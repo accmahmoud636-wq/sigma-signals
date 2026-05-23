@@ -386,30 +386,38 @@ function setFilter(f, btn){
 // ─── WEBHOOK من السيرفر ──────────────────────
 // الإشارات بتيجي من server.js عبر socket.io
 </script>
-<script src="/socket.io/socket.io.js"></script>
 <script>
-window.addEventListener('load', function() {
-  // ── جلب الإشارات القديمة ──
+var lastCount = 0;
+
+function loadSignals() {
   fetch('/signals')
-    .then(function(res) { return res.json(); })
+    .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (Array.isArray(data) && data.length > 0) {
-        var arr = data.slice().reverse();
-        for (var i = 0; i < arr.length; i++) {
-          try { addSignal(arr[i]); } catch(e) {}
-        }
+      if (!Array.isArray(data)) return;
+      // لو في إشارات جديدة
+      if (data.length > lastCount) {
+        var newSigs = data.slice(0, data.length - lastCount);
+        newSigs.reverse().forEach(function(s) {
+          try { addSignal(s); } catch(e) { console.log(e); }
+        });
+        lastCount = data.length;
+      }
+      // أول مرة — حمّل كل الإشارات
+      if (lastCount === 0 && data.length > 0) {
+        data.slice().reverse().forEach(function(s) {
+          try { addSignal(s); } catch(e) { console.log(e); }
+        });
+        lastCount = data.length;
       }
     })
-    .catch(function(err) { console.error(err); });
+    .catch(function(e) { console.log('fetch error:', e); });
+}
 
-  // ── إشارات لحظية ──
-  try {
-    var socket = io();
-    socket.on('signal', function(data) {
-      try { addSignal(data); } catch(e) {}
-    });
-  } catch(e) {}
-});
+// شغّل فور ما الصفحة تفتح
+loadSignals();
+
+// كرر كل 5 ثواني
+setInterval(loadSignals, 5000);
 </script>
 </body>
 </html>
