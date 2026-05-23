@@ -185,7 +185,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 
 
 <div class="webhook-bar">
   <span class="wh-label">Webhook URL:</span>
-  <span class="wh-url" onclick="copyWebhook()" title="انسخ الرابط">https://your-server.railway.app/webhook</span>
+  <span class="wh-url" onclick="copyWebhook()" title="انسخ الرابط">https://sigma-signals-by-mahmoud-ahmed.onrender.com/webhook</span>
   <span class="wh-format">JSON: {"action":"BUY","symbol":"AAPL","price":213.5,"sl":209.0,"tp":220.0,"strategy":"EMA Cross"}</span>
 </div>
 
@@ -393,21 +393,7 @@ const DEMO_SIGNALS = [
   {symbol:'COIN', action:'BUY',  price:302.45, sl:292.00, tp:325.00, strategy:'Trend Following'},
 ];
 
-function simulateIncoming(){
-  const sig = DEMO_SIGNALS[Math.floor(Math.random()*DEMO_SIGNALS.length)];
-  const variation = sig.price * (Math.random()*.015 - .0075);
-  addSignal({...sig, price: sig.price + variation});
-}
 
-// بدء بإشارات تجريبية
-setTimeout(()=> addSignal(DEMO_SIGNALS[0]), 1500);
-setTimeout(()=> addSignal(DEMO_SIGNALS[1]), 3000);
-setTimeout(()=> addSignal(DEMO_SIGNALS[2]), 4500);
-setTimeout(()=> addSignal(DEMO_SIGNALS[5]), 6000);
-
-// إشارة جديدة كل 30-60 ثانية
-function scheduleNext(){
-  setTimeout(()=>{ simulateIncoming(); scheduleNext(); }, 30000 + Math.random()*30000);
 }
 scheduleNext();
 
@@ -417,7 +403,7 @@ window.receiveWebhook = function(data){ addSignal(data); };
 
 // ─── UTILS ────────────────────────────────────
 function copyWebhook(){
-  navigator.clipboard?.writeText('https://your-server.railway.app/webhook');
+  navigator.clipboard?.writeText('https://sigma-signals-by-mahmoud-ahmed.onrender.com/webhook');
   showToast('تم نسخ الـ Webhook URL ✓');
 }
 
