@@ -99,6 +99,18 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20p
 .wh-url{font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px}
 .wh-url:hover{border-color:var(--blue)}
 
+
+/* ── PROGRESS ── */
+.progress-wrap{margin:0 12px 8px}
+.progress-top{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
+.progress-lbl{color:var(--muted2)}
+.progress-pct{font-family:var(--mono);font-weight:500}
+.progress-track{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s}
+.current-price{display:flex;justify-content:space-between;align-items:center;margin:0 12px 6px;background:var(--bg3);border-radius:5px;padding:5px 8px}
+.cp-label{font-size:10px;color:var(--muted2)}
+.cp-val{font-family:var(--mono);font-size:12px;font-weight:500}
+.cp-chg{font-family:var(--mono);font-size:11px}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.hstats{display:none}}
 </style>
 </head>
@@ -248,6 +260,19 @@ function render() {
         <div class="lv"><div class="lv-lbl">📈 نسبة</div><div class="lv-val lv-pct">+${tpPct}%</div></div>
         <div class="lv"><div class="lv-lbl">🛑 وقف</div><div class="lv-val lv-sl">$${sl.toFixed(dp)}</div></div>
       </div>
+      <div class="current-price" id="cp-${s.id}">
+        <span class="cp-label">السعر الحالي</span>
+        <span class="cp-val" style="color:var(--muted2)">جاري التحميل...</span>
+      </div>
+      <div class="progress-wrap" id="prog-${s.id}" style="display:none">
+        <div class="progress-top">
+          <span class="progress-lbl">التقدم نحو الهدف</span>
+          <span class="progress-pct" id="pct-${s.id}">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="fill-${s.id}" style="width:0%;background:var(--green)"></div>
+        </div>
+      </div>
       <div class="rr-wrap">
         <div class="rr-top"><span>المخاطرة / المكافأة</span><span style="color:${rrClr};font-family:var(--mono)">1 : ${rr}</span></div>
         <div class="rr-track"><div class="rr-fill" style="width:${rrPct}%;background:${rrClr}"></div></div>
@@ -320,6 +345,9 @@ async function checkPrices() {
         else if (price >= parseFloat(sig.sl)) newStatus = 'stopped';
       }
 
+      // حدّث السعر الحالي على الكارت
+      updateCardPrice(sig, price);
+
       if (newStatus) {
         updatedIds.add(sig.id);
         await updateSignal(sig.id, newStatus, price);
@@ -331,6 +359,44 @@ async function checkPrices() {
     }
   } catch(e) {
     // لو الرمز مش على Binance (فوركس مثلاً) تجاهل
+  }
+}
+
+
+function updateCardPrice(sig, price) {
+  const cpEl   = document.getElementById('cp-' + sig.id);
+  const progEl = document.getElementById('prog-' + sig.id);
+  const pctEl  = document.getElementById('pct-' + sig.id);
+  const fillEl = document.getElementById('fill-' + sig.id);
+  if (!cpEl) return;
+
+  const entry  = parseFloat(sig.price);
+  const tp     = parseFloat(sig.tp);
+  const sl     = parseFloat(sig.sl);
+  const isBuy  = sig.action === 'BUY';
+
+  // تغيير السعر من الدخول
+  const chgPct = ((price - entry) / entry * 100);
+  const isProfit = isBuy ? price > entry : price < entry;
+  const dp = price >= 100 ? 2 : 4;
+
+  cpEl.innerHTML = '<span class="cp-label">السعر الحالي</span>' +
+    '<div style="display:flex;align-items:center;gap:8px">' +
+    '<span class="cp-chg" style="color:' + (isProfit?'var(--green)':'var(--red)') + '">' +
+    (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%</span>' +
+    '<span class="cp-val" style="color:' + (isProfit?'var(--green)':'var(--red)') + '">$' + price.toFixed(dp) + '</span>' +
+    '</div>';
+
+  // شريط التقدم نحو الهدف
+  if (sig.status === 'open' && progEl) {
+    progEl.style.display = 'block';
+    const totalDist = Math.abs(tp - entry);
+    const movedDist = isBuy ? Math.max(0, price - entry) : Math.max(0, entry - price);
+    const pct = totalDist > 0 ? Math.min(100, (movedDist / totalDist) * 100) : 0;
+    const clr = pct >= 75 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--blue)';
+    if (pctEl)  pctEl.textContent = pct.toFixed(0) + '% من الهدف';
+    if (fillEl) { fillEl.style.width = pct + '%'; fillEl.style.background = clr; }
+    if (pctEl)  pctEl.style.color = clr;
   }
 }
 
