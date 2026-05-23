@@ -229,6 +229,12 @@ function addSignal(raw){
   const strat  = raw.strategy || 'TradingView Alert';
 
   // حساب نسبة الهدف
+  // لو الـ TP مش صح — احسبه تلقائياً (SL distance × 2)
+  const slDist = Math.abs(entry - sl);
+  if (!tp || tp === sl || tp === entry) {
+    tp = act==='BUY' ? entry + (slDist * 2) : entry - (slDist * 2);
+  }
+
   const tpPct = act==='BUY'
     ? ((tp - entry) / entry * 100).toFixed(2)
     : ((entry - tp) / entry * 100).toFixed(2);
