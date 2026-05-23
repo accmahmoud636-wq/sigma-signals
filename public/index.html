@@ -261,16 +261,7 @@ function addSignal(raw){
   // remove new flag after animation
   setTimeout(()=>{ sig.isNew=false; }, 600);
 
-  // simulate outcome after random time (demo only)
-  const outcome = Math.random();
-  const delay   = 20000 + Math.random()*60000;
-  setTimeout(()=>{
-    sig.status = outcome > 0.38 ? 'target' : 'stopped';
-    updateStats(); renderCards();
-    showToast(sig.status==='target'
-      ? `🎯 ${sym} وصل الهدف +${tpPct}%`
-      : `🛑 ${sym} وقف الخسارة`);
-  }, delay);
+
 }
 
 // ─── RENDER ───────────────────────────────────
@@ -383,50 +374,11 @@ function setFilter(f, btn){
 // ─── WEBHOOK ENDPOINT (Simulation) ────────────
 // في الواقع الـ Webhook بيجي من Python Server
 // هنا نحاكي وصول إشارات من TradingView
-const DEMO_SIGNALS = [
-  {symbol:'AAPL', action:'BUY',  price:213.45, sl:209.20, tp:221.80, strategy:'EMA Cross'},
-  {symbol:'NVDA', action:'BUY',  price:131.28, sl:127.50, tp:141.00, strategy:'MACD Signal'},
-  {symbol:'TSLA', action:'SELL', price:248.92, sl:254.10, tp:238.00, strategy:'RSI Divergence'},
-  {symbol:'META', action:'BUY',  price:591.20, sl:578.00, tp:615.00, strategy:'Volume Breakout'},
-  {symbol:'AMD',  action:'BUY',  price:162.88, sl:158.40, tp:174.50, strategy:'Support Bounce'},
-  {symbol:'PLTR', action:'SELL', price:98.76,  sl:102.30, tp:91.00,  strategy:'BB Squeeze'},
-  {symbol:'COIN', action:'BUY',  price:302.45, sl:292.00, tp:325.00, strategy:'Trend Following'},
-];
 
 
-}
-scheduleNext();
 
-// ─── WEBHOOK API (للربط مع Python Server) ─────
-// هذه الدالة تُستدعى من السيرفر عند وصول إشارة حقيقية
-window.receiveWebhook = function(data){ addSignal(data); };
-
-// ─── UTILS ────────────────────────────────────
-function copyWebhook(){
-  navigator.clipboard?.writeText('https://sigma-signals-by-mahmoud-ahmed.onrender.com/webhook');
-  showToast('تم نسخ الـ Webhook URL ✓');
-}
-
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._timer);
-  t._timer = setTimeout(()=>t.classList.remove('show'), 3000);
-}
+// ─── WEBHOOK من السيرفر ──────────────────────
+// الإشارات بتيجي من server.js عبر socket.io
 </script>
 </body>
 </html>
-<script src="/socket.io/socket.io.js"></script>
-<script>
-  const socket = io();
-  socket.on('connect', () => {
-    addLog('info', 'متصل بالسيرفر ✅ — في انتظار إشارات TradingView');
-  });
-  socket.on('signal', data => {
-    window.receiveWebhook(data);
-  });
-  fetch('/signals').then(r=>r.json()).then(list=>{
-    list.reverse().forEach(s => window.receiveWebhook(s));
-  }).catch(()=>{});
-</script>
