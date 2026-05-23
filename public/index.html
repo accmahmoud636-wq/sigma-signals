@@ -224,8 +224,8 @@ function addSignal(raw){
   const sym    = raw.symbol.toUpperCase();
   const act    = raw.action.toUpperCase(); // BUY or SELL
   const entry  = parseFloat(raw.price);
-  const sl     = parseFloat(raw.sl);
-  const tp     = parseFloat(raw.tp);
+  let   sl     = parseFloat(raw.sl);
+  let   tp     = parseFloat(raw.tp);
   const strat  = raw.strategy || 'TradingView Alert';
 
   // حساب نسبة الهدف
