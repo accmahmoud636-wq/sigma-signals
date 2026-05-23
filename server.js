@@ -236,6 +236,7 @@ app.get('/api/stats', auth, async (req, res) => {
 // ─── Pages ────────────────────────────────────
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'settings.html')));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ MILLIONAIRE Server شغال على بورت ${PORT}`));
