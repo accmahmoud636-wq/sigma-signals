@@ -389,24 +389,44 @@ function setFilter(f, btn){
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  const socket = io();
+(function() {
+  // جلب الإشارات القديمة أول ما الصفحة تفتح
+  function loadOldSignals() {
+    fetch('/signals')
+      .then(function(r) { return r.json(); })
+      .then(function(list) {
+        if (list && list.length > 0) {
+          var reversed = list.slice().reverse();
+          reversed.forEach(function(s) {
+            if (s && s.action && s.symbol) {
+              addSignal(s);
+            }
+          });
+        }
+      })
+      .catch(function(e) { console.log('خطأ في جلب الإشارات:', e); });
+  }
 
-  // إشارة جديدة لحظية من TradingView
+  // اتصال WebSocket للإشارات اللحظية
+  var socket = io();
+  socket.on('connect', function() {
+    console.log('متصل بالسيرفر');
+    loadOldSignals();
+  });
   socket.on('signal', function(data) {
     console.log('إشارة جديدة:', data);
-    addSignal(data);
+    if (data && data.action && data.symbol) {
+      addSignal(data);
+    }
   });
 
-  // جلب الإشارات المحفوظة عند فتح الصفحة
-  fetch('/signals')
-    .then(function(r) { return r.json(); })
-    .then(function(list) {
-      console.log('عدد الإشارات القديمة:', list.length);
-      list.slice().reverse().forEach(function(s) {
-        addSignal(s);
-      });
-    })
-    .catch(function(e) { console.log('خطأ:', e); });
+  // لو socket.io فشل — جرب fetch مباشرة بعد ثانية
+  setTimeout(function() {
+    if (typeof signals !== 'undefined' && signals.length === 0) {
+      loadOldSignals();
+    }
+  }, 1000);
+})();
 </script>
 </body>
 </html>
