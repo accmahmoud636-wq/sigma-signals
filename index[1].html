@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIGMA · إشارات التداول</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #07090d;
+  --bg2:     #0d1117;
+  --bg3:     #121820;
+  --card:    #0f1521;
+  --border:  #1a2535;
+  --border2: #243040;
+  --text:    #d0dce8;
+  --muted:   #445566;
+  --muted2:  #607080;
+  --green:   #00d97e;
+  --green2:  rgba(0,217,126,.12);
+  --red:     #ff4d4d;
+  --red2:    rgba(255,77,77,.12);
+  --gold:    #f0b429;
+  --blue:    #4da6ff;
+  --mono:    'IBM Plex Mono', monospace;
+  --ar:      'Tajawal', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--ar);min-height:100vh}
+
+/* ── TOP ── */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+.brand-name{font-family:var(--mono);font-size:17px;font-weight:600;color:#fff;letter-spacing:3px}
+.brand-sub{font-size:12px;color:var(--muted2)}
+.header-stats{display:flex;gap:6px;margin-right:auto;flex-wrap:wrap}
+.hstat{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 14px;text-align:center}
+.hstat-n{font-family:var(--mono);font-size:17px;font-weight:600}
+.hstat-l{font-size:10px;color:var(--muted2);margin-top:1px}
+.mkt-status{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;padding:6px 12px;border-radius:6px;border:1px solid}
+.mkt-open{color:var(--green);border-color:rgba(0,217,126,.3);background:rgba(0,217,126,.06)}
+.mkt-closed{color:var(--muted2);border-color:var(--border);background:var(--bg3)}
+#mkt-time{font-size:10px;margin-top:1px;color:var(--muted2)}
+
+/* ── FILTERS ── */
+.filters{padding:14px 24px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.filter-btn{padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:12px;cursor:pointer;transition:all .15s}
+.filter-btn:hover,.filter-btn.active{border-color:var(--blue);color:var(--blue);background:rgba(77,166,255,.08)}
+.filter-btn.buy-active{border-color:var(--green);color:var(--green);background:rgba(0,217,126,.08)}
+.filter-btn.sell-active{border-color:var(--red);color:var(--red);background:rgba(255,77,77,.08)}
+.filters-label{font-size:12px;color:var(--muted2)}
+.sort-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 10px;border-radius:6px;font-family:var(--ar);font-size:12px;outline:none;margin-right:auto}
+
+/* ── GRID ── */
+.grid-wrap{padding:20px 24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.empty{text-align:center;padding:60px;color:var(--muted);font-size:14px;grid-column:1/-1}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.3}
+
+/* ── SIGNAL CARD ── */
+.card{background:var(--card);border-radius:10px;border:1px solid var(--border);overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:default;position:relative}
+.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.card.new-card{animation:cardIn .4s cubic-bezier(.2,.8,.2,1)}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.card-accent{height:3px;width:100%}
+.card-accent.buy{background:linear-gradient(90deg,var(--green),rgba(0,217,126,.2))}
+.card-accent.sell{background:linear-gradient(90deg,var(--red),rgba(255,77,77,.2))}
+
+.card-top{padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between}
+.card-sym{font-family:var(--mono);font-size:20px;font-weight:600;color:#fff}
+.card-name{font-size:11px;color:var(--muted2);margin-top:2px}
+.direction-badge{padding:4px 12px;border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.05em}
+.dir-buy{background:var(--green2);color:var(--green);border:1px solid rgba(0,217,126,.25)}
+.dir-sell{background:var(--red2);color:var(--red);border:1px solid rgba(255,77,77,.25)}
+
+/* ── PRICE ROW ── */
+.price-row{padding:0 16px 12px;display:flex;align-items:baseline;gap:8px}
+.entry-price{font-family:var(--mono);font-size:26px;font-weight:600;color:#fff}
+.entry-label{font-size:11px;color:var(--muted2)}
+
+/* ── LEVELS ── */
+.levels{margin:0 16px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.level{background:var(--bg3);border-radius:7px;padding:8px 10px;border:1px solid var(--border)}
+.level-label{font-size:10px;color:var(--muted2);margin-bottom:3px;display:flex;align-items:center;gap:4px}
+.level-val{font-family:var(--mono);font-size:13px;font-weight:500}
+.lv-target{color:var(--green)}
+.lv-sl{color:var(--red)}
+.lv-pct{color:var(--gold)}
+.level-sell .lv-target{color:var(--red)}
+.level-sell .lv-sl{color:var(--green)}
+
+/* ── STATUS BAR ── */
+.status-bar{padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.status-chip{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500}
+.s-open{background:rgba(0,217,126,.1);color:var(--green);border:1px solid rgba(0,217,126,.2)}
+.s-stopped{background:rgba(255,77,77,.1);color:var(--red);border:1px solid rgba(255,77,77,.2)}
+.s-target{background:rgba(240,180,41,.1);color:var(--gold);border:1px solid rgba(240,180,41,.2)}
+.s-dot{width:6px;height:6px;border-radius:50%}
+.s-open .s-dot{background:var(--green);animation:pulse 2s infinite}
+.s-stopped .s-dot{background:var(--red)}
+.s-target .s-dot{background:var(--gold)}
+.card-time{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.strat-tag{font-size:10px;color:var(--muted2);display:flex;align-items:center;gap:4px}
+
+/* ── RISK METER ── */
+.risk-bar{margin:0 16px 14px}
+.risk-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);margin-bottom:4px}
+.risk-track{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.risk-fill{height:100%;border-radius:2px;transition:width .5s}
+.rr-badge{font-family:var(--mono);font-size:11px;margin-top:5px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── WEBHOOK INFO ── */
+.webhook-bar{background:var(--bg3);border-top:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.wh-label{font-size:11px;color:var(--muted2)}
+.wh-url{font-family:var(--mono);font-size:11px;color:var(--blue);background:var(--bg2);border:1px solid var(--border);padding:3px 10px;border-radius:4px;cursor:pointer}
+.wh-url:hover{border-color:var(--blue)}
+.wh-format{font-family:var(--mono);font-size:10px;color:var(--muted);margin-right:auto}
+
+@media(max-width:600px){
+  .grid{grid-template-columns:1fr}
+  .header-stats{gap:4px}
+  .hstat{padding:5px 10px}
+  .grid-wrap{padding:12px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div>
+      <div class="brand-name">SIGMA</div>
+      <div class="brand-sub">إشارات التداول الآلي</div>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-n" id="h-total">0</div>
+      <div class="hstat-l">إجمالي الإشارات</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-n" style="color:var(--green)" id="h-open">0</div>
+      <div class="hstat-l">مفتوحة</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-n" style="color:var(--gold)" id="h-hit">0</div>
+      <div class="hstat-l">وصلت الهدف</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-n" style="color:var(--red)" id="h-stopped">0</div>
+      <div class="hstat-l">وقف الخسارة</div>
+    </div>
+  </div>
+  <div>
+    <div class="mkt-status mkt-closed" id="mkt-badge">● السوق</div>
+    <div id="mkt-time">—</div>
+  </div>
+</header>
+
+<div class="filters">
+  <span class="filters-label">عرض:</span>
+  <button class="filter-btn active" onclick="setFilter('all',this)">الكل</button>
+  <button class="filter-btn" onclick="setFilter('BUY',this)" id="f-buy">شراء</button>
+  <button class="filter-btn" onclick="setFilter('SELL',this)" id="f-sell">بيع</button>
+  <button class="filter-btn" onclick="setFilter('open',this)">مفتوحة</button>
+  <button class="filter-btn" onclick="setFilter('stopped',this)">وقف الخسارة</button>
+  <button class="filter-btn" onclick="setFilter('target',this)">وصلت الهدف</button>
+  <select class="sort-select" id="sort-sel" onchange="renderCards()">
+    <option value="newest">الأحدث أولاً</option>
+    <option value="sym">الرمز أبجدياً</option>
+    <option value="pct">أعلى هدف %</option>
+  </select>
+</div>
+
+<div class="grid-wrap">
+  <div class="grid" id="cards-grid"></div>
+</div>
+
+<div class="webhook-bar">
+  <span class="wh-label">Webhook URL:</span>
+  <span class="wh-url" onclick="copyWebhook()" title="انسخ الرابط">https://your-server.railway.app/webhook</span>
+  <span class="wh-format">JSON: {"action":"BUY","symbol":"AAPL","price":213.5,"sl":209.0,"tp":220.0,"strategy":"EMA Cross"}</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ────────────────────────────────────
+let signals  = [];
+let filter   = 'all';
+
+const NAMES = {
+  AAPL:'Apple',NVDA:'NVIDIA',TSLA:'Tesla',MSFT:'Microsoft',
+  AMZN:'Amazon',GOOGL:'Alphabet',META:'Meta',AMD:'AMD',
+  NFLX:'Netflix',JPM:'JPMorgan',COIN:'Coinbase',PLTR:'Palantir',
+  UBER:'Uber',SHOP:'Shopify',SOFI:'SoFi',RIVN:'Rivian',
+  SNOW:'Snowflake',SMCI:'Super Micro',MARA:'Marathon Digital'
+};
+const STRATS = ['EMA Cross','RSI Divergence','MACD Signal','Volume Breakout','BB Squeeze','Support Bounce','Trend Following'];
+
+// ─── CLOCK ────────────────────────────────────
+function clock(){
+  const ny  = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const ruh = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Riyadh'}));
+  const d=ny.getDay(), h=ny.getHours(), m=ny.getMinutes();
+  const open = d>=1&&d<=5&&(h>9||(h===9&&m>=30))&&h<16;
+  const badge = document.getElementById('mkt-badge');
+  badge.textContent = open ? '● السوق مفتوح' : '○ السوق مغلق';
+  badge.className = 'mkt-status ' + (open ? 'mkt-open' : 'mkt-closed');
+  document.getElementById('mkt-time').textContent =
+    `NY: ${ny.toLocaleTimeString('en-US',{hour12:false})} | الرياض: ${ruh.toLocaleTimeString('ar',{hour12:false})}`;
+}
+setInterval(clock, 1000); clock();
+
+// ─── ADD SIGNAL ───────────────────────────────
+function addSignal(raw){
+  const sym    = raw.symbol.toUpperCase();
+  const act    = raw.action.toUpperCase(); // BUY or SELL
+  const entry  = parseFloat(raw.price);
+  const sl     = parseFloat(raw.sl);
+  const tp     = parseFloat(raw.tp);
+  const strat  = raw.strategy || 'TradingView Alert';
+
+  // حساب نسبة الهدف
+  const tpPct = act==='BUY'
+    ? ((tp - entry) / entry * 100).toFixed(2)
+    : ((entry - tp) / entry * 100).toFixed(2);
+
+  // نسبة المخاطرة/المكافأة
+  const risk   = Math.abs(entry - sl);
+  const reward = Math.abs(tp - entry);
+  const rr     = (reward / risk).toFixed(1);
+
+  // نسبة شريط الـ Risk/Reward
+  const rrPct  = Math.min((reward/(risk+reward)*100), 100).toFixed(0);
+
+  const sig = {
+    id:     Date.now() + Math.random(),
+    sym, act, entry, sl, tp,
+    tpPct, rr, rrPct,
+    strat,
+    name:   NAMES[sym] || sym,
+    time:   new Date().toLocaleTimeString('ar',{hour12:true}),
+    date:   new Date().toLocaleDateString('ar'),
+    status: 'open',  // open | stopped | target
+    isNew:  true,
+  };
+
+  signals.unshift(sig);
+  updateStats();
+  renderCards();
+  showToast(`📡 إشارة ${act==='BUY'?'شراء':'بيع'} جديدة على ${sym}`);
+
+  // remove new flag after animation
+  setTimeout(()=>{ sig.isNew=false; }, 600);
+
+  // simulate outcome after random time (demo only)
+  const outcome = Math.random();
+  const delay   = 20000 + Math.random()*60000;
+  setTimeout(()=>{
+    sig.status = outcome > 0.38 ? 'target' : 'stopped';
+    updateStats(); renderCards();
+    showToast(sig.status==='target'
+      ? `🎯 ${sym} وصل الهدف +${tpPct}%`
+      : `🛑 ${sym} وقف الخسارة`);
+  }, delay);
+}
+
+// ─── RENDER ───────────────────────────────────
+function renderCards(){
+  const sort = document.getElementById('sort-sel').value;
+  let list   = [...signals];
+
+  // filter
+  if(filter==='BUY')     list = list.filter(s=>s.act==='BUY');
+  else if(filter==='SELL')list = list.filter(s=>s.act==='SELL');
+  else if(filter==='open')list = list.filter(s=>s.status==='open');
+  else if(filter==='stopped') list = list.filter(s=>s.status==='stopped');
+  else if(filter==='target')  list = list.filter(s=>s.status==='target');
+
+  // sort
+  if(sort==='sym')    list.sort((a,b)=>a.sym.localeCompare(b.sym));
+  else if(sort==='pct') list.sort((a,b)=>b.tpPct-a.tpPct);
+
+  const grid = document.getElementById('cards-grid');
+
+  if(list.length===0){
+    grid.innerHTML = `<div class="empty"><div class="empty-icon">📡</div>لا توجد إشارات بعد<br><small style="color:var(--muted);font-size:12px;margin-top:8px;display:block">في انتظار إشارات TradingView...</small></div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(s => {
+    const isBuy = s.act==='BUY';
+    const statusMap = {
+      open:    {cls:'s-open',    label:'مفتوحة ●'},
+      stopped: {cls:'s-stopped', label:'وقف الخسارة'},
+      target:  {cls:'s-target',  label:'وصل الهدف 🎯'},
+    };
+    const st = statusMap[s.status];
+    const rrColor = s.rr >= 2 ? 'var(--green)' : s.rr >= 1.5 ? 'var(--gold)' : 'var(--red)';
+
+    return `
+    <div class="card ${s.isNew?'new-card':''}">
+      <div class="card-accent ${isBuy?'buy':'sell'}"></div>
+
+      <div class="card-top">
+        <div>
+          <div class="card-sym">${s.sym}</div>
+          <div class="card-name">${s.name}</div>
+        </div>
+        <span class="direction-badge ${isBuy?'dir-buy':'dir-sell'}">${isBuy?'▲ شراء':'▼ بيع'}</span>
+      </div>
+
+      <div class="price-row">
+        <span class="entry-price">$${s.entry.toFixed(2)}</span>
+        <span class="entry-label">سعر الدخول</span>
+      </div>
+
+      <div class="levels">
+        <div class="level">
+          <div class="level-label">🎯 الهدف</div>
+          <div class="level-val lv-target ${!isBuy?'level-sell':''}" style="${!isBuy?'color:var(--red)':''}">$${s.tp.toFixed(2)}</div>
+        </div>
+        <div class="level">
+          <div class="level-label">📈 الهدف %</div>
+          <div class="level-val lv-pct">+${s.tpPct}%</div>
+        </div>
+        <div class="level">
+          <div class="level-label">🛑 وقف الخسارة</div>
+          <div class="level-val lv-sl">$${s.sl.toFixed(2)}</div>
+        </div>
+      </div>
+
+      <div class="risk-bar">
+        <div class="risk-labels">
+          <span>نسبة المخاطرة / المكافأة</span>
+          <span class="rr-badge" style="color:${rrColor}">1 : ${s.rr}</span>
+        </div>
+        <div class="risk-track">
+          <div class="risk-fill" style="width:${s.rrPct}%;background:${rrColor}"></div>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-chip ${st.cls}">
+          <div class="s-dot"></div>
+          ${st.label}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <div class="strat-tag">⚡ ${s.strat}</div>
+          <div class="card-time">${s.time} · ${s.date}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── STATS ────────────────────────────────────
+function updateStats(){
+  document.getElementById('h-total').textContent   = signals.length;
+  document.getElementById('h-open').textContent    = signals.filter(s=>s.status==='open').length;
+  document.getElementById('h-hit').textContent     = signals.filter(s=>s.status==='target').length;
+  document.getElementById('h-stopped').textContent = signals.filter(s=>s.status==='stopped').length;
+}
+
+// ─── FILTER ───────────────────────────────────
+function setFilter(f, btn){
+  filter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active','buy-active','sell-active'));
+  if(f==='BUY') btn.classList.add('buy-active');
+  else if(f==='SELL') btn.classList.add('sell-active');
+  else btn.classList.add('active');
+  renderCards();
+}
+
+// ─── WEBHOOK ENDPOINT (Simulation) ────────────
+// في الواقع الـ Webhook بيجي من Python Server
+// هنا نحاكي وصول إشارات من TradingView
+const DEMO_SIGNALS = [
+  {symbol:'AAPL', action:'BUY',  price:213.45, sl:209.20, tp:221.80, strategy:'EMA Cross'},
+  {symbol:'NVDA', action:'BUY',  price:131.28, sl:127.50, tp:141.00, strategy:'MACD Signal'},
+  {symbol:'TSLA', action:'SELL', price:248.92, sl:254.10, tp:238.00, strategy:'RSI Divergence'},
+  {symbol:'META', action:'BUY',  price:591.20, sl:578.00, tp:615.00, strategy:'Volume Breakout'},
+  {symbol:'AMD',  action:'BUY',  price:162.88, sl:158.40, tp:174.50, strategy:'Support Bounce'},
+  {symbol:'PLTR', action:'SELL', price:98.76,  sl:102.30, tp:91.00,  strategy:'BB Squeeze'},
+  {symbol:'COIN', action:'BUY',  price:302.45, sl:292.00, tp:325.00, strategy:'Trend Following'},
+];
+
+function simulateIncoming(){
+  const sig = DEMO_SIGNALS[Math.floor(Math.random()*DEMO_SIGNALS.length)];
+  const variation = sig.price * (Math.random()*.015 - .0075);
+  addSignal({...sig, price: sig.price + variation});
+}
+
+// بدء بإشارات تجريبية
+setTimeout(()=> addSignal(DEMO_SIGNALS[0]), 1500);
+setTimeout(()=> addSignal(DEMO_SIGNALS[1]), 3000);
+setTimeout(()=> addSignal(DEMO_SIGNALS[2]), 4500);
+setTimeout(()=> addSignal(DEMO_SIGNALS[5]), 6000);
+
+// إشارة جديدة كل 30-60 ثانية
+function scheduleNext(){
+  setTimeout(()=>{ simulateIncoming(); scheduleNext(); }, 30000 + Math.random()*30000);
+}
+scheduleNext();
+
+// ─── WEBHOOK API (للربط مع Python Server) ─────
+// هذه الدالة تُستدعى من السيرفر عند وصول إشارة حقيقية
+window.receiveWebhook = function(data){ addSignal(data); };
+
+// ─── UTILS ────────────────────────────────────
+function copyWebhook(){
+  navigator.clipboard?.writeText('https://your-server.railway.app/webhook');
+  showToast('تم نسخ الـ Webhook URL ✓');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  socket.on('connect', () => {
+    addLog('info', 'متصل بالسيرفر ✅ — في انتظار إشارات TradingView');
+  });
+  socket.on('signal', data => {
+    window.receiveWebhook(data);
+  });
+  fetch('/signals').then(r=>r.json()).then(list=>{
+    list.reverse().forEach(s => window.receiveWebhook(s));
+  }).catch(()=>{});
+</script>
