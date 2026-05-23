@@ -380,5 +380,27 @@ function setFilter(f, btn){
 // ─── WEBHOOK من السيرفر ──────────────────────
 // الإشارات بتيجي من server.js عبر socket.io
 </script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  // إشارة جديدة لحظية من TradingView
+  socket.on('signal', function(data) {
+    console.log('إشارة جديدة:', data);
+    addSignal(data);
+  });
+
+  // جلب الإشارات المحفوظة عند فتح الصفحة
+  fetch('/signals')
+    .then(function(r) { return r.json(); })
+    .then(function(list) {
+      console.log('عدد الإشارات القديمة:', list.length);
+      list.slice().reverse().forEach(function(s) {
+        addSignal(s);
+      });
+    })
+    .catch(function(e) { console.log('خطأ:', e); });
+</script>
 </body>
 </html>
