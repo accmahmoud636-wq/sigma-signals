@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MILLIONAIRE · لوحة الإدارة</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--border:rgba(212,175,55,.12);--gold:#d4af37;--gold2:#f5d070;--gold3:rgba(212,175,55,.08);--green:#00d97e;--red:#ff4d4d;--text:#d0dce8;--muted:#445566;--muted2:#607080;--mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--ar);min-height:100vh}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:56px;display:flex;align-items:center;gap:12px}
+.logo{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--gold);letter-spacing:2px}
+.admin-badge{background:var(--gold3);border:1px solid var(--border);color:var(--gold);font-size:11px;padding:2px 8px;border-radius:4px;font-family:var(--mono)}
+.btn-logout{margin-right:auto;background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:5px 12px;border-radius:6px;cursor:pointer;font-family:var(--ar);font-size:12px}
+.content{padding:20px;max-width:1000px;margin:0 auto}
+h2{font-size:16px;font-weight:500;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:11px;color:var(--muted2)}
+.form-input{background:var(--bg3);border:1px solid rgba(212,175,55,.15);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--ar);font-size:13px;outline:none}
+.form-input:focus{border-color:var(--gold)}
+.btn{padding:8px 18px;border-radius:6px;font-family:var(--ar);font-size:13px;cursor:pointer;border:none;font-weight:500}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000}
+.btn-red{background:rgba(255,77,77,.15);color:var(--red);border:1px solid rgba(255,77,77,.3)}
+.btn-green{background:rgba(0,217,126,.15);color:var(--green);border:1px solid rgba(0,217,126,.3)}
+.btn-gray{background:var(--bg3);color:var(--muted2);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:8px 12px;color:var(--muted2);font-weight:400;text-align:right;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.05em}
+td{padding:10px 12px;border-bottom:1px solid rgba(212,175,55,.05);vertical-align:middle}
+tr:hover td{background:rgba(212,175,55,.02)}
+.status-on{color:var(--green);font-size:11px}
+.status-off{color:var(--red);font-size:11px}
+.expires-ok{color:var(--green);font-family:var(--mono);font-size:11px}
+.expires-soon{color:var(--gold);font-family:var(--mono);font-size:11px}
+.expires-expired{color:var(--red);font-family:var(--mono);font-size:11px}
+.expires-never{color:var(--muted2);font-size:11px}
+.msg{padding:8px 12px;border-radius:6px;font-size:13px;margin-top:10px}
+.msg-ok{background:rgba(0,217,126,.1);color:var(--green);border:1px solid rgba(0,217,126,.2)}
+.msg-err{background:rgba(255,77,77,.1);color:var(--red);border:1px solid rgba(255,77,77,.2)}
+.td-actions{display:flex;gap:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">💰 MILLIONAIRE</div>
+  <span class="admin-badge">ADMIN</span>
+  <button class="btn-logout" onclick="logout()">خروج</button>
+</header>
+
+<div class="content">
+
+  <!-- Add User -->
+  <div class="card">
+    <h2>➕ إضافة مشترك جديد</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">اسم المستخدم</label>
+        <input class="form-input" id="new-username" placeholder="username123">
+      </div>
+      <div class="form-group">
+        <label class="form-label">كلمة المرور</label>
+        <input class="form-input" id="new-password" placeholder="password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">الاسم الكامل</label>
+        <input class="form-input" id="new-name" placeholder="محمد أحمد">
+      </div>
+      <div class="form-group">
+        <label class="form-label">الإيميل (اختياري)</label>
+        <input class="form-input" id="new-email" placeholder="user@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">مدة الاشتراك (أيام)</label>
+        <input class="form-input" id="new-days" type="number" placeholder="30">
+      </div>
+    </div>
+    <button class="btn btn-gold" onclick="addUser()">إضافة المشترك</button>
+    <div id="add-msg"></div>
+  </div>
+
+  <!-- Users Table -->
+  <div class="card">
+    <h2 style="justify-content:space-between">
+      <span>👥 المشتركين</span>
+      <button class="btn btn-gray" onclick="loadUsers()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>الاسم</th>
+            <th>المستخدم</th>
+            <th>الإيميل</th>
+            <th>الحالة</th>
+            <th>انتهاء الاشتراك</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Signals Control -->
+  <div class="card">
+    <h2>⚙️ التحكم في الإشارات</h2>
+    <button class="btn btn-red" onclick="clearSignals()">🗑️ مسح كل الإشارات</button>
+    <div id="sig-msg"></div>
+  </div>
+
+</div>
+
+<script>
+const token = localStorage.getItem('mm_token');
+const role  = localStorage.getItem('mm_role');
+if (!token || role !== 'admin') window.location.href = '/login.html';
+
+let users = [];
+
+async function loadUsers() {
+  try {
+    const res  = await fetch('/api/admin/users', { headers:{'x-auth-token':token} });
+    if (!res.ok) { logout(); return; }
+    users = await res.json();
+    renderUsers();
+  } catch(e) {}
+}
+
+function renderUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = users.map(u => {
+    const expires = u.expiresAt ? new Date(u.expiresAt) : null;
+    const now     = new Date();
+    const daysLeft = expires ? Math.ceil((expires-now)/86400000) : null;
+    let expEl = '';
+    if (u.role === 'admin') {
+      expEl = '<span class="expires-never">لا ينتهي (Admin)</span>';
+    } else if (!expires) {
+      expEl = '<span class="expires-never">غير محدد</span>';
+    } else if (daysLeft < 0) {
+      expEl = `<span class="expires-expired">منتهي (${Math.abs(daysLeft)} يوم)</span>`;
+    } else if (daysLeft <= 7) {
+      expEl = `<span class="expires-soon">⚠ ${daysLeft} أيام</span>`;
+    } else {
+      expEl = `<span class="expires-ok">${expires.toLocaleDateString('ar')} (${daysLeft} يوم)</span>`;
+    }
+
+    const actions = u.role === 'admin' ? '' : `
+      <div class="td-actions">
+        ${u.active
+          ? `<button class="btn btn-red" style="font-size:11px;padding:3px 8px" onclick="toggleUser('${u.id}',false)">إيقاف</button>`
+          : `<button class="btn btn-green" style="font-size:11px;padding:3px 8px" onclick="toggleUser('${u.id}',true)">تفعيل</button>`
+        }
+        <button class="btn btn-gold" style="font-size:11px;padding:3px 8px" onclick="renewUser('${u.id}')">تجديد 30</button>
+        <button class="btn btn-gray" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="deleteUser('${u.id}','${u.name}')">حذف</button>
+      </div>`;
+
+    return `<tr>
+      <td style="font-weight:500">${u.name}</td>
+      <td style="font-family:var(--mono);font-size:12px">${u.username}</td>
+      <td style="font-size:12px;color:var(--muted2)">${u.email || '—'}</td>
+      <td>${u.active ? '<span class="status-on">● نشط</span>' : '<span class="status-off">● موقوف</span>'}</td>
+      <td>${expEl}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function addUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value.trim();
+  const name     = document.getElementById('new-name').value.trim();
+  const email    = document.getElementById('new-email').value.trim();
+  const days     = parseInt(document.getElementById('new-days').value) || 30;
+  const msgEl    = document.getElementById('add-msg');
+
+  if (!username || !password || !name) { showMsg('add-msg','أدخل اسم المستخدم وكلمة المرور والاسم','err'); return; }
+
+  try {
+    const res  = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','x-auth-token':token},
+      body: JSON.stringify({ username, password, name, email, days })
+    });
+    const data = await res.json();
+    if (!res.ok) { showMsg('add-msg', data.error,'err'); return; }
+    showMsg('add-msg', `✓ تم إضافة ${name} — اشتراك ${days} يوم`,'ok');
+    ['new-username','new-password','new-name','new-email','new-days'].forEach(id => document.getElementById(id).value = '');
+    loadUsers();
+  } catch(e) { showMsg('add-msg','خطأ في الاتصال','err'); }
+}
+
+async function toggleUser(id, active) {
+  await fetch(`/api/admin/users/${id}`, {
+    method:'PUT', headers:{'Content-Type':'application/json','x-auth-token':token},
+    body: JSON.stringify({ active })
+  });
+  loadUsers();
+}
+
+async function renewUser(id) {
+  const days = parseInt(prompt('كم يوم تجديد؟','30'));
+  if (!days) return;
+  await fetch(`/api/admin/users/${id}`, {
+    method:'PUT', headers:{'Content-Type':'application/json','x-auth-token':token},
+    body: JSON.stringify({ days })
+  });
+  loadUsers();
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`حذف ${name}؟`)) return;
+  await fetch(`/api/admin/users/${id}`, { method:'DELETE', headers:{'x-auth-token':token} });
+  loadUsers();
+}
+
+async function clearSignals() {
+  if (!confirm('مسح كل الإشارات؟')) return;
+  await fetch('/api/admin/signals', { method:'DELETE', headers:{'x-auth-token':token} });
+  showMsg('sig-msg','✓ تم مسح كل الإشارات','ok');
+}
+
+function showMsg(id, msg, type) {
+  const el = document.getElementById(id);
+  el.className = 'msg ' + (type==='ok' ? 'msg-ok' : 'msg-err');
+  el.textContent = msg;
+  setTimeout(() => el.textContent = '', 4000);
+}
+
+function logout() {
+  localStorage.clear();
+  window.location.href = '/login.html';
+}
+
+loadUsers();
+</script>
+</body>
+</html>
