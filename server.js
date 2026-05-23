@@ -136,6 +136,20 @@ app.post('/webhook', (req, res) => {
   res.json({ ok: true, signal });
 });
 
+
+// ─── UPDATE SIGNAL STATUS ─────────────────────
+app.put('/api/signals/:id', authMiddleware, (req, res) => {
+  const signals = readJSON(SIGNALS_FILE, []);
+  const sig = signals.find(s => s.id === req.params.id);
+  if (!sig) return res.status(404).json({ error: 'إشارة غير موجودة' });
+  const { status, closePrice } = req.body;
+  if (status) sig.status = status;
+  if (closePrice) sig.closePrice = closePrice;
+  sig.closedAt = new Date().toISOString();
+  writeJSON(SIGNALS_FILE, signals);
+  res.json({ ok: true, signal: sig });
+});
+
 // ─── ADMIN ROUTES ─────────────────────────────
 // جلب كل المشتركين
 app.get('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
