@@ -46,7 +46,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20p
 
 /* ── GRID ── */
 .wrap{padding:20px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .empty{text-align:center;padding:80px 20px;color:var(--muted);grid-column:1/-1}
 .empty-icon{font-size:48px;margin-bottom:12px;opacity:.3;display:block}
 .empty-txt{font-size:14px}
@@ -60,24 +60,24 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20p
 .card-bar{height:3px}
 .bar-buy{background:linear-gradient(90deg,var(--green),transparent)}
 .bar-sell{background:linear-gradient(90deg,var(--red),transparent)}
-.card-head{padding:14px 16px 8px;display:flex;align-items:flex-start;justify-content:space-between}
-.card-sym{font-family:var(--mono);font-size:20px;font-weight:600;color:#fff}
-.dir-badge{padding:4px 12px;border-radius:6px;font-family:var(--mono);font-size:11px;font-weight:600}
+.card-head{padding:8px 12px 4px;display:flex;align-items:flex-start;justify-content:space-between}
+.card-sym{font-family:var(--mono);font-size:15px;font-weight:600;color:#fff}
+.dir-badge{padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:600}
 .dir-buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.25)}
 .dir-sell{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.25)}
-.card-price{padding:2px 16px 12px;display:flex;align-items:baseline;gap:8px}
-.price-val{font-family:var(--mono);font-size:24px;font-weight:600;color:#fff}
+.card-price{padding:2px 12px 6px;display:flex;align-items:baseline;gap:6px}
+.price-val{font-family:var(--mono);font-size:18px;font-weight:600;color:#fff}
 .price-lbl{font-size:11px;color:var(--muted2)}
-.levels{margin:0 16px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.lv{background:var(--bg3);border-radius:7px;padding:7px 8px;border:1px solid rgba(28,39,51,.9)}
+.levels{margin:0 12px 8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.lv{background:var(--bg3);border-radius:5px;padding:5px 6px;border:1px solid rgba(28,39,51,.9)}
 .lv-lbl{font-size:9px;color:var(--muted2);margin-bottom:3px}
-.lv-val{font-family:var(--mono);font-size:12px;font-weight:500}
+.lv-val{font-family:var(--mono);font-size:11px;font-weight:500}
 .lv-tp{color:var(--green)}.lv-sl{color:var(--red)}.lv-pct{color:var(--yellow)}
-.rr-wrap{margin:0 16px 12px}
+.rr-wrap{margin:0 12px 6px}
 .rr-top{display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);margin-bottom:4px}
 .rr-track{height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
 .rr-fill{height:100%;border-radius:2px}
-.card-foot{padding:10px 16px;border-top:1px solid rgba(28,39,51,.7);display:flex;align-items:center;justify-content:space-between}
+.card-foot{padding:6px 12px;border-top:1px solid rgba(28,39,51,.7);display:flex;align-items:center;justify-content:space-between}
 .status-chip{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
 .s-open{background:rgba(0,217,126,.08);color:var(--green);border:1px solid rgba(0,217,126,.2)}
 .s-stopped{background:rgba(255,77,77,.08);color:var(--red);border:1px solid rgba(255,77,77,.2)}
@@ -280,6 +280,76 @@ function showToast(msg){
   t.textContent=msg; t.classList.add('show');
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),3000);
 }
+
+// ── Price Monitor (Binance) ─────────────────────
+const BINANCE_API = 'https://api.binance.com/api/v3/ticker/price';
+const updatedIds  = new Set(); // عشان ميتحدثش أكتر من مرة
+
+async function checkPrices() {
+  const openSigs = signals.filter(s => s.status === 'open');
+  if (!openSigs.length) return;
+
+  // جمّع كل الرموز الفريدة
+  const syms = [...new Set(openSigs.map(s => s.symbol.toUpperCase()))];
+
+  try {
+    // جيب أسعار كل الرموز دفعة واحدة
+    const url = BINANCE_API + '?symbols=[' + syms.map(s => '"' + s + '"').join(',') + ']';
+    const res  = await fetch(url);
+    if (!res.ok) return;
+    const prices = await res.json();
+
+    // حوّل لـ map
+    const priceMap = {};
+    prices.forEach(p => { priceMap[p.symbol] = parseFloat(p.price); });
+
+    // تحقق من كل صفقة مفتوحة
+    for (const sig of openSigs) {
+      if (updatedIds.has(sig.id)) continue;
+      const price = priceMap[sig.symbol.toUpperCase()];
+      if (!price) continue;
+
+      const isBuy = sig.action === 'BUY';
+      let   newStatus = null;
+
+      if (isBuy) {
+        if (price >= parseFloat(sig.tp))  newStatus = 'target';
+        else if (price <= parseFloat(sig.sl)) newStatus = 'stopped';
+      } else {
+        if (price <= parseFloat(sig.tp))  newStatus = 'target';
+        else if (price >= parseFloat(sig.sl)) newStatus = 'stopped';
+      }
+
+      if (newStatus) {
+        updatedIds.add(sig.id);
+        await updateSignal(sig.id, newStatus, price);
+        const msg = newStatus === 'target'
+          ? '🎯 ' + sig.symbol + ' حقق الهدف! +' + Math.abs(((price - sig.price)/sig.price)*100).toFixed(2) + '%'
+          : '🛑 ' + sig.symbol + ' وقف الخسارة';
+        showToast(msg);
+      }
+    }
+  } catch(e) {
+    // لو الرمز مش على Binance (فوركس مثلاً) تجاهل
+  }
+}
+
+async function updateSignal(id, status, closePrice) {
+  try {
+    await fetch('/api/signals/' + id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json','x-auth-token':token},
+      body: JSON.stringify({ status, closePrice })
+    });
+    // حدّث محلياً فوراً
+    const sig = signals.find(s => s.id === id);
+    if (sig) { sig.status = status; sig.closePrice = closePrice; render(); }
+  } catch(e) {}
+}
+
+// شغّل Price Monitor كل 15 ثانية
+setInterval(checkPrices, 15000);
+setTimeout(checkPrices, 3000); // أول مرة بعد 3 ثواني
 
 async function logout(){
   try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
