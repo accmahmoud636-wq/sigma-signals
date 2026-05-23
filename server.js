@@ -1,8 +1,8 @@
-const express = require('express');
-const http    = require('http');
-const path    = require('path');
-const fs      = require('fs');
-const crypto  = require('crypto');
+const express  = require('express');
+const http     = require('http');
+const path     = require('path');
+const crypto   = require('crypto');
+const mongoose = require('mongoose');
 
 const app    = express();
 const server = http.createServer(app);
@@ -10,204 +10,230 @@ const server = http.createServer(app);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── DATA FILES ───────────────────────────────
-const SIGNALS_FILE = path.join(__dirname, 'signals.json');
-const USERS_FILE   = path.join(__dirname, 'users.json');
+// ─── MongoDB Connection ───────────────────────
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://millionaire:Mm1234512345@cluster0.w50zpog.mongodb.net/millionaire?retryWrites=true&w=majority&appName=Cluster0';
 
-function readJSON(file, def) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch(e) { return def; }
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ MongoDB متصل'))
+  .catch(e => console.error('❌ MongoDB خطأ:', e.message));
+
+// ─── Schemas ──────────────────────────────────
+const SignalSchema = new mongoose.Schema({
+  symbol:     { type: String, required: true },
+  action:     { type: String, required: true },
+  price:      { type: Number, required: true },
+  sl:         Number,
+  tp:         Number,
+  strategy:   { type: String, default: 'TradingView' },
+  status:     { type: String, default: 'open', enum: ['open','target','stopped'] },
+  closePrice: Number,
+  closedAt:   Date,
+  receivedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+const UserSchema = new mongoose.Schema({
+  username:  { type: String, required: true, unique: true },
+  password:  { type: String, required: true },
+  name:      { type: String, required: true },
+  email:     String,
+  role:      { type: String, default: 'user', enum: ['user','admin'] },
+  active:    { type: Boolean, default: true },
+  expiresAt: Date,
+  token:     String,
+  lastLogin: Date,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Signal = mongoose.model('Signal', SignalSchema);
+const User   = mongoose.model('User',   UserSchema);
+
+// إنشاء Admin لو مش موجود
+async function initAdmin() {
+  try {
+    const exists = await User.findOne({ username: 'admin' });
+    if (!exists) {
+      await User.create({
+        username: 'admin', password: 'admin123',
+        name: 'Admin', email: 'admin@millionaire.com',
+        role: 'admin', active: true, expiresAt: null
+      });
+      console.log('✅ Admin account created');
+    }
+  } catch(e) {}
 }
-function writeJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
+mongoose.connection.once('open', initAdmin);
 
-// ─── INIT DATA ────────────────────────────────
-if (!fs.existsSync(SIGNALS_FILE)) writeJSON(SIGNALS_FILE, []);
-if (!fs.existsSync(USERS_FILE)) writeJSON(USERS_FILE, [
-  {
-    id: '1',
-    username: 'admin',
-    password: 'admin123',
-    role: 'admin',
-    name: 'Admin',
-    email: 'admin@millionaire.com',
-    active: true,
-    expiresAt: null,
-    createdAt: new Date().toISOString()
-  }
-]);
-
-// ─── AUTH MIDDLEWARE ──────────────────────────
-function authMiddleware(req, res, next) {
+// ─── Auth Middleware ──────────────────────────
+async function auth(req, res, next) {
   const token = req.headers['x-auth-token'];
   if (!token) return res.status(401).json({ error: 'غير مصرح' });
-  const users = readJSON(USERS_FILE, []);
-  const user  = users.find(u => u.token === token && u.active);
+  const user = await User.findOne({ token, active: true });
   if (!user) return res.status(401).json({ error: 'جلسة منتهية' });
   if (user.expiresAt && new Date(user.expiresAt) < new Date())
-    return res.status(403).json({ error: 'انتهى الاشتراك' });
+    return res.status(403).json({ error: 'انتهى الاشتراك — تواصل مع الإدارة' });
   req.user = user;
   next();
 }
 
-function adminMiddleware(req, res, next) {
+async function adminOnly(req, res, next) {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'ليس لديك صلاحية' });
   next();
 }
 
-// ─── AUTH ROUTES ──────────────────────────────
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  const users = readJSON(USERS_FILE, []);
-  const user  = users.find(u => u.username === username && u.password === password);
-  if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خاطئة' });
-  if (!user.active) return res.status(403).json({ error: 'الحساب موقوف' });
-  if (user.expiresAt && new Date(user.expiresAt) < new Date())
-    return res.status(403).json({ error: 'انتهى اشتراكك — تواصل مع الإدارة' });
-  user.token = crypto.randomBytes(32).toString('hex');
-  user.lastLogin = new Date().toISOString();
-  writeJSON(USERS_FILE, users);
-  res.json({ token: user.token, name: user.name, role: user.role, expiresAt: user.expiresAt });
+// ─── Auth Routes ─────────────────────────────
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ username, password });
+    if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خاطئة' });
+    if (!user.active) return res.status(403).json({ error: 'الحساب موقوف — تواصل مع الإدارة' });
+    if (user.expiresAt && new Date(user.expiresAt) < new Date())
+      return res.status(403).json({ error: 'انتهى اشتراكك — تواصل مع الإدارة' });
+    user.token     = crypto.randomBytes(32).toString('hex');
+    user.lastLogin = new Date();
+    await user.save();
+    res.json({ token: user.token, name: user.name, role: user.role, expiresAt: user.expiresAt });
+  } catch(e) { res.status(500).json({ error: 'خطأ في السيرفر' }); }
 });
 
-app.post('/api/logout', authMiddleware, (req, res) => {
-  const users = readJSON(USERS_FILE, []);
-  const user  = users.find(u => u.id === req.user.id);
-  if (user) { user.token = null; writeJSON(USERS_FILE, users); }
+app.post('/api/logout', auth, async (req, res) => {
+  req.user.token = null;
+  await req.user.save();
   res.json({ ok: true });
 });
 
-app.get('/api/me', authMiddleware, (req, res) => {
+app.get('/api/me', auth, (req, res) => {
   res.json({ name: req.user.name, role: req.user.role, expiresAt: req.user.expiresAt });
 });
 
-// ─── SIGNALS ROUTES ───────────────────────────
-app.get('/api/signals', authMiddleware, (req, res) => {
-  const signals = readJSON(SIGNALS_FILE, []);
+// تغيير الباسورد
+app.put('/api/me/password', auth, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (req.user.password !== oldPassword) return res.status(400).json({ error: 'كلمة المرور القديمة خاطئة' });
+  req.user.password = newPassword;
+  await req.user.save();
+  res.json({ ok: true });
+});
+
+// ─── Signals Routes ───────────────────────────
+app.get('/api/signals', auth, async (req, res) => {
+  const signals = await Signal.find().sort({ receivedAt: -1 }).limit(200);
   res.json(signals);
 });
 
+app.put('/api/signals/:id', auth, async (req, res) => {
+  try {
+    const { status, closePrice } = req.body;
+    const sig = await Signal.findByIdAndUpdate(
+      req.params.id,
+      { status, closePrice, closedAt: new Date() },
+      { new: true }
+    );
+    res.json({ ok: true, signal: sig });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // TradingView Webhook
-app.post('/webhook', (req, res) => {
-  const data = req.body;
-  if (!data.action || !data.symbol) return res.status(400).json({ error: 'بيانات ناقصة' });
-  const signals = readJSON(SIGNALS_FILE, []);
+app.post('/webhook', async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.action || !data.symbol) return res.status(400).json({ error: 'بيانات ناقصة' });
 
-  // لو إشارة STOPPED أو CLOSED — حدّث الصفقة الموجودة
-  if (data.action === 'STOPPED' || data.action === 'CLOSED') {
-    const sig = signals.find(s => s.symbol === data.symbol.toUpperCase() && s.status === 'open');
-    if (sig) {
-      sig.status    = data.action === 'STOPPED' ? 'stopped' : 'closed';
-      sig.closedAt  = new Date().toISOString();
-      sig.closePrice = data.price;
+    if (data.action === 'STOPPED' || data.action === 'CLOSED') {
+      await Signal.findOneAndUpdate(
+        { symbol: data.symbol.toUpperCase(), status: 'open' },
+        { status: data.action === 'STOPPED' ? 'stopped' : 'closed', closedAt: new Date(), closePrice: data.price }
+      );
+      return res.json({ ok: true });
     }
-    writeJSON(SIGNALS_FILE, signals);
-    return res.json({ ok: true });
+
+    const entry  = parseFloat(data.price);
+    const sl     = parseFloat(data.sl) || entry * 0.99;
+    let   tp     = parseFloat(data.tp);
+    const slDist = Math.abs(entry - sl);
+    if (!tp || Math.abs(tp - entry) < 0.00001) tp = data.action.toUpperCase() === 'BUY' ? entry + slDist * 2 : entry - slDist * 2;
+
+    const signal = await Signal.create({
+      symbol: data.symbol.toUpperCase(), action: data.action.toUpperCase(),
+      price: entry, sl, tp, strategy: data.strategy || 'TradingView',
+      status: 'open', receivedAt: new Date()
+    });
+
+    console.log(`📡 ${signal.action} ${signal.symbol} @ ${signal.price}`);
+    res.json({ ok: true, signal });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Admin Routes ─────────────────────────────
+app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
+  const users = await User.find().select('-token');
+  res.json(users);
+});
+
+app.post('/api/admin/users', auth, adminOnly, async (req, res) => {
+  try {
+    const { username, password, name, email, days } = req.body;
+    const expiresAt = days ? new Date(Date.now() + days * 86400000) : null;
+    const user = await User.create({ username, password, name, email, role: 'user', active: true, expiresAt });
+    res.json({ ok: true, user });
+  } catch(e) {
+    if (e.code === 11000) return res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' });
+    res.status(500).json({ error: e.message });
   }
-
-  // إشارة جديدة
-  const entry  = parseFloat(data.price);
-  const sl     = parseFloat(data.sl) || entry * 0.99;
-  let   tp     = parseFloat(data.tp);
-  const slDist = Math.abs(entry - sl);
-  if (!tp || tp === sl || tp === entry) {
-    tp = data.action === 'BUY' ? entry + slDist * 2 : entry - slDist * 2;
-  }
-
-  const signal = {
-    id:         Date.now().toString(),
-    symbol:     data.symbol.toUpperCase(),
-    action:     data.action.toUpperCase(),
-    price:      entry,
-    sl:         sl,
-    tp:         tp,
-    strategy:   data.strategy || 'TradingView',
-    status:     'open',
-    receivedAt: new Date().toISOString(),
-    closedAt:   null,
-    closePrice: null
-  };
-
-  signals.unshift(signal);
-  if (signals.length > 200) signals.pop();
-  writeJSON(SIGNALS_FILE, signals);
-  console.log(`📡 ${signal.action} ${signal.symbol} @ ${signal.price}`);
-  res.json({ ok: true, signal });
 });
 
-
-// ─── UPDATE SIGNAL STATUS ─────────────────────
-app.put('/api/signals/:id', authMiddleware, (req, res) => {
-  const signals = readJSON(SIGNALS_FILE, []);
-  const sig = signals.find(s => s.id === req.params.id);
-  if (!sig) return res.status(404).json({ error: 'إشارة غير موجودة' });
-  const { status, closePrice } = req.body;
-  if (status) sig.status = status;
-  if (closePrice) sig.closePrice = closePrice;
-  sig.closedAt = new Date().toISOString();
-  writeJSON(SIGNALS_FILE, signals);
-  res.json({ ok: true, signal: sig });
+app.put('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const { active, days, password, name } = req.body;
+    const update = {};
+    if (active !== undefined) update.active = active;
+    if (days) update.expiresAt = new Date(Date.now() + days * 86400000);
+    if (password) update.password = password;
+    if (name) update.name = name;
+    await User.findByIdAndUpdate(req.params.id, update);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── ADMIN ROUTES ─────────────────────────────
-// جلب كل المشتركين
-app.get('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
-  const users = readJSON(USERS_FILE, []);
-  res.json(users.map(u => ({ ...u, password: '***', token: undefined })));
-});
-
-// إضافة مشترك
-app.post('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
-  const { username, password, name, email, days } = req.body;
-  const users = readJSON(USERS_FILE, []);
-  if (users.find(u => u.username === username))
-    return res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' });
-  const expiresAt = days ? new Date(Date.now() + days * 86400000).toISOString() : null;
-  const newUser = {
-    id:        Date.now().toString(),
-    username, password, name,
-    email:     email || '',
-    role:      'user',
-    active:    true,
-    expiresAt,
-    createdAt: new Date().toISOString(),
-    token:     null
-  };
-  users.push(newUser);
-  writeJSON(USERS_FILE, users);
-  res.json({ ok: true, user: { ...newUser, password: '***' } });
-});
-
-// تعديل مشترك
-app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, (req, res) => {
-  const users = readJSON(USERS_FILE, []);
-  const idx   = users.findIndex(u => u.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'مستخدم غير موجود' });
-  const { active, days, password, name } = req.body;
-  if (active !== undefined) users[idx].active = active;
-  if (days) users[idx].expiresAt = new Date(Date.now() + days * 86400000).toISOString();
-  if (password) users[idx].password = password;
-  if (name) users[idx].name = name;
-  writeJSON(USERS_FILE, users);
+app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
+  await User.findByIdAndDelete(req.params.id);
   res.json({ ok: true });
 });
 
-// حذف مشترك
-app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, (req, res) => {
-  let users = readJSON(USERS_FILE, []);
-  users = users.filter(u => u.id !== req.params.id);
-  writeJSON(USERS_FILE, users);
+app.delete('/api/admin/signals', auth, adminOnly, async (req, res) => {
+  await Signal.deleteMany({});
   res.json({ ok: true });
 });
 
-// مسح الإشارات
-app.delete('/api/admin/signals', authMiddleware, adminMiddleware, (req, res) => {
-  writeJSON(SIGNALS_FILE, []);
-  res.json({ ok: true });
+// إضافة إشارة يدوية من الـ Admin
+app.post('/api/admin/signals', auth, adminOnly, async (req, res) => {
+  try {
+    const { symbol, action, price, sl, tp, strategy } = req.body;
+    const entry  = parseFloat(price);
+    const slVal  = parseFloat(sl) || entry * 0.99;
+    let   tpVal  = parseFloat(tp);
+    const slDist = Math.abs(entry - slVal);
+    if (!tpVal) tpVal = action === 'BUY' ? entry + slDist * 2 : entry - slDist * 2;
+    const signal = await Signal.create({
+      symbol: symbol.toUpperCase(), action: action.toUpperCase(),
+      price: entry, sl: slVal, tp: tpVal,
+      strategy: strategy || 'Manual', status: 'open', receivedAt: new Date()
+    });
+    res.json({ ok: true, signal });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── PAGES ────────────────────────────────────
+// ─── Stats ────────────────────────────────────
+app.get('/api/stats', auth, async (req, res) => {
+  const total   = await Signal.countDocuments();
+  const open    = await Signal.countDocuments({ status: 'open' });
+  const target  = await Signal.countDocuments({ status: 'target' });
+  const stopped = await Signal.countDocuments({ status: 'stopped' });
+  const winRate = total > 0 ? ((target / (target + stopped)) * 100).toFixed(1) : 0;
+  res.json({ total, open, target, stopped, winRate });
+});
+
+// ─── Pages ────────────────────────────────────
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
