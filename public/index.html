@@ -386,47 +386,30 @@ function setFilter(f, btn){
 // ─── WEBHOOK من السيرفر ──────────────────────
 // الإشارات بتيجي من server.js عبر socket.io
 </script>
-
 <script src="/socket.io/socket.io.js"></script>
 <script>
-(function() {
-  // جلب الإشارات القديمة أول ما الصفحة تفتح
-  function loadOldSignals() {
-    fetch('/signals')
-      .then(function(r) { return r.json(); })
-      .then(function(list) {
-        if (list && list.length > 0) {
-          var reversed = list.slice().reverse();
-          reversed.forEach(function(s) {
-            if (s && s.action && s.symbol) {
-              addSignal(s);
-            }
-          });
+window.addEventListener('load', function() {
+  // ── جلب الإشارات القديمة ──
+  fetch('/signals')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (Array.isArray(data) && data.length > 0) {
+        var arr = data.slice().reverse();
+        for (var i = 0; i < arr.length; i++) {
+          try { addSignal(arr[i]); } catch(e) {}
         }
-      })
-      .catch(function(e) { console.log('خطأ في جلب الإشارات:', e); });
-  }
+      }
+    })
+    .catch(function(err) { console.error(err); });
 
-  // اتصال WebSocket للإشارات اللحظية
-  var socket = io();
-  socket.on('connect', function() {
-    console.log('متصل بالسيرفر');
-    loadOldSignals();
-  });
-  socket.on('signal', function(data) {
-    console.log('إشارة جديدة:', data);
-    if (data && data.action && data.symbol) {
-      addSignal(data);
-    }
-  });
-
-  // لو socket.io فشل — جرب fetch مباشرة بعد ثانية
-  setTimeout(function() {
-    if (typeof signals !== 'undefined' && signals.length === 0) {
-      loadOldSignals();
-    }
-  }, 1000);
-})();
+  // ── إشارات لحظية ──
+  try {
+    var socket = io();
+    socket.on('signal', function(data) {
+      try { addSignal(data); } catch(e) {}
+    });
+  } catch(e) {}
+});
 </script>
 </body>
 </html>
