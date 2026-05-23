@@ -18,122 +18,159 @@
 body{background:var(--bg);color:var(--text);font-family:var(--ar);min-height:100vh}
 
 /* ── HEADER ── */
-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:56px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100}
-.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
 .logo-text{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--gold);letter-spacing:2px}
-.hstats{display:flex;gap:1px;margin-right:auto;flex-wrap:wrap}
-.hs{padding:0 12px;height:56px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid var(--border)}
+.logo-by{font-family:var(--mono);font-size:9px;color:var(--muted2)}
+.hstats{display:flex;gap:1px;margin-right:auto}
+.hs{padding:0 12px;height:52px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid var(--border)}
 .hs-n{font-family:var(--mono);font-size:15px;font-weight:600}
-.hs-l{font-size:10px;color:var(--muted2);margin-top:1px}
-.mkt{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:4px}
+.hs-l{font-size:9px;color:var(--muted2);margin-top:1px}
+.mkt{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:4px}
 .mkt-open{color:var(--green);background:rgba(0,217,126,.08);border:1px solid rgba(0,217,126,.2)}
 .mkt-closed{color:var(--muted2);background:var(--bg3);border:1px solid var(--border)}
 .user-wrap{display:flex;align-items:center;gap:8px}
-.user-name{font-size:12px;color:var(--muted2);font-family:var(--mono)}
-.btn-sm{background:transparent;border:1px solid var(--border2);color:var(--muted2);padding:4px 10px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px;transition:all .15s}
+.uname{font-size:11px;color:var(--muted2);font-family:var(--mono)}
+.btn-sm{background:transparent;border:1px solid var(--border2);color:var(--muted2);padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px;transition:all .15s}
 .btn-sm:hover{border-color:var(--red);color:var(--red)}
 
 /* ── TABS ── */
-.tabs{padding:12px 20px;display:flex;gap:6px;border-bottom:1px solid var(--border);background:var(--bg2);flex-wrap:wrap;align-items:center}
-.tab{padding:6px 16px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:12px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px}
+.tabs{padding:10px 20px;display:flex;gap:6px;border-bottom:1px solid var(--border);background:var(--bg2);align-items:center;flex-wrap:wrap}
+.tab{padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:12px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px}
 .tab:hover{border-color:var(--gold);color:var(--gold)}
 .tab.active{background:var(--gold3);border-color:var(--gold);color:var(--gold)}
-.tab .cnt{background:var(--bg3);padding:1px 6px;border-radius:10px;font-family:var(--mono);font-size:10px}
+.cnt{background:var(--bg3);padding:1px 6px;border-radius:10px;font-family:var(--mono);font-size:10px}
 .tab.active .cnt{background:rgba(212,175,55,.15)}
-.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;margin-left:auto}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;margin-right:auto}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-/* ── GRID ── */
-.wrap{padding:20px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
-.empty{text-align:center;padding:80px 20px;color:var(--muted);grid-column:1/-1}
-.empty-icon{font-size:48px;margin-bottom:12px;opacity:.3;display:block}
-.empty-txt{font-size:14px}
-.empty-sub{font-size:12px;color:var(--muted);margin-top:6px}
+/* ── REPORT ── */
+.report{padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.rcard{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.rcard-val{font-family:var(--mono);font-size:20px;font-weight:600;margin-bottom:3px}
+.rcard-lbl{font-size:11px;color:var(--muted2)}
+.rcard-sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+.winrate-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+.winrate-fill{height:100%;border-radius:2px;background:var(--green);transition:width .5s}
 
-/* ── CARD ── */
-.card{background:var(--card);border-radius:12px;border:1px solid var(--border);overflow:hidden;transition:transform .18s,box-shadow .18s;cursor:default}
-.card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.4)}
-.card.new-card{animation:cardIn .35s cubic-bezier(.2,.8,.2,1)}
-@keyframes cardIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-.card-bar{height:3px}
-.bar-buy{background:linear-gradient(90deg,var(--green),transparent)}
-.bar-sell{background:linear-gradient(90deg,var(--red),transparent)}
-.card-head{padding:8px 12px 4px;display:flex;align-items:flex-start;justify-content:space-between}
-.card-sym{font-family:var(--mono);font-size:15px;font-weight:600;color:#fff}
-.dir-badge{padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:600}
-.dir-buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.25)}
-.dir-sell{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.25)}
-.card-price{padding:2px 12px 6px;display:flex;align-items:baseline;gap:6px}
-.price-val{font-family:var(--mono);font-size:18px;font-weight:600;color:#fff}
-.price-lbl{font-size:11px;color:var(--muted2)}
-.levels{margin:0 12px 8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
-.lv{background:var(--bg3);border-radius:5px;padding:5px 6px;border:1px solid rgba(28,39,51,.9)}
-.lv-lbl{font-size:9px;color:var(--muted2);margin-bottom:3px}
-.lv-val{font-family:var(--mono);font-size:11px;font-weight:500}
-.lv-tp{color:var(--green)}.lv-sl{color:var(--red)}.lv-pct{color:var(--yellow)}
-.rr-wrap{margin:0 12px 6px}
-.rr-top{display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);margin-bottom:4px}
-.rr-track{height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
-.rr-fill{height:100%;border-radius:2px}
-.card-foot{padding:6px 12px;border-top:1px solid rgba(28,39,51,.7);display:flex;align-items:center;justify-content:space-between}
-.status-chip{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
-.s-open{background:rgba(0,217,126,.08);color:var(--green);border:1px solid rgba(0,217,126,.2)}
-.s-stopped{background:rgba(255,77,77,.08);color:var(--red);border:1px solid rgba(255,77,77,.2)}
-.s-target{background:rgba(240,180,41,.08);color:var(--yellow);border:1px solid rgba(240,180,41,.2)}
-.s-dot{width:5px;height:5px;border-radius:50%}
+/* ── TABLE ── */
+.wrap{padding:16px 20px;overflow-x:auto}
+.signals-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
+.signals-table thead th{padding:8px 12px;color:var(--muted2);font-weight:400;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-align:right;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:52px;z-index:1;white-space:nowrap}
+.signals-table tbody td{padding:9px 12px;border-bottom:1px solid rgba(212,175,55,.04);text-align:right;vertical-align:middle}
+.signals-table tbody tr{transition:background .1s}
+.signals-table tbody tr:hover td{background:rgba(212,175,55,.03)}
+.signals-table tbody tr.new-row{animation:rowIn .3s ease}
+@keyframes rowIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+
+/* ── TABLE CELLS ── */
+.sym-cell{display:flex;align-items:center;gap:8px}
+.sym-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;font-family:var(--mono);flex-shrink:0}
+.sym-icon.buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.2)}
+.sym-icon.sell{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.2)}
+.sym-name{font-family:var(--mono);font-size:13px;font-weight:500;color:#fff}
+.dir-txt{font-family:var(--mono);font-size:11px;font-weight:600}
+.dir-buy{color:var(--green)}
+.dir-sell{color:var(--red)}
+.price-cell{font-family:var(--mono);font-size:12px}
+.current-up{color:var(--green)}
+.current-dn{color:var(--red)}
+.current-neutral{color:var(--muted2)}
+.tp-cell{color:var(--green);font-family:var(--mono);font-size:12px}
+.sl-cell{color:var(--red);font-family:var(--mono);font-size:12px}
+.pct-cell{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--yellow)}
+
+/* Progress bar in table */
+.prog-wrap{display:flex;align-items:center;gap:6px;min-width:100px}
+.prog-track{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;transition:width .5s}
+.prog-pct{font-family:var(--mono);font-size:10px;color:var(--muted2);width:30px;text-align:left}
+
+/* Status */
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500;white-space:nowrap}
+.s-open{background:rgba(0,217,126,.08);color:var(--green);border:1px solid rgba(0,217,126,.15)}
+.s-stopped{background:rgba(255,77,77,.08);color:var(--red);border:1px solid rgba(255,77,77,.15)}
+.s-target{background:rgba(240,180,41,.08);color:var(--yellow);border:1px solid rgba(240,180,41,.15)}
+.s-dot{width:4px;height:4px;border-radius:50%}
 .s-open .s-dot{background:var(--green);animation:pulse 2s infinite}
-.s-stopped .s-dot,.s-target .s-dot{background:currentColor}
-.card-meta{text-align:left}
-.card-strat{font-size:10px;color:var(--muted2)}
-.card-time{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px}
+.s-stopped .s-dot{background:var(--red)}
+.s-target .s-dot{background:var(--yellow)}
 
-/* ── TOAST ── */
+.strat-cell{font-size:10px;color:var(--muted2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.time-cell{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
+
+/* Empty */
+.empty-row td{text-align:center;padding:60px;color:var(--muted)}
+.empty-icon{font-size:36px;display:block;margin-bottom:10px;opacity:.3}
+
+/* Toast */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ── WEBHOOK BAR ── */
-.wh-bar{background:var(--bg2);border-top:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;font-size:11px;flex-wrap:wrap}
-.wh-label{color:var(--muted2)}
+/* WH bar */
+.wh-bar{background:var(--bg2);border-top:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;font-size:11px}
+.wh-lbl{color:var(--muted2)}
 .wh-url{font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px}
-.wh-url:hover{border-color:var(--blue)}
 
-
-/* ── PROGRESS ── */
-.progress-wrap{margin:0 12px 8px}
-.progress-top{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
-.progress-lbl{color:var(--muted2)}
-.progress-pct{font-family:var(--mono);font-weight:500}
-.progress-track{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
-.progress-fill{height:100%;border-radius:3px;transition:width .5s}
-.current-price{display:flex;justify-content:space-between;align-items:center;margin:0 12px 6px;background:var(--bg3);border-radius:5px;padding:5px 8px}
-.cp-label{font-size:10px;color:var(--muted2)}
-.cp-val{font-family:var(--mono);font-size:12px;font-weight:500}
-.cp-chg{font-family:var(--mono);font-size:11px}
-@media(max-width:600px){.grid{grid-template-columns:1fr}.hstats{display:none}}
+@media(max-width:768px){.hstats{display:none}.report{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 
 <header>
-  <a class="logo" href="/">
+  <div class="logo">
     <div class="logo-icon">💰</div>
-    <div><div class="logo-text">MILLIONAIRE</div><div style="font-family:var(--mono);font-size:9px;color:var(--muted2);letter-spacing:.05em">by Mahmoud Ahmed</div></div>
-  </a>
+    <div>
+      <div class="logo-text">MILLIONAIRE</div>
+      <div class="logo-by">by Mahmoud Ahmed</div>
+    </div>
+  </div>
   <div class="hstats">
     <div class="hs"><div class="hs-n" id="h-open" style="color:var(--green)">0</div><div class="hs-l">مفتوحة</div></div>
     <div class="hs"><div class="hs-n" id="h-target" style="color:var(--yellow)">0</div><div class="hs-l">حققت الهدف</div></div>
     <div class="hs"><div class="hs-n" id="h-stopped" style="color:var(--red)">0</div><div class="hs-l">وقف الخسارة</div></div>
-    <div class="hs"><div class="hs-n" id="h-total">0</div><div class="hs-l">الكل</div></div>
+    <div class="hs"><div class="hs-n" id="h-wr" style="color:var(--gold)">—</div><div class="hs-l">Win Rate</div></div>
   </div>
   <div class="mkt mkt-closed" id="mkt"></div>
   <div class="user-wrap">
-    <span class="user-name" id="uname"></span>
+    <span class="uname" id="uname"></span>
     <button class="btn-sm" onclick="logout()">خروج</button>
   </div>
 </header>
 
+<!-- REPORT -->
+<div class="report" id="report">
+  <div class="rcard">
+    <div class="rcard-val" id="r-total" style="color:var(--blue)">0</div>
+    <div class="rcard-lbl">إجمالي الإشارات</div>
+  </div>
+  <div class="rcard">
+    <div class="rcard-val" id="r-win" style="color:var(--green)">0</div>
+    <div class="rcard-lbl">صفقات رابحة ✅</div>
+    <div class="rcard-sub" id="r-win-pct">—</div>
+  </div>
+  <div class="rcard">
+    <div class="rcard-val" id="r-loss" style="color:var(--red)">0</div>
+    <div class="rcard-lbl">صفقات خاسرة ❌</div>
+    <div class="rcard-sub" id="r-loss-pct">—</div>
+  </div>
+  <div class="rcard">
+    <div class="rcard-val" id="r-open" style="color:var(--muted2)">0</div>
+    <div class="rcard-lbl">مفتوحة الآن 🟢</div>
+  </div>
+  <div class="rcard">
+    <div class="rcard-val" id="r-wr" style="color:var(--gold)">—</div>
+    <div class="rcard-lbl">نسبة النجاح</div>
+    <div class="winrate-bar"><div class="winrate-fill" id="r-wr-bar" style="width:0%"></div></div>
+  </div>
+  <div class="rcard">
+    <div class="rcard-val" id="r-best" style="color:var(--green);font-size:14px">—</div>
+    <div class="rcard-lbl">أفضل استراتيجية</div>
+  </div>
+</div>
+
+<!-- TABS -->
 <div class="tabs">
   <button class="tab active" onclick="setTab('all',this)">الكل <span class="cnt" id="c-all">0</span></button>
   <button class="tab" onclick="setTab('open',this)">🟢 مفتوحة <span class="cnt" id="c-open">0</span></button>
@@ -144,37 +181,54 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20p
   <span class="live-dot"></span>
 </div>
 
-<div class="wrap"><div class="grid" id="grid"></div></div>
+<!-- TABLE -->
+<div class="wrap">
+  <table class="signals-table">
+    <thead>
+      <tr>
+        <th>السهم</th>
+        <th>اتجاه</th>
+        <th>سعر الدخول</th>
+        <th>السعر الحالي</th>
+        <th>الهدف</th>
+        <th>وقف الخسارة</th>
+        <th>نسبة الهدف</th>
+        <th>التقدم</th>
+        <th>الحالة</th>
+        <th>الاستراتيجية</th>
+        <th>الوقت</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
 
 <div class="wh-bar">
-  <span class="wh-label">Webhook URL:</span>
-  <span class="wh-url" onclick="copyWH()" id="wh-url-text">جاري التحميل...</span>
+  <span class="wh-lbl">Webhook:</span>
+  <span class="wh-url" onclick="copyWH()" id="wh-url"></span>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Auth Check ──────────────────────────────────
 const token = localStorage.getItem('mm_token');
 if (!token) window.location.href = '/login.html';
-document.getElementById('uname').textContent = localStorage.getItem('mm_name') || '';
-document.getElementById('wh-url-text').textContent = location.origin + '/webhook';
+document.getElementById('uname').textContent  = localStorage.getItem('mm_name') || '';
+document.getElementById('wh-url').textContent = location.origin + '/webhook';
 
-// ── State ───────────────────────────────────────
-let signals  = [];
-let tab      = 'all';
-let lastSeen = 0;
+let signals = [], tab = 'all', lastSeen = 0;
+const priceCache = {};
 
-// ── Market Status ───────────────────────────────
+// ── Market ──────────────────────────────────────
 function updateMkt() {
   const ny = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
   const d=ny.getDay(),h=ny.getHours(),m=ny.getMinutes();
   const open = d>=1&&d<=5&&(h>9||(h===9&&m>=30))&&h<16;
   const el = document.getElementById('mkt');
-  el.textContent = open ? '● السوق مفتوح' : '○ السوق مغلق';
+  el.textContent = open ? '● مفتوح' : '○ مغلق';
   el.className = 'mkt '+(open?'mkt-open':'mkt-closed');
 }
-setInterval(updateMkt,30000); updateMkt();
+setInterval(updateMkt,60000); updateMkt();
 
 // ── Load Signals ────────────────────────────────
 async function load() {
@@ -183,38 +237,49 @@ async function load() {
     if(r.status===401||r.status===403){logout();return;}
     const data = await r.json();
     if(!Array.isArray(data)) return;
-    // إشارات جديدة
-    if(data.length > lastSeen && lastSeen > 0) {
-      const n = data.length - lastSeen;
-      showToast(`📡 ${n} إشارة جديدة!`);
-    }
+    if(data.length > lastSeen && lastSeen > 0) showToast('📡 إشارة جديدة!');
     lastSeen = data.length;
     signals  = data;
     render();
+    updateReport();
   } catch(e){}
 }
 load();
 setInterval(load, 5000);
 
-// ── Render ──────────────────────────────────────
-function render() {
+// ── Report ──────────────────────────────────────
+function updateReport() {
   const open    = signals.filter(s=>s.status==='open').length;
   const target  = signals.filter(s=>s.status==='target').length;
   const stopped = signals.filter(s=>s.status==='stopped').length;
-  const buys    = signals.filter(s=>s.action==='BUY').length;
-  const sells   = signals.filter(s=>s.action==='SELL').length;
+  const closed  = target + stopped;
+  const wr      = closed > 0 ? (target/closed*100).toFixed(1) : null;
 
+  // أفضل استراتيجية
+  const stratMap = {};
+  signals.filter(s=>s.status==='target').forEach(s=>{
+    stratMap[s.strategy] = (stratMap[s.strategy]||0) + 1;
+  });
+  const bestStrat = Object.keys(stratMap).sort((a,b)=>stratMap[b]-stratMap[a])[0] || '—';
+
+  document.getElementById('r-total').textContent   = signals.length;
+  document.getElementById('r-win').textContent     = target;
+  document.getElementById('r-loss').textContent    = stopped;
+  document.getElementById('r-open').textContent    = open;
+  document.getElementById('r-win-pct').textContent = closed>0 ? (target/closed*100).toFixed(1)+'% من المغلقة' : '—';
+  document.getElementById('r-loss-pct').textContent= closed>0 ? (stopped/closed*100).toFixed(1)+'% من المغلقة' : '—';
+  document.getElementById('r-wr').textContent      = wr ? wr+'%' : '—';
+  document.getElementById('r-wr-bar').style.width  = (wr||0)+'%';
+  document.getElementById('r-wr-bar').style.background = parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
+  document.getElementById('r-best').textContent    = bestStrat;
   document.getElementById('h-open').textContent    = open;
   document.getElementById('h-target').textContent  = target;
   document.getElementById('h-stopped').textContent = stopped;
-  document.getElementById('h-total').textContent   = signals.length;
-  document.getElementById('c-all').textContent     = signals.length;
-  document.getElementById('c-open').textContent    = open;
-  document.getElementById('c-target').textContent  = target;
-  document.getElementById('c-stopped').textContent = stopped;
-  document.getElementById('c-buy').textContent     = buys;
-  document.getElementById('c-sell').textContent    = sells;
+  document.getElementById('h-wr').textContent      = wr ? wr+'%' : '—';
+}
 
+// ── Render Table ────────────────────────────────
+function render() {
   let list = [...signals];
   if(tab==='open')    list=list.filter(s=>s.status==='open');
   else if(tab==='target')  list=list.filter(s=>s.status==='target');
@@ -222,69 +287,79 @@ function render() {
   else if(tab==='BUY')  list=list.filter(s=>s.action==='BUY');
   else if(tab==='SELL') list=list.filter(s=>s.action==='SELL');
 
-  const grid = document.getElementById('grid');
+  const counts = {
+    all:signals.length,
+    open:signals.filter(s=>s.status==='open').length,
+    target:signals.filter(s=>s.status==='target').length,
+    stopped:signals.filter(s=>s.status==='stopped').length,
+    BUY:signals.filter(s=>s.action==='BUY').length,
+    SELL:signals.filter(s=>s.action==='SELL').length
+  };
+  ['all','open','target','stopped','BUY','SELL'].forEach(k=>{
+    const el = document.getElementById('c-'+k);
+    if(el) el.textContent = counts[k]||0;
+  });
+
+  const tbody = document.getElementById('tbody');
   if(!list.length){
-    grid.innerHTML=`<div class="empty"><span class="empty-icon">📡</span><div class="empty-txt">لا توجد إشارات</div><div class="empty-sub">في انتظار إشارات TradingView...</div></div>`;
+    tbody.innerHTML=`<tr class="empty-row"><td colspan="11"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</td></tr>`;
     return;
   }
 
-  grid.innerHTML = list.map(s => {
+  tbody.innerHTML = list.map(s => {
     const isBuy  = s.action==='BUY';
     const entry  = parseFloat(s.price)||0;
     let   tp     = parseFloat(s.tp)||0;
     const sl     = parseFloat(s.sl)||0;
     const slDist = Math.abs(entry-sl);
-    if(!tp||Math.abs(tp-entry)<0.00001) tp = isBuy ? entry+slDist*2 : entry-slDist*2;
-    const reward = Math.abs(tp-entry);
-    const tpPct  = entry>0 ? (isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2) : '0.00';
-    const rr     = slDist>0 ? (reward/slDist).toFixed(1) : '—';
-    const rrPct  = slDist>0 ? Math.min(reward/(slDist+reward)*100,100).toFixed(0) : 50;
-    const rrClr  = parseFloat(rr)>=2?'var(--green)':parseFloat(rr)>=1.5?'var(--yellow)':'var(--red)';
+    if(!tp||Math.abs(tp-entry)<0.00001) tp = isBuy?entry+slDist*2:entry-slDist*2;
+    const tpPct  = entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
     const dp     = entry>=100?2:4;
-    const stMap  = {open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف الخسارة'},target:{cls:'s-target',txt:'🎯 حقق الهدف'}};
-    const st     = stMap[s.status]||stMap.open;
-    const dt     = new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
 
-    return `<div class="card new-card">
-      <div class="card-bar ${isBuy?'bar-buy':'bar-sell'}"></div>
-      <div class="card-head">
-        <div class="card-sym">${s.symbol}</div>
-        <span class="dir-badge ${isBuy?'dir-buy':'dir-sell'}">${isBuy?'▲ شراء':'▼ بيع'}</span>
-      </div>
-      <div class="card-price">
-        <span class="price-val">$${entry.toFixed(dp)}</span>
-        <span class="price-lbl">سعر الدخول</span>
-      </div>
-      <div class="levels">
-        <div class="lv"><div class="lv-lbl">🎯 الهدف</div><div class="lv-val lv-tp">$${tp.toFixed(dp)}</div></div>
-        <div class="lv"><div class="lv-lbl">📈 نسبة</div><div class="lv-val lv-pct">+${tpPct}%</div></div>
-        <div class="lv"><div class="lv-lbl">🛑 وقف</div><div class="lv-val lv-sl">$${sl.toFixed(dp)}</div></div>
-      </div>
-      <div class="current-price" id="cp-${s.id}">
-        <span class="cp-label">السعر الحالي</span>
-        <span class="cp-val" style="color:var(--muted2)">جاري التحميل...</span>
-      </div>
-      <div class="progress-wrap" id="prog-${s.id}" style="display:none">
-        <div class="progress-top">
-          <span class="progress-lbl">التقدم نحو الهدف</span>
-          <span class="progress-pct" id="pct-${s.id}">0%</span>
+    // السعر الحالي من الكاش
+    const cur    = priceCache[s.symbol.toUpperCase()];
+    const isProfit = cur ? (isBuy?cur>entry:cur<entry) : null;
+    const chgPct = cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
+    const curText = cur ? '$'+cur.toFixed(dp) : '—';
+    const curClass = isProfit===null?'current-neutral':isProfit?'current-up':'current-dn';
+    const chgText  = chgPct ? (chgPct>=0?'+':'')+chgPct+'%' : '';
+
+    // شريط التقدم
+    let progPct = 0;
+    if(cur && s.status==='open') {
+      const reward = Math.abs(tp-entry);
+      const moved  = isBuy?Math.max(0,cur-entry):Math.max(0,entry-cur);
+      progPct = reward>0?Math.min(100,(moved/reward*100)):0;
+    } else if(s.status==='target') progPct=100;
+    const progClr = progPct>=75?'var(--green)':progPct>=40?'var(--yellow)':'var(--blue)';
+
+    const stMap = {open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف الخسارة'},target:{cls:'s-target',txt:'🎯 الهدف'}};
+    const st = stMap[s.status]||stMap.open;
+    const dt = new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+
+    return `<tr id="row-${s._id||s.id}" class="new-row">
+      <td>
+        <div class="sym-cell">
+          <div class="sym-icon ${isBuy?'buy':'sell'}">${s.symbol.replace('USDT','').slice(0,3)}</div>
+          <span class="sym-name">${s.symbol}</span>
         </div>
-        <div class="progress-track">
-          <div class="progress-fill" id="fill-${s.id}" style="width:0%;background:var(--green)"></div>
+      </td>
+      <td><span class="dir-txt ${isBuy?'dir-buy':'dir-sell'}">${isBuy?'▲ شراء':'▼ بيع'}</span></td>
+      <td class="price-cell">$${entry.toFixed(dp)}</td>
+      <td class="price-cell ${curClass}">${curText} <small style="opacity:.7">${chgText}</small></td>
+      <td class="tp-cell">$${tp.toFixed(dp)}</td>
+      <td class="sl-cell">$${sl.toFixed(dp)}</td>
+      <td class="pct-cell">+${tpPct}%</td>
+      <td>
+        <div class="prog-wrap">
+          <div class="prog-track"><div class="prog-fill" style="width:${progPct.toFixed(0)}%;background:${progClr}"></div></div>
+          <span class="prog-pct" style="color:${progClr}">${progPct.toFixed(0)}%</span>
         </div>
-      </div>
-      <div class="rr-wrap">
-        <div class="rr-top"><span>المخاطرة / المكافأة</span><span style="color:${rrClr};font-family:var(--mono)">1 : ${rr}</span></div>
-        <div class="rr-track"><div class="rr-fill" style="width:${rrPct}%;background:${rrClr}"></div></div>
-      </div>
-      <div class="card-foot">
-        <div class="status-chip ${st.cls}"><div class="s-dot"></div>${st.txt}</div>
-        <div class="card-meta">
-          <div class="card-strat">⚡ ${s.strategy||'TradingView'}</div>
-          <div class="card-time">${dt}</div>
-        </div>
-      </div>
-    </div>`;
+      </td>
+      <td><span class="status-chip ${st.cls}"><span class="s-dot"></span>${st.txt}</span></td>
+      <td class="strat-cell" title="${s.strategy||''}">${s.strategy||'—'}</td>
+      <td class="time-cell">${dt}</td>
+    </tr>`;
   }).join('');
 }
 
@@ -294,6 +369,54 @@ function setTab(t,btn){
   btn.classList.add('active');
   render();
 }
+
+// ── Price Monitor (Binance) ─────────────────────
+const updatedIds = new Set();
+
+async function checkPrices() {
+  const openSigs = signals.filter(s=>s.status==='open');
+  if(!openSigs.length) return;
+  const syms = [...new Set(openSigs.map(s=>s.symbol.toUpperCase()))];
+  try {
+    const url = 'https://api.binance.com/api/v3/ticker/price?symbols=['+syms.map(s=>'"'+s+'"').join(',')+']';
+    const res  = await fetch(url);
+    if(!res.ok) return;
+    const prices = await res.json();
+    prices.forEach(p=>{ priceCache[p.symbol]=parseFloat(p.price); });
+
+    for(const sig of openSigs) {
+      const price = priceCache[sig.symbol.toUpperCase()];
+      if(!price||updatedIds.has(sig._id||sig.id)) continue;
+      const isBuy = sig.action==='BUY';
+      let   tp    = parseFloat(sig.tp)||0;
+      const sl    = parseFloat(sig.sl)||0;
+      const entry = parseFloat(sig.price)||0;
+      const slD   = Math.abs(entry-sl);
+      if(!tp||Math.abs(tp-entry)<0.00001) tp = isBuy?entry+slD*2:entry-slD*2;
+      let newStatus = null;
+      if(isBuy){ if(price>=tp) newStatus='target'; else if(price<=sl) newStatus='stopped'; }
+      else     { if(price<=tp) newStatus='target'; else if(price>=sl) newStatus='stopped'; }
+      if(newStatus) {
+        updatedIds.add(sig._id||sig.id);
+        await updateSignal(sig._id||sig.id, newStatus, price);
+        showToast(newStatus==='target'?'🎯 '+sig.symbol+' حقق الهدف!':'🛑 '+sig.symbol+' وقف الخسارة');
+      }
+    }
+    render();
+  } catch(e){}
+}
+
+async function updateSignal(id,status,closePrice) {
+  try {
+    await fetch('/api/signals/'+id,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':token},body:JSON.stringify({status,closePrice})});
+    const sig = signals.find(s=>(s._id||s.id)===id);
+    if(sig){sig.status=status;sig.closePrice=closePrice;}
+    render(); updateReport();
+  } catch(e){}
+}
+
+setInterval(checkPrices,15000);
+setTimeout(checkPrices,3000);
 
 function copyWH(){
   navigator.clipboard?.writeText(location.origin+'/webhook');
@@ -305,117 +428,6 @@ function showToast(msg){
   t.textContent=msg; t.classList.add('show');
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),3000);
 }
-
-// ── Price Monitor (Binance) ─────────────────────
-const BINANCE_API = 'https://api.binance.com/api/v3/ticker/price';
-const updatedIds  = new Set(); // عشان ميتحدثش أكتر من مرة
-
-async function checkPrices() {
-  const openSigs = signals.filter(s => s.status === 'open');
-  if (!openSigs.length) return;
-
-  // جمّع كل الرموز الفريدة
-  const syms = [...new Set(openSigs.map(s => s.symbol.toUpperCase()))];
-
-  try {
-    // جيب أسعار كل الرموز دفعة واحدة
-    const url = BINANCE_API + '?symbols=[' + syms.map(s => '"' + s + '"').join(',') + ']';
-    const res  = await fetch(url);
-    if (!res.ok) return;
-    const prices = await res.json();
-
-    // حوّل لـ map
-    const priceMap = {};
-    prices.forEach(p => { priceMap[p.symbol] = parseFloat(p.price); });
-
-    // تحقق من كل صفقة مفتوحة
-    for (const sig of openSigs) {
-      if (updatedIds.has(sig.id)) continue;
-      const price = priceMap[sig.symbol.toUpperCase()];
-      if (!price) continue;
-
-      const isBuy = sig.action === 'BUY';
-      let   newStatus = null;
-
-      if (isBuy) {
-        if (price >= parseFloat(sig.tp))  newStatus = 'target';
-        else if (price <= parseFloat(sig.sl)) newStatus = 'stopped';
-      } else {
-        if (price <= parseFloat(sig.tp))  newStatus = 'target';
-        else if (price >= parseFloat(sig.sl)) newStatus = 'stopped';
-      }
-
-      // حدّث السعر الحالي على الكارت
-      updateCardPrice(sig, price);
-
-      if (newStatus) {
-        updatedIds.add(sig.id);
-        await updateSignal(sig.id, newStatus, price);
-        const msg = newStatus === 'target'
-          ? '🎯 ' + sig.symbol + ' حقق الهدف! +' + Math.abs(((price - sig.price)/sig.price)*100).toFixed(2) + '%'
-          : '🛑 ' + sig.symbol + ' وقف الخسارة';
-        showToast(msg);
-      }
-    }
-  } catch(e) {
-    // لو الرمز مش على Binance (فوركس مثلاً) تجاهل
-  }
-}
-
-
-function updateCardPrice(sig, price) {
-  const cpEl   = document.getElementById('cp-' + sig.id);
-  const progEl = document.getElementById('prog-' + sig.id);
-  const pctEl  = document.getElementById('pct-' + sig.id);
-  const fillEl = document.getElementById('fill-' + sig.id);
-  if (!cpEl) return;
-
-  const entry  = parseFloat(sig.price);
-  const tp     = parseFloat(sig.tp);
-  const sl     = parseFloat(sig.sl);
-  const isBuy  = sig.action === 'BUY';
-
-  // تغيير السعر من الدخول
-  const chgPct = ((price - entry) / entry * 100);
-  const isProfit = isBuy ? price > entry : price < entry;
-  const dp = price >= 100 ? 2 : 4;
-
-  cpEl.innerHTML = '<span class="cp-label">السعر الحالي</span>' +
-    '<div style="display:flex;align-items:center;gap:8px">' +
-    '<span class="cp-chg" style="color:' + (isProfit?'var(--green)':'var(--red)') + '">' +
-    (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%</span>' +
-    '<span class="cp-val" style="color:' + (isProfit?'var(--green)':'var(--red)') + '">$' + price.toFixed(dp) + '</span>' +
-    '</div>';
-
-  // شريط التقدم نحو الهدف
-  if (sig.status === 'open' && progEl) {
-    progEl.style.display = 'block';
-    const totalDist = Math.abs(tp - entry);
-    const movedDist = isBuy ? Math.max(0, price - entry) : Math.max(0, entry - price);
-    const pct = totalDist > 0 ? Math.min(100, (movedDist / totalDist) * 100) : 0;
-    const clr = pct >= 75 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--blue)';
-    if (pctEl)  pctEl.textContent = pct.toFixed(0) + '% من الهدف';
-    if (fillEl) { fillEl.style.width = pct + '%'; fillEl.style.background = clr; }
-    if (pctEl)  pctEl.style.color = clr;
-  }
-}
-
-async function updateSignal(id, status, closePrice) {
-  try {
-    await fetch('/api/signals/' + id, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json','x-auth-token':token},
-      body: JSON.stringify({ status, closePrice })
-    });
-    // حدّث محلياً فوراً
-    const sig = signals.find(s => s.id === id);
-    if (sig) { sig.status = status; sig.closePrice = closePrice; render(); }
-  } catch(e) {}
-}
-
-// شغّل Price Monitor كل 15 ثانية
-setInterval(checkPrices, 15000);
-setTimeout(checkPrices, 3000); // أول مرة بعد 3 ثواني
 
 async function logout(){
   try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
