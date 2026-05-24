@@ -192,7 +192,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
     </div>
     <button class="btn-icon" onclick="toggleThemePicker()" title="الثيم">🎨</button>
     <button class="btn-icon" onclick="requestNotif()" id="notif-btn" title="إشعارات الموبايل">🔔</button>
-    <button class="btn-icon" onclick="window.location.href='/settings.html'" title="الإعدادات">⚙️</button>
+    <a href='/reports.html' class='btn-icon' style='text-decoration:none' title='التقارير'>📈</a><button class="btn-icon" onclick="window.location.href='/settings.html'" title="الإعدادات">⚙️</button>
     <span style="font-family:var(--mono);font-size:11px;color:var(--muted2)" id="uname"></span>
     <button class="btn-logout" onclick="logout()">خروج</button>
   </div>
@@ -557,6 +557,7 @@ async function requestNotif(){
   if(perm==='granted'){
     document.getElementById('notif-btn').textContent='🔔';
     document.getElementById('notif-btn').style.color='var(--green)';
+}
     showToast('✅ تم تفعيل الإشعارات!');
     new Notification('MILLIONAIRE',{body:'تم تفعيل الإشعارات بنجاح 🎉',icon:''});
   } else {
@@ -574,7 +575,6 @@ function sendPushNotif(title,body){
 if(Notification.permission==='granted'){
   document.getElementById('notif-btn').style.color='var(--green)';
 }
-
 // ── Webhook Admin Only ─────────────────────────
 if(localStorage.getItem('mm_role')==='admin'){
   const bar=document.createElement('div');
