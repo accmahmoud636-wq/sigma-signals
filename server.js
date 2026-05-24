@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 
 
 const https = require('https');
-const crypto = require('crypto');
 
 // ─── Binance Testnet Config ───────────────────
 const BINANCE_KEY    = process.env.BINANCE_API_KEY    || 'viqClNFfTWvMWwUjUHJZaho0g2JSSfaffcF8F1Ww08e5AfYrRrljTzaBMwuW5qJn';
