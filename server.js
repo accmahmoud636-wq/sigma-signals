@@ -4,6 +4,86 @@ const path     = require('path');
 const crypto   = require('crypto');
 const mongoose = require('mongoose');
 
+
+const https = require('https');
+const crypto = require('crypto');
+
+// ─── Binance Testnet Config ───────────────────
+const BINANCE_KEY    = process.env.BINANCE_API_KEY    || 'viqClNFfTWvMWwUjUHJZaho0g2JSSfaffcF8F1Ww08e5AfYrRrljTzaBMwuW5qJn';
+const BINANCE_SECRET = process.env.BINANCE_API_SECRET || 'SH5NWccgetoxGMFXmGTWm7x4EI8X43firno9NF5O4p1tzZgKshciEyHcI0wKRJxQ';
+const BINANCE_BASE   = 'https://testnet.binance.vision';
+const TRADE_AMOUNT   = process.env.TRADE_AMOUNT || '10'; // USDT per trade
+
+function binanceRequest(method, path, params = {}) {
+  return new Promise((resolve, reject) => {
+    params.timestamp = Date.now();
+    params.recvWindow = 5000;
+    const query = Object.entries(params).map(([k,v]) => k+'='+v).join('&');
+    const signature = crypto.createHmac('sha256', BINANCE_SECRET).update(query).digest('hex');
+    const fullQuery = query + '&signature=' + signature;
+    const options = {
+      hostname: 'testnet.binance.vision',
+      path: path + '?' + fullQuery,
+      method,
+      headers: { 'X-MBX-APIKEY': BINANCE_KEY, 'Content-Type': 'application/json' }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch(e) { resolve(data); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function getBinancePrice(symbol) {
+  return new Promise((resolve) => {
+    https.get(`${BINANCE_BASE}/api/v3/ticker/price?symbol=${symbol}`, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try { resolve(parseFloat(JSON.parse(data).price)); }
+        catch(e) { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+async function placeBinanceOrder(symbol, side, quantity) {
+  try {
+    const result = await binanceRequest('POST', '/api/v3/order', {
+      symbol: symbol.toUpperCase(),
+      side,
+      type: 'MARKET',
+      quantity
+    });
+    console.log(`✅ Binance Order: ${side} ${quantity} ${symbol} →`, result.orderId || result);
+    return result;
+  } catch(e) {
+    console.error('❌ Binance Order Error:', e.message);
+    return null;
+  }
+}
+
+async function executeTradeFromSignal(signal) {
+  try {
+    const sym = signal.symbol.toUpperCase();
+    // جيب السعر الحالي لحساب الكمية
+    const price = await getBinancePrice(sym);
+    if (!price) { console.log('❌ مش قادر أجيب سعر:', sym); return; }
+    // حساب الكمية بناءً على TRADE_AMOUNT
+    const qty = (parseFloat(TRADE_AMOUNT) / price).toFixed(5);
+    const side = signal.action === 'BUY' ? 'BUY' : 'SELL';
+    await placeBinanceOrder(sym, side, qty);
+  } catch(e) {
+    console.error('Trade Error:', e.message);
+  }
+}
+
 const app    = express();
 const server = http.createServer(app);
 
@@ -164,6 +244,10 @@ app.post('/webhook', async (req, res) => {
     });
 
     console.log(`📡 ${signal.action} ${signal.symbol} @ ${signal.price}`);
+    // تنفيذ الصفقة تلقائياً على Binance Testnet
+    if (process.env.BINANCE_TRADING === 'true') {
+      executeTradeFromSignal(signal).catch(console.error);
+    }
     res.json({ ok: true, signal });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
