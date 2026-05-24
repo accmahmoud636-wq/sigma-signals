@@ -278,7 +278,120 @@ function updateReport() {
   document.getElementById('h-wr').textContent      = wr ? wr+'%' : '—';
 }
 
-// ── Render Table ────────────────────────────────
+// ── Render Table (Grouped by Symbol) ──────────────
+function render() {
+  let list = [...signals];
+  if(tab==='open')    list=list.filter(s=>s.status==='open');
+  else if(tab==='target')  list=list.filter(s=>s.status==='target');
+  else if(tab==='stopped') list=list.filter(s=>s.status==='stopped');
+  else if(tab==='BUY')  list=list.filter(s=>s.action==='BUY');
+  else if(tab==='SELL') list=list.filter(s=>s.action==='SELL');
+
+  const counts = {
+    all:signals.length,
+    open:signals.filter(s=>s.status==='open').length,
+    target:signals.filter(s=>s.status==='target').length,
+    stopped:signals.filter(s=>s.status==='stopped').length,
+    BUY:signals.filter(s=>s.action==='BUY').length,
+    SELL:signals.filter(s=>s.action==='SELL').length
+  };
+  ['all','open','target','stopped','BUY','SELL'].forEach(k=>{
+    const el = document.getElementById('c-'+k);
+    if(el) el.textContent = counts[k]||0;
+  });
+
+  const tbody = document.getElementById('tbody');
+  if(!list.length){
+    tbody.innerHTML=`<tr class="empty-row"><td colspan="11"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</td></tr>`;
+    return;
+  }
+
+  // تجميع بالسهم
+  const groups = {};
+  list.forEach(s => {
+    const sym = s.symbol.toUpperCase();
+    if (!groups[sym]) groups[sym] = [];
+    groups[sym].push(s);
+  });
+
+  // ترتيب الأسماء أبجدياً
+  const sortedSyms = Object.keys(groups).sort();
+
+  let html = '';
+  sortedSyms.forEach(sym => {
+    const groupSigs = groups[sym];
+    const openCount    = groupSigs.filter(s=>s.status==='open').length;
+    const targetCount  = groupSigs.filter(s=>s.status==='target').length;
+    const stoppedCount = groupSigs.filter(s=>s.status==='stopped').length;
+
+    // صف رأس المجموعة
+    html += `<tr style="background:rgba(212,175,55,.05)">
+      <td colspan="11" style="padding:8px 12px;border-bottom:1px solid rgba(212,175,55,.1)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-family:var(--mono);font-size:14px;font-weight:600;color:#fff">${sym}</span>
+          <span style="font-size:11px;color:var(--muted2)">${groupSigs.length} صفقة</span>
+          ${openCount    > 0 ? `<span style="font-size:10px;background:rgba(0,217,126,.1);color:var(--green);border:1px solid rgba(0,217,126,.2);padding:1px 7px;border-radius:10px">🟢 ${openCount} مفتوحة</span>` : ''}
+          ${targetCount  > 0 ? `<span style="font-size:10px;background:rgba(240,180,41,.1);color:var(--yellow);border:1px solid rgba(240,180,41,.2);padding:1px 7px;border-radius:10px">🎯 ${targetCount} هدف</span>` : ''}
+          ${stoppedCount > 0 ? `<span style="font-size:10px;background:rgba(255,77,77,.1);color:var(--red);border:1px solid rgba(255,77,77,.2);padding:1px 7px;border-radius:10px">🛑 ${stoppedCount} وقف</span>` : ''}
+        </div>
+      </td>
+    </tr>`;
+
+    // صفوف الصفقات
+    groupSigs.forEach(s => {
+      const isBuy  = s.action==='BUY';
+      const entry  = parseFloat(s.price)||0;
+      let   tp     = parseFloat(s.tp)||0;
+      const sl     = parseFloat(s.sl)||0;
+      const slDist = Math.abs(entry-sl);
+      if(!tp||Math.abs(tp-entry)<0.00001) tp = isBuy?entry+slDist*2:entry-slDist*2;
+      const tpPct  = entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
+      const dp     = entry>=100?2:4;
+      const cur    = priceCache[s.symbol.toUpperCase()];
+      const isProfit = cur ? (isBuy?cur>entry:cur<entry) : null;
+      const chgPct = cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
+      const curText = cur ? '$'+cur.toFixed(dp) : '—';
+      const curClass = isProfit===null?'current-neutral':isProfit?'current-up':'current-dn';
+      const chgText  = chgPct ? (chgPct>=0?'+':'')+chgPct+'%' : '';
+      let progPct = 0;
+      if(cur && s.status==='open') {
+        const reward = Math.abs(tp-entry);
+        const moved  = isBuy?Math.max(0,cur-entry):Math.max(0,entry-cur);
+        progPct = reward>0?Math.min(100,(moved/reward*100)):0;
+      } else if(s.status==='target') progPct=100;
+      const progClr = progPct>=75?'var(--green)':progPct>=40?'var(--yellow)':'var(--blue)';
+      const stMap = {open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف'},target:{cls:'s-target',txt:'🎯 الهدف'}};
+      const st = stMap[s.status]||stMap.open;
+      const dt = new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+
+      html += `<tr id="row-${s._id||s.id}">
+        <td>
+          <div class="sym-cell">
+            <div class="sym-icon ${isBuy?'buy':'sell'}">${s.symbol.replace('USDT','').slice(0,3)}</div>
+            <span class="sym-name">${s.symbol}</span>
+          </div>
+        </td>
+        <td><span class="dir-txt ${isBuy?'dir-buy':'dir-sell'}">${isBuy?'▲ شراء':'▼ بيع'}</span></td>
+        <td class="price-cell">$${entry.toFixed(dp)}</td>
+        <td class="price-cell ${curClass}">${curText} <small style="opacity:.7">${chgText}</small></td>
+        <td class="tp-cell">$${tp.toFixed(dp)}</td>
+        <td class="sl-cell">$${sl.toFixed(dp)}</td>
+        <td class="pct-cell">+${tpPct}%</td>
+        <td>
+          <div class="prog-wrap">
+            <div class="prog-track"><div class="prog-fill" style="width:${progPct.toFixed(0)}%;background:${progClr}"></div></div>
+            <span class="prog-pct" style="color:${progClr}">${progPct.toFixed(0)}%</span>
+          </div>
+        </td>
+        <td><span class="status-chip ${st.cls}"><span class="s-dot"></span>${st.txt}</span></td>
+        <td class="strat-cell" title="${s.strategy||''}">${s.strategy||'—'}</td>
+        <td class="time-cell">${dt}</td>
+      </tr>`;
+    });
+  });
+
+  tbody.innerHTML = html;
+}
 function render() {
   let list = [...signals];
   if(tab==='open')    list=list.filter(s=>s.status==='open');
