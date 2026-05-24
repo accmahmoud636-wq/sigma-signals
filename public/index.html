@@ -203,7 +203,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20p
   </table>
 </div>
 
-<div class="wh-bar">
+<div class="wh-bar" id="wh-bar" style="display:none">
   <span class="wh-lbl">Webhook:</span>
   <span class="wh-url" onclick="copyWH()" id="wh-url"></span>
 </div>
@@ -215,6 +215,10 @@ const token = localStorage.getItem('mm_token');
 if (!token) window.location.href = '/login.html';
 document.getElementById('uname').textContent  = localStorage.getItem('mm_name') || '';
 document.getElementById('wh-url').textContent = location.origin + '/webhook';
+// إظهار الـ Webhook فقط للأدمن
+if (localStorage.getItem('mm_role') === 'admin') {
+  document.getElementById('wh-bar').style.display = 'flex';
+}
 
 let signals = [], tab = 'all', lastSeen = 0;
 const priceCache = {};
