@@ -134,17 +134,24 @@ function renderUsers() {
     const expires = u.expiresAt ? new Date(u.expiresAt) : null;
     const now     = new Date();
     const daysLeft = expires ? Math.ceil((expires-now)/86400000) : null;
+    const hoursLeft = expires ? Math.ceil((expires-now)/3600000) : null;
     let expEl = '';
     if (u.role === 'admin') {
-      expEl = '<span class="expires-never">لا ينتهي (Admin)</span>';
+      expEl = '<span class="expires-never">♾️ لا ينتهي</span>';
     } else if (!expires) {
       expEl = '<span class="expires-never">غير محدد</span>';
     } else if (daysLeft < 0) {
-      expEl = `<span class="expires-expired">منتهي (${Math.abs(daysLeft)} يوم)</span>`;
+      expEl = `<span class="expires-expired">❌ منتهي منذ ${Math.abs(daysLeft)} يوم</span>`;
+    } else if (daysLeft === 0) {
+      expEl = `<span class="expires-expired">⚠️ ينتهي اليوم خلال ${hoursLeft} ساعة</span>`;
+    } else if (daysLeft === 1) {
+      expEl = `<span class="expires-soon">⚠️ ينتهي غداً</span>`;
     } else if (daysLeft <= 7) {
-      expEl = `<span class="expires-soon">⚠ ${daysLeft} أيام</span>`;
+      expEl = `<span class="expires-soon">⚠️ متبقي ${daysLeft} أيام — ${expires.toLocaleDateString('ar')}</span>`;
+    } else if (daysLeft <= 30) {
+      expEl = `<span class="expires-ok">✅ متبقي ${daysLeft} يوم — ${expires.toLocaleDateString('ar')}</span>`;
     } else {
-      expEl = `<span class="expires-ok">${expires.toLocaleDateString('ar')} (${daysLeft} يوم)</span>`;
+      expEl = `<span class="expires-ok">✅ متبقي ${daysLeft} يوم — ${expires.toLocaleDateString('ar')}</span>`;
     }
 
     const actions = u.role === 'admin' ? '' : `
