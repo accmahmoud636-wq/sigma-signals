@@ -240,7 +240,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
     <div class="tbl-wrap">
       <table class="signals-table">
         <thead><tr>
-          <th id="th-check" style="display:none">🗑️</th><th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
+          ${isAdminUser?'<th>🗑️</th>':`<th style="display:none"></th>`}<th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
