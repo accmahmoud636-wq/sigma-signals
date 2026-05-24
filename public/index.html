@@ -557,7 +557,6 @@ async function requestNotif(){
   if(perm==='granted'){
     document.getElementById('notif-btn').textContent='🔔';
     document.getElementById('notif-btn').style.color='var(--green)';
-}
     showToast('✅ تم تفعيل الإشعارات!');
     new Notification('MILLIONAIRE',{body:'تم تفعيل الإشعارات بنجاح 🎉',icon:''});
   } else {
