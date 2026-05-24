@@ -68,16 +68,47 @@ async function placeBinanceOrder(symbol, side, quantity) {
   }
 }
 
+// تتبع المراكز المفتوحة
+const openPositions = {};
+
 async function executeTradeFromSignal(signal) {
   try {
-    const sym = signal.symbol.toUpperCase();
-    // جيب السعر الحالي لحساب الكمية
-    const price = await getBinancePrice(sym);
-    if (!price) { console.log('❌ مش قادر أجيب سعر:', sym); return; }
-    // حساب الكمية بناءً على TRADE_AMOUNT
-    const qty = (parseFloat(TRADE_AMOUNT) / price).toFixed(5);
-    const side = signal.action === 'BUY' ? 'BUY' : 'SELL';
-    await placeBinanceOrder(sym, side, qty);
+    const sym    = signal.symbol.toUpperCase();
+    const action = signal.action.toUpperCase();
+
+    // ── شراء ──────────────────────────────────
+    if (action === 'BUY') {
+      // لو في مركز مفتوح بالفعل على نفس السهم — تجاهل
+      if (openPositions[sym]) {
+        console.log(`⚠️ مركز مفتوح بالفعل على ${sym} — تم التجاهل`);
+        return;
+      }
+      const price = await getBinancePrice(sym);
+      if (!price) { console.log('❌ مش قادر أجيب سعر:', sym); return; }
+      const qty = (parseFloat(TRADE_AMOUNT) / price).toFixed(5);
+      const order = await placeBinanceOrder(sym, 'BUY', qty);
+      if (order && order.orderId) {
+        openPositions[sym] = { qty, entryPrice: price, orderId: order.orderId };
+        console.log(`✅ فتح مركز شراء: ${qty} ${sym} @ $${price}`);
+      }
+    }
+
+    // ── بيع / إغلاق / وقف الخسارة / الهدف ────
+    else if (['SELL','STOPPED','TARGET','CLOSE'].includes(action)) {
+      const pos = openPositions[sym];
+      if (!pos) {
+        console.log(`⚠️ مفيش مركز مفتوح على ${sym}`);
+        return;
+      }
+      const order = await placeBinanceOrder(sym, 'SELL', pos.qty);
+      if (order && order.orderId) {
+        const currentPrice = await getBinancePrice(sym);
+        const profit = currentPrice ? ((currentPrice - pos.entryPrice) / pos.entryPrice * 100).toFixed(2) : '?';
+        const profitSign = parseFloat(profit) >= 0 ? '+' : '';
+        console.log(`✅ إغلاق مركز ${sym} @ $${currentPrice} | ربح/خسارة: ${profitSign}${profit}%`);
+        delete openPositions[sym];
+      }
+    }
   } catch(e) {
     console.error('Trade Error:', e.message);
   }
