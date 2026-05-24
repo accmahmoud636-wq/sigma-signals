@@ -128,47 +128,16 @@ tr:hover td{background:rgba(212,175,55,.02)}
   </div>
   <span class="admin-badge">ADMIN</span>
   <div class="nav-tabs">
-    <a href="/" class="nav-btn">📊 الداشبورد</a>
-    <button class="nav-tab active" onclick="showPage('signals',this)">📡 الإشارات</button>
-    <button class="nav-tab" onclick="showPage('users',this)">👥 المشتركين</button>
+    <a href="/" class="nav-btn">📊 الصفقات</a>
+    <a href="/reports.html" class="nav-btn">📈 التقارير</a>
+    <button class="nav-tab active" onclick="showPage('users',this)">👥 المشتركين</button>
     <button class="nav-tab" onclick="showPage('settings',this)">⚙️ الإعدادات</button>
   </div>
   <button class="btn-logout" onclick="logout()">خروج</button>
 </header>
 
-<!-- ══════════════ صفحة الإشارات ══════════════ -->
-<div class="page active" id="page-signals">
-  <div class="sig-stats">
-    <div class="sstat"><div class="sstat-val" id="s-total" style="color:var(--blue)">0</div><div class="sstat-lbl">إجمالي الإشارات</div></div>
-    <div class="sstat"><div class="sstat-val" id="s-open"  style="color:var(--green)">0</div><div class="sstat-lbl">مفتوحة 🟢</div></div>
-    <div class="sstat"><div class="sstat-val" id="s-target" style="color:var(--yellow)">0</div><div class="sstat-lbl">حققت الهدف 🎯</div></div>
-    <div class="sstat"><div class="sstat-val" id="s-stopped" style="color:var(--red)">0</div><div class="sstat-lbl">وقف الخسارة 🛑</div></div>
-    <div class="sstat"><div class="sstat-val" id="s-wr" style="color:var(--gold)">—</div><div class="sstat-lbl">Win Rate</div></div>
-    <div class="sstat"><div class="sstat-val" id="s-best" style="color:var(--green);font-size:13px">—</div><div class="sstat-lbl">أفضل استراتيجية</div></div>
-  </div>
-
-  <div class="sig-tabs">
-    <button class="stab active" onclick="setSigTab('all',this)">الكل <span class="scnt" id="sc-all">0</span></button>
-    <button class="stab" onclick="setSigTab('open',this)">🟢 مفتوحة <span class="scnt" id="sc-open">0</span></button>
-    <button class="stab" onclick="setSigTab('target',this)">🎯 الهدف <span class="scnt" id="sc-target">0</span></button>
-    <button class="stab" onclick="setSigTab('stopped',this)">🛑 وقف <span class="scnt" id="sc-stopped">0</span></button>
-    <button class="stab btn-red" style="margin-right:auto" onclick="clearSignals()">🗑️ مسح الكل</button>
-  </div>
-
-  <div class="tbl-wrap">
-    <table class="signals-table">
-      <thead>
-        <tr>
-          <th>السهم</th><th>اتجاه</th><th>سعر الدخول</th><th>الهدف</th><th>وقف الخسارة</th><th>نسبة الهدف</th><th>الحالة</th><th>الاستراتيجية</th><th>الوقت</th>
-        </tr>
-      </thead>
-      <tbody id="sig-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
 <!-- ══════════════ صفحة المشتركين ══════════════ -->
-<div class="page" id="page-users">
+<div class="page active" id="page-users">
   <div class="section">
     <div class="section-head">➕ إضافة مشترك جديد</div>
     <div class="form-row">
@@ -257,8 +226,7 @@ function showPage(name, btn) {
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   btn.classList.add('active');
-  if (name === 'signals') loadSignals();
-  if (name === 'users')   loadUsers();
+  if (name === 'users') loadUsers();
 }
 
 // ── Signals ──────────────────────────────────
