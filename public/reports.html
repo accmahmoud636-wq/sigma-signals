@@ -243,7 +243,9 @@ tr:hover td{background:rgba(212,175,55,.02)}
 
 <script>
 const token = localStorage.getItem('mm_token');
+const role  = localStorage.getItem('mm_role');
 if (!token) window.location.href = '/login.html';
+if (role !== 'admin') window.location.href = '/';
 
 let allSignals = [], filteredSignals = [], period = 'all', page = 1;
 const PAGE_SIZE = 15;
