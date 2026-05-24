@@ -203,11 +203,6 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20p
   </table>
 </div>
 
-<div class="wh-bar" id="wh-bar" style="display:none">
-  <span class="wh-lbl">Webhook:</span>
-  <span class="wh-url" onclick="copyWH()" id="wh-url"></span>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
@@ -535,9 +530,18 @@ async function updateSignal(id,status,closePrice) {
 setInterval(checkPrices,15000);
 setTimeout(checkPrices,3000);
 
+
+// إضافة Webhook bar للأدمن فقط
+if (localStorage.getItem('mm_role') === 'admin') {
+  const whBar = document.createElement('div');
+  whBar.style.cssText = 'background:var(--bg2);border-top:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;font-size:11px;flex-shrink:0';
+  whBar.innerHTML = '<span style="color:var(--muted2)">Webhook URL:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="copyWH()">' + location.origin + '/webhook</span><span style="font-size:10px;color:var(--muted2)">Webhook URL</span>';
+  document.body.appendChild(whBar);
+}
+
 function copyWH(){
   navigator.clipboard?.writeText(location.origin+'/webhook');
-  showToast('تم نسخ الـ Webhook URL ✓');
+  showToast('✓ تم نسخ الـ Webhook URL');
 }
 
 
