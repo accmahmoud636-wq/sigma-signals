@@ -270,18 +270,30 @@ function setPeriod(p, btn) {
   applyPeriod();
 }
 
-function applyPeriod() {
+function getFromDate(p) {
   const now = new Date();
-  let from = null;
+  if (p === 'today')   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (p === 'week')    return new Date(now.getTime() - 7*24*60*60*1000);
+  if (p === 'month')   return new Date(now.getFullYear(), now.getMonth(), 1);
+  if (p === '3months') return new Date(now.getTime() - 90*24*60*60*1000);
+  return null;
+}
+
+function applyPeriod() {
   const labels = {all:'كل الإشارات',today:'إشارات اليوم',week:'هذا الأسبوع',month:'هذا الشهر','3months':'آخر 3 أشهر'};
   document.getElementById('period-label').textContent = labels[period] || '';
 
-  if (period === 'today') { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
-  else if (period === 'week') { from = new Date(now - 7*86400000); }
-  else if (period === 'month') { from = new Date(now.getFullYear(), now.getMonth(), 1); }
-  else if (period === '3months') { from = new Date(now - 90*86400000); }
+  const from = getFromDate(period);
+  if (from) {
+    filteredSignals = allSignals.filter(s => {
+      if (!s.receivedAt) return false;
+      return new Date(s.receivedAt).getTime() >= from.getTime();
+    });
+  } else {
+    filteredSignals = [...allSignals];
+  }
 
-  filteredSignals = from ? allSignals.filter(s => new Date(s.receivedAt) >= from) : [...allSignals];
+  console.log('Period:', period, '| From:', from, '| Filtered:', filteredSignals.length, '/', allSignals.length);
   page = 1;
   updateAll();
 }
