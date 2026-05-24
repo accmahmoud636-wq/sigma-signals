@@ -240,7 +240,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
     <div class="tbl-wrap">
       <table class="signals-table">
         <thead><tr>
-          ${isAdminUser?'<th>🗑️</th>':`<th style="display:none"></th>`}<th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
+          <th id="th-del"></th><th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -597,9 +597,9 @@ let isAdminUser = localStorage.getItem('mm_role') === 'admin';
 
 function initAdminFeatures() {
   if (!isAdminUser) return;
-  // إظهار عمود الـ checkbox في الجدول
-  document.getElementById('th-check').style.display = '';
-  document.querySelectorAll('.check-td').forEach(td => td.style.display = '');
+  // إظهار عمود الحذف
+  const thDel = document.getElementById('th-del');
+  if(thDel) thDel.textContent = '🗑️';
 
   // إضافة شريط الحذف
   const toolbar = document.createElement('div');
