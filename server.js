@@ -117,7 +117,11 @@ app.put('/api/me/password', auth, async (req, res) => {
 
 // ─── Signals Routes ───────────────────────────
 app.get('/api/signals', auth, async (req, res) => {
-  const signals = await Signal.find().sort({ receivedAt: -1 }).limit(200);
+  // المشتركين يشوفون الإشارات من تاريخ اشتراكهم فقط
+  const query = { receivedAt: { $gte: req.user.createdAt || new Date(0) } };
+  // الأدمن يشوف كل الإشارات
+  if (req.user.role === 'admin') delete query.receivedAt;
+  const signals = await Signal.find(query).sort({ receivedAt: -1 }).limit(500);
   res.json(signals);
 });
 
