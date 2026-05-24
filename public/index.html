@@ -240,7 +240,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
     <div class="tbl-wrap">
       <table class="signals-table">
         <thead><tr>
-          <th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
+          <th id="th-check" style="display:none"><input type="checkbox" id="check-all" onchange="toggleAll(this)"></th><th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -443,7 +443,10 @@ function renderCards(groups){
         </div>
         <div class="card-foot">
           <span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span>
-          <div class="card-meta">⚡${s.strategy||'—'}<br>${d.dt}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="card-meta">⚡${s.strategy||'—'}<br>${d.dt}</div>
+            ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}',this)" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center" title="حذف">🗑</button>`:''}
+          </div>
         </div>
       </div>`;
     });
@@ -587,6 +590,87 @@ function showToast(msg){
   t.textContent=msg;t.classList.add('show');
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);
 }
+
+
+// ── Delete Signals (Admin) ─────────────────
+let isAdminUser = localStorage.getItem('mm_role') === 'admin';
+
+function initAdminFeatures() {
+  if (!isAdminUser) return;
+  // إظهار عمود الـ checkbox في الجدول
+  document.getElementById('th-check').style.display = '';
+  document.querySelectorAll('.check-td').forEach(td => td.style.display = '');
+
+  // إضافة شريط الحذف
+  const toolbar = document.createElement('div');
+  toolbar.id = 'delete-toolbar';
+  toolbar.style.cssText = 'display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 16px;display:none;align-items:center;gap:10px;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,.5)';
+  toolbar.innerHTML = '<span id="selected-count" style="font-size:12px;color:var(--muted2)">0 محدد</span><button onclick="deleteSelected()" style="background:rgba(255,77,77,.15);border:1px solid rgba(255,77,77,.3);color:var(--red);padding:5px 14px;border-radius:6px;font-family:var(--ar);font-size:12px;cursor:pointer">🗑️ حذف المحددة</button><button onclick="clearSelection()" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted2);padding:5px 14px;border-radius:6px;font-family:var(--ar);font-size:12px;cursor:pointer">إلغاء</button>';
+  document.body.appendChild(toolbar);
+
+  // مراقبة تغيير الـ checkboxes
+  document.addEventListener('change', e => {
+    if (e.target.classList.contains('sig-check') || e.target.id === 'check-all') {
+      updateToolbar();
+    }
+  });
+}
+
+function updateToolbar() {
+  const checked = document.querySelectorAll('.sig-check:checked');
+  const toolbar = document.getElementById('delete-toolbar');
+  if (!toolbar) return;
+  if (checked.length > 0) {
+    toolbar.style.display = 'flex';
+    document.getElementById('selected-count').textContent = checked.length + ' محدد';
+  } else {
+    toolbar.style.display = 'none';
+  }
+}
+
+function toggleAll(cb) {
+  document.querySelectorAll('.sig-check').forEach(c => c.checked = cb.checked);
+  updateToolbar();
+}
+
+function clearSelection() {
+  document.querySelectorAll('.sig-check').forEach(c => c.checked = false);
+  const cb = document.getElementById('check-all');
+  if (cb) cb.checked = false;
+  updateToolbar();
+}
+
+async function deleteSig(id, btn) {
+  if (!confirm('حذف هذه الإشارة؟')) return;
+  try {
+    await fetch('/api/signals/'+id, {method:'DELETE', headers:{'x-auth-token':token}});
+    signals = signals.filter(s=>(s._id||s.id)!==id);
+    render();
+    updateReport();
+    showToast('✓ تم الحذف');
+  } catch(e) { showToast('❌ خطأ في الحذف'); }
+}
+
+async function deleteSelected() {
+  const checked = [...document.querySelectorAll('.sig-check:checked')].map(c=>c.value);
+  if (!checked.length) return;
+  if (!confirm('حذف ' + checked.length + ' إشارة؟')) return;
+  try {
+    await fetch('/api/signals/delete-many', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-auth-token':token},
+      body: JSON.stringify({ids: checked})
+    });
+    signals = signals.filter(s=>!checked.includes(s._id||s.id));
+    render();
+    updateReport();
+    clearSelection();
+    showToast('✓ تم حذف ' + checked.length + ' إشارة');
+  } catch(e) { showToast('❌ خطأ في الحذف'); }
+}
+
+// تشغيل بعد تحميل الصفحة
+setTimeout(initAdminFeatures, 500);
 
 async function logout(){
   try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
