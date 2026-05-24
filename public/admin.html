@@ -3,172 +3,398 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MILLIONAIRE · لوحة الإدارة</title>
+<title>MILLIONAIRE · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--border:rgba(212,175,55,.12);--gold:#d4af37;--gold2:#f5d070;--gold3:rgba(212,175,55,.08);--green:#00d97e;--red:#ff4d4d;--text:#d0dce8;--muted:#445566;--muted2:#607080;--mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif}
+:root{--bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--border:rgba(212,175,55,.12);--border2:rgba(212,175,55,.2);--gold:#d4af37;--gold2:#f5d070;--gold3:rgba(212,175,55,.08);--green:#00d97e;--red:#ff4d4d;--blue:#4da6ff;--yellow:#f0b429;--text:#d0dce8;--muted:#445566;--muted2:#607080;--mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--ar);min-height:100vh}
-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:56px;display:flex;align-items:center;gap:12px}
-.logo{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--gold);letter-spacing:2px}
-.admin-badge{background:var(--gold3);border:1px solid var(--border);color:var(--gold);font-size:11px;padding:2px 8px;border-radius:4px;font-family:var(--mono)}
-.btn-logout{margin-right:auto;background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:5px 12px;border-radius:6px;cursor:pointer;font-family:var(--ar);font-size:12px}
-.content{padding:20px;max-width:1000px;margin:0 auto}
-h2{font-size:16px;font-weight:500;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}
-.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+
+/* ── HEADER ── */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.logo-text{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--gold);letter-spacing:2px}
+.logo-by{font-family:var(--mono);font-size:9px;color:var(--muted2)}
+.admin-badge{background:var(--gold3);border:1px solid var(--border2);color:var(--gold);font-size:10px;padding:2px 8px;border-radius:4px;font-family:var(--mono)}
+
+/* ── TABS NAV ── */
+.nav-tabs{display:flex;gap:2px;margin-right:auto}
+.nav-tab{padding:6px 16px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted2);font-family:var(--ar);font-size:12px;cursor:pointer;transition:all .15s}
+.nav-tab:hover{color:var(--gold);border-color:var(--border2)}
+.nav-tab.active{background:var(--gold3);border-color:var(--gold);color:var(--gold)}
+.btn-logout{background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:4px 12px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px}
+
+/* ── PAGES ── */
+.page{display:none;padding:20px}
+.page.active{display:block}
+
+/* ── SIGNALS PAGE ── */
+.sig-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:16px}
+.sstat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px}
+.sstat-val{font-family:var(--mono);font-size:18px;font-weight:600;margin-bottom:2px}
+.sstat-lbl{font-size:11px;color:var(--muted2)}
+
+.sig-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.stab{padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:12px;cursor:pointer;transition:all .15s}
+.stab:hover{border-color:var(--gold);color:var(--gold)}
+.stab.active{background:var(--gold3);border-color:var(--gold);color:var(--gold)}
+.scnt{background:var(--bg3);padding:1px 6px;border-radius:10px;font-family:var(--mono);font-size:10px}
+
+.signals-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
+.signals-table thead th{padding:8px 12px;color:var(--muted2);font-weight:400;font-family:var(--mono);font-size:10px;text-align:right;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap}
+.signals-table tbody td{padding:8px 12px;border-bottom:1px solid rgba(212,175,55,.04);text-align:right;vertical-align:middle}
+.signals-table tbody tr:hover td{background:rgba(212,175,55,.03)}
+.sym-cell{display:flex;align-items:center;gap:8px}
+.sym-icon{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;font-family:var(--mono);flex-shrink:0}
+.sym-icon.buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.2)}
+.sym-icon.sell{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.2)}
+.dir-txt{font-family:var(--mono);font-size:11px;font-weight:600}
+.dir-buy{color:var(--green)}.dir-sell{color:var(--red)}
+.price-cell{font-family:var(--mono);font-size:12px}
+.tp-cell{color:var(--green);font-family:var(--mono);font-size:12px}
+.sl-cell{color:var(--red);font-family:var(--mono);font-size:12px}
+.pct-cell{font-family:var(--mono);font-size:11px;color:var(--yellow)}
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500;white-space:nowrap}
+.s-open{background:rgba(0,217,126,.08);color:var(--green);border:1px solid rgba(0,217,126,.15)}
+.s-stopped{background:rgba(255,77,77,.08);color:var(--red);border:1px solid rgba(255,77,77,.15)}
+.s-target{background:rgba(240,180,41,.08);color:var(--yellow);border:1px solid rgba(240,180,41,.15)}
+.s-dot{width:4px;height:4px;border-radius:50%}
+.s-open .s-dot{background:var(--green);animation:pulse 2s infinite}
+.s-stopped .s-dot,.s-target .s-dot{background:currentColor}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.strat-cell{font-size:10px;color:var(--muted2)}
+.time-cell{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
+.empty-row td{text-align:center;padding:60px;color:var(--muted)}
+.tbl-wrap{overflow-x:auto}
+
+/* ── USERS PAGE ── */
+.section{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.section-head{font-size:14px;font-weight:500;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
 .form-group{display:flex;flex-direction:column;gap:5px}
 .form-label{font-size:11px;color:var(--muted2)}
-.form-input{background:var(--bg3);border:1px solid rgba(212,175,55,.15);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--ar);font-size:13px;outline:none}
+.form-input{background:var(--bg3);border:1px solid rgba(212,175,55,.15);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--ar);font-size:13px;outline:none;width:100%}
 .form-input:focus{border-color:var(--gold)}
-.btn{padding:8px 18px;border-radius:6px;font-family:var(--ar);font-size:13px;cursor:pointer;border:none;font-weight:500}
-.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000}
-.btn-red{background:rgba(255,77,77,.15);color:var(--red);border:1px solid rgba(255,77,77,.3)}
-.btn-green{background:rgba(0,217,126,.15);color:var(--green);border:1px solid rgba(0,217,126,.3)}
-.btn-gray{background:var(--bg3);color:var(--muted2);border:1px solid var(--border)}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{padding:8px 12px;color:var(--muted2);font-weight:400;text-align:right;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.05em}
-td{padding:10px 12px;border-bottom:1px solid rgba(212,175,55,.05);vertical-align:middle}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;color:#000;padding:8px 20px;border-radius:7px;font-family:var(--ar);font-size:13px;font-weight:600;cursor:pointer}
+.btn-red{background:rgba(255,77,77,.15);color:var(--red);border:1px solid rgba(255,77,77,.3);padding:5px 10px;border-radius:6px;font-family:var(--ar);font-size:11px;cursor:pointer}
+.btn-green{background:rgba(0,217,126,.15);color:var(--green);border:1px solid rgba(0,217,126,.3);padding:5px 10px;border-radius:6px;font-family:var(--ar);font-size:11px;cursor:pointer}
+.btn-yellow{background:rgba(240,180,41,.15);color:var(--yellow);border:1px solid rgba(240,180,41,.3);padding:5px 10px;border-radius:6px;font-family:var(--ar);font-size:11px;cursor:pointer}
+.btn-gray{background:var(--bg3);color:var(--muted2);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:var(--ar);font-size:11px;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{padding:8px 12px;color:var(--muted2);font-weight:400;text-align:right;border-bottom:1px solid var(--border);font-size:11px}
+td{padding:9px 12px;border-bottom:1px solid rgba(212,175,55,.05);vertical-align:middle}
 tr:hover td{background:rgba(212,175,55,.02)}
+.td-actions{display:flex;gap:5px;flex-wrap:wrap}
+.expires-ok{color:var(--green);font-size:11px}
+.expires-soon{color:var(--yellow);font-size:11px}
+.expires-expired{color:var(--red);font-size:11px}
+.expires-never{color:var(--muted2);font-size:11px}
 .status-on{color:var(--green);font-size:11px}
 .status-off{color:var(--red);font-size:11px}
-.expires-ok{color:var(--green);font-family:var(--mono);font-size:11px}
-.expires-soon{color:var(--gold);font-family:var(--mono);font-size:11px}
-.expires-expired{color:var(--red);font-family:var(--mono);font-size:11px}
-.expires-never{color:var(--muted2);font-size:11px}
-.msg{padding:8px 12px;border-radius:6px;font-size:13px;margin-top:10px}
+
+/* ── SETTINGS PAGE ── */
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(212,175,55,.05)}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:13px;font-weight:500;margin-bottom:3px}
+.setting-desc{font-size:11px;color:var(--muted2)}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--bg3);border:1px solid var(--border2);border-radius:24px;transition:.3s}
+.toggle-slider:before{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;background:var(--muted2);border-radius:50%;transition:.3s}
+.toggle input:checked + .toggle-slider{background:rgba(0,217,126,.2);border-color:var(--green)}
+.toggle input:checked + .toggle-slider:before{transform:translateX(20px);background:var(--green)}
+.setting-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 10px;border-radius:6px;font-family:var(--ar);font-size:12px;outline:none}
+.setting-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:12px;outline:none;width:200px}
+.btn-test{background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.3);color:var(--blue);padding:5px 12px;border-radius:6px;font-family:var(--ar);font-size:11px;cursor:pointer}
+.msg{padding:8px 12px;border-radius:6px;font-size:12px;margin-top:10px;display:none}
 .msg-ok{background:rgba(0,217,126,.1);color:var(--green);border:1px solid rgba(0,217,126,.2)}
 .msg-err{background:rgba(255,77,77,.1);color:var(--red);border:1px solid rgba(255,77,77,.2)}
-.td-actions{display:flex;gap:6px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
+
 <header>
-  <div class="logo">💰 MILLIONAIRE</div>
+  <div class="logo">
+    <div class="logo-icon">💰</div>
+    <div>
+      <div class="logo-text">MILLIONAIRE</div>
+      <div class="logo-by">by Mahmoud Ahmed</div>
+    </div>
+  </div>
   <span class="admin-badge">ADMIN</span>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('signals',this)">📊 الإشارات</button>
+    <button class="nav-tab" onclick="showPage('users',this)">👥 المشتركين</button>
+    <button class="nav-tab" onclick="showPage('settings',this)">⚙️ الإعدادات</button>
+  </div>
   <button class="btn-logout" onclick="logout()">خروج</button>
 </header>
 
-<div class="content">
-
-  <!-- Add User -->
-  <div class="card">
-    <h2>➕ إضافة مشترك جديد</h2>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">اسم المستخدم</label>
-        <input class="form-input" id="new-username" placeholder="username123">
-      </div>
-      <div class="form-group">
-        <label class="form-label">كلمة المرور</label>
-        <input class="form-input" id="new-password" placeholder="password">
-      </div>
-      <div class="form-group">
-        <label class="form-label">الاسم الكامل</label>
-        <input class="form-input" id="new-name" placeholder="محمد أحمد">
-      </div>
-      <div class="form-group">
-        <label class="form-label">الإيميل (اختياري)</label>
-        <input class="form-input" id="new-email" placeholder="user@email.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">مدة الاشتراك (أيام)</label>
-        <input class="form-input" id="new-days" type="number" placeholder="30">
-      </div>
-    </div>
-    <button class="btn btn-gold" onclick="addUser()">إضافة المشترك</button>
-    <div id="add-msg"></div>
+<!-- ══════════════ صفحة الإشارات ══════════════ -->
+<div class="page active" id="page-signals">
+  <div class="sig-stats">
+    <div class="sstat"><div class="sstat-val" id="s-total" style="color:var(--blue)">0</div><div class="sstat-lbl">إجمالي الإشارات</div></div>
+    <div class="sstat"><div class="sstat-val" id="s-open"  style="color:var(--green)">0</div><div class="sstat-lbl">مفتوحة 🟢</div></div>
+    <div class="sstat"><div class="sstat-val" id="s-target" style="color:var(--yellow)">0</div><div class="sstat-lbl">حققت الهدف 🎯</div></div>
+    <div class="sstat"><div class="sstat-val" id="s-stopped" style="color:var(--red)">0</div><div class="sstat-lbl">وقف الخسارة 🛑</div></div>
+    <div class="sstat"><div class="sstat-val" id="s-wr" style="color:var(--gold)">—</div><div class="sstat-lbl">Win Rate</div></div>
+    <div class="sstat"><div class="sstat-val" id="s-best" style="color:var(--green);font-size:13px">—</div><div class="sstat-lbl">أفضل استراتيجية</div></div>
   </div>
 
-  <!-- Users Table -->
-  <div class="card">
-    <h2 style="justify-content:space-between">
+  <div class="sig-tabs">
+    <button class="stab active" onclick="setSigTab('all',this)">الكل <span class="scnt" id="sc-all">0</span></button>
+    <button class="stab" onclick="setSigTab('open',this)">🟢 مفتوحة <span class="scnt" id="sc-open">0</span></button>
+    <button class="stab" onclick="setSigTab('target',this)">🎯 الهدف <span class="scnt" id="sc-target">0</span></button>
+    <button class="stab" onclick="setSigTab('stopped',this)">🛑 وقف <span class="scnt" id="sc-stopped">0</span></button>
+    <button class="stab btn-red" style="margin-right:auto" onclick="clearSignals()">🗑️ مسح الكل</button>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="signals-table">
+      <thead>
+        <tr>
+          <th>السهم</th><th>اتجاه</th><th>سعر الدخول</th><th>الهدف</th><th>وقف الخسارة</th><th>نسبة الهدف</th><th>الحالة</th><th>الاستراتيجية</th><th>الوقت</th>
+        </tr>
+      </thead>
+      <tbody id="sig-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ صفحة المشتركين ══════════════ -->
+<div class="page" id="page-users">
+  <div class="section">
+    <div class="section-head">➕ إضافة مشترك جديد</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">اسم المستخدم</label><input class="form-input" id="new-username" placeholder="username"></div>
+      <div class="form-group"><label class="form-label">كلمة المرور</label><input class="form-input" id="new-password" placeholder="password"></div>
+      <div class="form-group"><label class="form-label">الاسم الكامل</label><input class="form-input" id="new-name" placeholder="محمد أحمد"></div>
+      <div class="form-group"><label class="form-label">الإيميل</label><input class="form-input" id="new-email" placeholder="user@email.com"></div>
+      <div class="form-group"><label class="form-label">مدة الاشتراك (أيام)</label><input class="form-input" id="new-days" type="number" placeholder="30"></div>
+    </div>
+    <button class="btn-gold" onclick="addUser()">إضافة المشترك</button>
+    <div class="msg" id="add-msg"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head" style="justify-content:space-between">
       <span>👥 المشتركين</span>
-      <button class="btn btn-gray" onclick="loadUsers()" style="font-size:11px;padding:4px 10px">تحديث</button>
-    </h2>
+      <button class="btn-gray" onclick="loadUsers()">🔄 تحديث</button>
+    </div>
     <div style="overflow-x:auto">
       <table>
-        <thead>
-          <tr>
-            <th>الاسم</th>
-            <th>المستخدم</th>
-            <th>الإيميل</th>
-            <th>الحالة</th>
-            <th>انتهاء الاشتراك</th>
-            <th>الإجراءات</th>
-          </tr>
-        </thead>
+        <thead><tr><th>الاسم</th><th>المستخدم</th><th>الحالة</th><th>انتهاء الاشتراك</th><th>الإجراءات</th></tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
     </div>
   </div>
+</div>
 
-  <!-- Signals Control -->
-  <div class="card">
-    <h2>⚙️ التحكم في الإشارات</h2>
-    <button class="btn btn-red" onclick="clearSignals()">🗑️ مسح كل الإشارات</button>
-    <div id="sig-msg"></div>
+<!-- ══════════════ صفحة الإعدادات ══════════════ -->
+<div class="page" id="page-settings">
+  <div class="section">
+    <div class="section-head">🔐 تغيير كلمة المرور</div>
+    <div class="setting-row">
+      <div><div class="setting-label">كلمة المرور الحالية</div></div>
+      <input class="setting-input" type="password" id="old-pass" placeholder="••••••••">
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">كلمة المرور الجديدة</div></div>
+      <input class="setting-input" type="password" id="new-pass" placeholder="••••••••">
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">تأكيد كلمة المرور</div></div>
+      <input class="setting-input" type="password" id="confirm-pass" placeholder="••••••••">
+    </div>
+    <div style="margin-top:14px"><button class="btn-gold" onclick="changePassword()">حفظ كلمة المرور</button></div>
+    <div class="msg" id="pass-msg"></div>
   </div>
 
+  <div class="section">
+    <div class="section-head">📡 معلومات الاتصال</div>
+    <div class="setting-row">
+      <div><div class="setting-label">Webhook URL</div><div class="setting-desc">الصقه في TradingView Alerts</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--blue)" id="wh-url"></span>
+        <button class="btn-test" onclick="copyWH()">نسخ</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">JSON Format</div></div>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted2)">{"action":"BUY","symbol":"{{ticker}}","price":{{close}},...}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">⚙️ إدارة الإشارات</div>
+    <div class="setting-row">
+      <div><div class="setting-label">مسح كل الإشارات</div><div class="setting-desc">لا يمكن التراجع عن هذا الإجراء</div></div>
+      <button class="btn-red" onclick="clearSignals()">🗑️ مسح الكل</button>
+    </div>
+  </div>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 const token = localStorage.getItem('mm_token');
 const role  = localStorage.getItem('mm_role');
 if (!token || role !== 'admin') window.location.href = '/login.html';
 
-let users = [];
+document.getElementById('wh-url').textContent = location.origin + '/webhook';
 
-async function loadUsers() {
-  try {
-    const res  = await fetch('/api/admin/users', { headers:{'x-auth-token':token} });
-    if (!res.ok) { logout(); return; }
-    users = await res.json();
-    renderUsers();
-  } catch(e) {}
+let signals = [], sigTab = 'all';
+
+// ── Page Navigation ──────────────────────────
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'signals') loadSignals();
+  if (name === 'users')   loadUsers();
 }
 
-function renderUsers() {
+// ── Signals ──────────────────────────────────
+async function loadSignals() {
+  try {
+    const r = await fetch('/api/signals', {headers:{'x-auth-token':token}});
+    signals = await r.json();
+    renderSignals();
+    updateStats();
+  } catch(e){}
+}
+
+function updateStats() {
+  const open    = signals.filter(s=>s.status==='open').length;
+  const target  = signals.filter(s=>s.status==='target').length;
+  const stopped = signals.filter(s=>s.status==='stopped').length;
+  const closed  = target + stopped;
+  const wr      = closed > 0 ? (target/closed*100).toFixed(1) : null;
+  const stratMap = {};
+  signals.filter(s=>s.status==='target').forEach(s=>{ stratMap[s.strategy]=(stratMap[s.strategy]||0)+1; });
+  const best = Object.keys(stratMap).sort((a,b)=>stratMap[b]-stratMap[a])[0] || '—';
+
+  document.getElementById('s-total').textContent   = signals.length;
+  document.getElementById('s-open').textContent    = open;
+  document.getElementById('s-target').textContent  = target;
+  document.getElementById('s-stopped').textContent = stopped;
+  document.getElementById('s-wr').textContent      = wr ? wr+'%' : '—';
+  document.getElementById('s-best').textContent    = best;
+  document.getElementById('sc-all').textContent     = signals.length;
+  document.getElementById('sc-open').textContent    = open;
+  document.getElementById('sc-target').textContent  = target;
+  document.getElementById('sc-stopped').textContent = stopped;
+}
+
+function renderSignals() {
+  let list = [...signals];
+  if(sigTab==='open')    list=list.filter(s=>s.status==='open');
+  else if(sigTab==='target')  list=list.filter(s=>s.status==='target');
+  else if(sigTab==='stopped') list=list.filter(s=>s.status==='stopped');
+
+  const tbody = document.getElementById('sig-tbody');
+  if(!list.length){ tbody.innerHTML='<tr class="empty-row"><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>'; return; }
+
+  // تجميع بالسهم
+  const groups = {};
+  list.forEach(s=>{ const sym=s.symbol.toUpperCase(); if(!groups[sym]) groups[sym]=[]; groups[sym].push(s); });
+  const sortedSyms = Object.keys(groups).sort();
+
+  let html = '';
+  sortedSyms.forEach(sym => {
+    const g = groups[sym];
+    const oc = g.filter(s=>s.status==='open').length;
+    const tc = g.filter(s=>s.status==='target').length;
+    const sc = g.filter(s=>s.status==='stopped').length;
+    html += `<tr style="background:rgba(212,175,55,.04)">
+      <td colspan="9" style="padding:7px 12px;border-bottom:1px solid rgba(212,175,55,.08)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:#fff">${sym}</span>
+          <span style="font-size:11px;color:var(--muted2)">${g.length} صفقة</span>
+          ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 7px;border-radius:10px">🟢 ${oc}</span>`:''}
+          ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 7px;border-radius:10px">🎯 ${tc}</span>`:''}
+          ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 7px;border-radius:10px">🛑 ${sc}</span>`:''}
+        </div>
+      </td></tr>`;
+    g.forEach(s => {
+      const isBuy = s.action==='BUY';
+      const entry = parseFloat(s.price)||0;
+      let tp = parseFloat(s.tp)||0;
+      const sl = parseFloat(s.sl)||0;
+      const slDist = Math.abs(entry-sl);
+      if(!tp||Math.abs(tp-entry)<0.00001) tp = isBuy?entry+slDist*2:entry-slDist*2;
+      const tpPct = entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
+      const dp = entry>=100?2:4;
+      const stMap = {open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف'},target:{cls:'s-target',txt:'🎯 هدف'}};
+      const st = stMap[s.status]||stMap.open;
+      const dt = new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+      html += `<tr>
+        <td><div class="sym-cell"><div class="sym-icon ${isBuy?'buy':'sell'}">${s.symbol.replace('USDT','').slice(0,3)}</div><span style="font-family:var(--mono);font-size:12px">${s.symbol}</span></div></td>
+        <td><span class="dir-txt ${isBuy?'dir-buy':'dir-sell'}">${isBuy?'▲ شراء':'▼ بيع'}</span></td>
+        <td class="price-cell">$${entry.toFixed(dp)}</td>
+        <td class="tp-cell">$${tp.toFixed(dp)}</td>
+        <td class="sl-cell">$${sl.toFixed(dp)}</td>
+        <td class="pct-cell">+${tpPct}%</td>
+        <td><span class="status-chip ${st.cls}"><span class="s-dot"></span>${st.txt}</span></td>
+        <td class="strat-cell">${s.strategy||'—'}</td>
+        <td class="time-cell">${dt}</td>
+      </tr>`;
+    });
+  });
+  tbody.innerHTML = html;
+}
+
+function setSigTab(t, btn) {
+  sigTab = t;
+  document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSignals();
+}
+
+setInterval(loadSignals, 10000);
+loadSignals();
+
+// ── Users ─────────────────────────────────────
+async function loadUsers() {
+  try {
+    const r = await fetch('/api/admin/users', {headers:{'x-auth-token':token}});
+    const users = await r.json();
+    renderUsers(users);
+  } catch(e){}
+}
+
+function renderUsers(users) {
   const tbody = document.getElementById('users-tbody');
   tbody.innerHTML = users.map(u => {
     const expires = u.expiresAt ? new Date(u.expiresAt) : null;
-    const now     = new Date();
+    const now = new Date();
     const daysLeft = expires ? Math.ceil((expires-now)/86400000) : null;
-    const hoursLeft = expires ? Math.ceil((expires-now)/3600000) : null;
     let expEl = '';
-    if (u.role === 'admin') {
-      expEl = '<span class="expires-never">♾️ لا ينتهي</span>';
-    } else if (!expires) {
-      expEl = '<span class="expires-never">غير محدد</span>';
-    } else if (daysLeft < 0) {
-      expEl = `<span class="expires-expired">❌ منتهي منذ ${Math.abs(daysLeft)} يوم</span>`;
-    } else if (daysLeft === 0) {
-      expEl = `<span class="expires-expired">⚠️ ينتهي اليوم خلال ${hoursLeft} ساعة</span>`;
-    } else if (daysLeft === 1) {
-      expEl = `<span class="expires-soon">⚠️ ينتهي غداً</span>`;
-    } else if (daysLeft <= 7) {
-      expEl = `<span class="expires-soon">⚠️ متبقي ${daysLeft} أيام — ${expires.toLocaleDateString('ar')}</span>`;
-    } else if (daysLeft <= 30) {
-      expEl = `<span class="expires-ok">✅ متبقي ${daysLeft} يوم — ${expires.toLocaleDateString('ar')}</span>`;
-    } else {
-      expEl = `<span class="expires-ok">✅ متبقي ${daysLeft} يوم — ${expires.toLocaleDateString('ar')}</span>`;
-    }
+    if(u.role==='admin') expEl = '<span class="expires-never">♾️ لا ينتهي</span>';
+    else if(!expires)    expEl = '<span class="expires-never">غير محدد</span>';
+    else if(daysLeft<0)  expEl = `<span class="expires-expired">❌ منتهي منذ ${Math.abs(daysLeft)} يوم</span>`;
+    else if(daysLeft===0) expEl = `<span class="expires-expired">⚠️ ينتهي اليوم</span>`;
+    else if(daysLeft<=7) expEl = `<span class="expires-soon">⚠️ متبقي ${daysLeft} أيام</span>`;
+    else expEl = `<span class="expires-ok">✅ متبقي ${daysLeft} يوم</span>`;
 
-    const actions = u.role === 'admin' ? '' : `
-      <div class="td-actions">
-        ${u.active
-          ? `<button class="btn btn-red" style="font-size:11px;padding:3px 8px" onclick="toggleUser('${u.id}',false)">إيقاف</button>`
-          : `<button class="btn btn-green" style="font-size:11px;padding:3px 8px" onclick="toggleUser('${u.id}',true)">تفعيل</button>`
-        }
-        <button class="btn btn-gold" style="font-size:11px;padding:3px 8px" onclick="renewUser('${u.id}')">تجديد 30</button>
-        <button class="btn btn-gray" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="deleteUser('${u.id}','${u.name}')">حذف</button>
-      </div>`;
+    const actions = u.role==='admin' ? '' : `<div class="td-actions">
+      ${u.active
+        ? `<button class="btn-red" onclick="toggleUser('${u._id||u.id}',false)">إيقاف</button>`
+        : `<button class="btn-green" onclick="toggleUser('${u._id||u.id}',true)">تفعيل</button>`}
+      <button class="btn-yellow" onclick="renewUser('${u._id||u.id}')">تجديد</button>
+      <button class="btn-red" onclick="deleteUser('${u._id||u.id}','${u.name}')">حذف</button>
+    </div>`;
 
     return `<tr>
       <td style="font-weight:500">${u.name}</td>
       <td style="font-family:var(--mono);font-size:12px">${u.username}</td>
-      <td style="font-size:12px;color:var(--muted2)">${u.email || '—'}</td>
-      <td>${u.active ? '<span class="status-on">● نشط</span>' : '<span class="status-off">● موقوف</span>'}</td>
+      <td>${u.active?'<span class="status-on">● نشط</span>':'<span class="status-off">● موقوف</span>'}</td>
       <td>${expEl}</td>
       <td>${actions}</td>
     </tr>`;
@@ -180,68 +406,86 @@ async function addUser() {
   const password = document.getElementById('new-password').value.trim();
   const name     = document.getElementById('new-name').value.trim();
   const email    = document.getElementById('new-email').value.trim();
-  const days     = parseInt(document.getElementById('new-days').value) || 30;
-  const msgEl    = document.getElementById('add-msg');
-
-  if (!username || !password || !name) { showMsg('add-msg','أدخل اسم المستخدم وكلمة المرور والاسم','err'); return; }
-
+  const days     = parseInt(document.getElementById('new-days').value)||30;
+  if(!username||!password||!name){showMsg('add-msg','أدخل جميع البيانات المطلوبة','err');return;}
   try {
-    const res  = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','x-auth-token':token},
-      body: JSON.stringify({ username, password, name, email, days })
-    });
-    const data = await res.json();
-    if (!res.ok) { showMsg('add-msg', data.error,'err'); return; }
-    showMsg('add-msg', `✓ تم إضافة ${name} — اشتراك ${days} يوم`,'ok');
-    ['new-username','new-password','new-name','new-email','new-days'].forEach(id => document.getElementById(id).value = '');
+    const r = await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':token},body:JSON.stringify({username,password,name,email,days})});
+    const d = await r.json();
+    if(!r.ok){showMsg('add-msg',d.error,'err');return;}
+    showMsg('add-msg',`✓ تم إضافة ${name} — اشتراك ${days} يوم`,'ok');
+    ['new-username','new-password','new-name','new-email','new-days'].forEach(id=>document.getElementById(id).value='');
     loadUsers();
-  } catch(e) { showMsg('add-msg','خطأ في الاتصال','err'); }
+  }catch(e){showMsg('add-msg','خطأ في الاتصال','err');}
 }
 
-async function toggleUser(id, active) {
-  await fetch(`/api/admin/users/${id}`, {
-    method:'PUT', headers:{'Content-Type':'application/json','x-auth-token':token},
-    body: JSON.stringify({ active })
-  });
+async function toggleUser(id,active){
+  await fetch(`/api/admin/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':token},body:JSON.stringify({active})});
   loadUsers();
 }
 
-async function renewUser(id) {
-  const days = parseInt(prompt('كم يوم تجديد؟','30'));
-  if (!days) return;
-  await fetch(`/api/admin/users/${id}`, {
-    method:'PUT', headers:{'Content-Type':'application/json','x-auth-token':token},
-    body: JSON.stringify({ days })
-  });
+async function renewUser(id){
+  const days=parseInt(prompt('كم يوم تجديد؟','30'));
+  if(!days)return;
+  await fetch(`/api/admin/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':token},body:JSON.stringify({days})});
+  showToast('✓ تم التجديد');
   loadUsers();
 }
 
-async function deleteUser(id, name) {
-  if (!confirm(`حذف ${name}؟`)) return;
-  await fetch(`/api/admin/users/${id}`, { method:'DELETE', headers:{'x-auth-token':token} });
+async function deleteUser(id,name){
+  if(!confirm(`حذف ${name}؟`))return;
+  await fetch(`/api/admin/users/${id}`,{method:'DELETE',headers:{'x-auth-token':token}});
   loadUsers();
 }
 
-async function clearSignals() {
-  if (!confirm('مسح كل الإشارات؟')) return;
-  await fetch('/api/admin/signals', { method:'DELETE', headers:{'x-auth-token':token} });
-  showMsg('sig-msg','✓ تم مسح كل الإشارات','ok');
+// ── Settings ──────────────────────────────────
+async function changePassword(){
+  const oldPass=document.getElementById('old-pass').value;
+  const newPass=document.getElementById('new-pass').value;
+  const confirmPass=document.getElementById('confirm-pass').value;
+  if(!oldPass||!newPass){showMsg('pass-msg','أدخل كلمة المرور','err');return;}
+  if(newPass!==confirmPass){showMsg('pass-msg','كلمة المرور غير متطابقة','err');return;}
+  if(newPass.length<6){showMsg('pass-msg','6 أحرف على الأقل','err');return;}
+  try{
+    const r=await fetch('/api/me/password',{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':token},body:JSON.stringify({oldPassword:oldPass,newPassword:newPass})});
+    const d=await r.json();
+    if(!r.ok){showMsg('pass-msg',d.error,'err');return;}
+    showMsg('pass-msg','✓ تم تغيير كلمة المرور','ok');
+    document.getElementById('old-pass').value='';
+    document.getElementById('new-pass').value='';
+    document.getElementById('confirm-pass').value='';
+  }catch(e){showMsg('pass-msg','خطأ في الاتصال','err');}
 }
 
-function showMsg(id, msg, type) {
-  const el = document.getElementById(id);
-  el.className = 'msg ' + (type==='ok' ? 'msg-ok' : 'msg-err');
-  el.textContent = msg;
-  setTimeout(() => el.textContent = '', 4000);
+async function clearSignals(){
+  if(!confirm('مسح كل الإشارات؟'))return;
+  await fetch('/api/admin/signals',{method:'DELETE',headers:{'x-auth-token':token}});
+  showToast('✓ تم مسح الإشارات');
+  loadSignals();
 }
 
-function logout() {
-  localStorage.clear();
-  window.location.href = '/login.html';
+function copyWH(){
+  navigator.clipboard?.writeText(location.origin+'/webhook');
+  showToast('✓ تم نسخ الـ Webhook URL');
 }
 
-loadUsers();
+function showMsg(id,msg,type){
+  const el=document.getElementById(id);
+  el.textContent=msg;
+  el.className='msg '+(type==='ok'?'msg-ok':'msg-err');
+  el.style.display='block';
+  setTimeout(()=>el.style.display='none',4000);
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+async function logout(){
+  try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
+  localStorage.clear();window.location.href='/login.html';
+}
 </script>
 </body>
 </html>
