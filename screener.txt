@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MILLIONAIRE · فرص المضاربة</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--card:#0f1521;
+  --border:rgba(212,175,55,.12);--border2:rgba(212,175,55,.2);
+  --gold:#d4af37;--gold2:#f5d070;--gold3:rgba(212,175,55,.08);
+  --green:#00d97e;--red:#ff4d4d;--blue:#4da6ff;--yellow:#f0b429;
+  --text:#d0dce8;--muted:#445566;--muted2:#607080;
+  --mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif;
+  --shadow:0 8px 32px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--ar);min-height:100vh;display:flex;flex-direction:column}
+
+/* HEADER */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--gold);letter-spacing:2px}
+.nav-links{display:flex;gap:6px;margin-right:auto}
+.nav-link{padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:11px;cursor:pointer;text-decoration:none;transition:all .15s}
+.nav-link:hover,.nav-link.active{background:var(--gold3);border-color:var(--gold);color:var(--gold)}
+.btn-logout{background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px}
+
+/* HERO */
+.hero{background:linear-gradient(135deg,var(--bg2),var(--bg3));border-bottom:1px solid var(--border);padding:20px 16px}
+.hero-title{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--gold);margin-bottom:4px}
+.hero-sub{font-size:12px;color:var(--muted2);margin-bottom:16px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filter-group{display:flex;flex-direction:column;gap:3px}
+.filter-label{font-size:10px;color:var(--muted2)}
+.filter-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 10px;border-radius:6px;font-family:var(--ar);font-size:11px;cursor:pointer}
+.btn-refresh{background:var(--gold3);border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-family:var(--ar);font-size:12px;font-weight:600;transition:all .15s}
+.btn-refresh:hover{background:var(--gold);color:#000}
+.update-time{font-size:10px;color:var(--muted2);margin-right:auto}
+
+/* STATS */
+.stats-bar{display:flex;gap:1px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.stat{padding:10px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--border)}
+.stat-val{font-family:var(--mono);font-size:16px;font-weight:600}
+.stat-lbl{font-size:9px;color:var(--muted2)}
+
+/* TABLE */
+.content{flex:1;overflow:auto;padding:16px}
+.tbl-wrap{overflow-x:auto}
+.screener-table{width:100%;border-collapse:collapse;font-size:12px;min-width:800px}
+.screener-table thead th{padding:10px 12px;color:var(--muted2);font-weight:400;font-family:var(--mono);font-size:10px;text-align:right;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap;position:sticky;top:0;cursor:pointer}
+.screener-table thead th:hover{color:var(--gold)}
+.screener-table tbody td{padding:10px 12px;border-bottom:1px solid rgba(212,175,55,.04);text-align:right;vertical-align:middle}
+.screener-table tbody tr:hover td{background:rgba(212,175,55,.02);cursor:pointer}
+
+/* BADGES */
+.change-up{color:var(--green);font-family:var(--mono);font-size:11px;font-weight:600}
+.change-dn{color:var(--red);font-family:var(--mono);font-size:11px;font-weight:600}
+.vol-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-family:var(--mono);font-size:10px}
+.vol-hot{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.2)}
+.vol-high{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.2)}
+.vol-med{background:rgba(240,180,41,.12);color:var(--yellow);border:1px solid rgba(240,180,41,.2)}
+.sym-name{font-family:var(--mono);font-size:13px;font-weight:600;color:#fff}
+.sym-full{font-size:10px;color:var(--muted2);margin-top:1px}
+.chart-btn{display:inline-flex;align-items:center;gap:4px;background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.3);color:var(--blue);padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;text-decoration:none;transition:all .15s}
+.chart-btn:hover{background:rgba(77,166,255,.2)}
+.signal-btn{display:inline-flex;align-items:center;gap:4px;background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.3);color:var(--green);padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;transition:all .15s;margin-right:4px}
+.signal-btn:hover{background:rgba(0,217,126,.2)}
+
+/* LOADING */
+.loading{text-align:center;padding:60px;color:var(--muted2)}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* EMPTY */
+.empty{text-align:center;padding:60px;color:var(--muted2)}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:640px){
+  .stats-bar{display:none}
+  .filters{gap:6px}
+  .content{padding:10px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">💰 MILLIONAIRE</div>
+  <div class="nav-links">
+    <a class="nav-link" href="/">📡 الإشارات</a>
+    <a class="nav-link active" href="/screener">🔍 فرص المضاربة</a>
+    <a class="nav-link" href="/admin">⚙️ الإدارة</a>
+  </div>
+  <span id="uname" style="font-family:var(--mono);font-size:11px;color:var(--muted2)"></span>
+  <button class="btn-logout" onclick="logout()">خروج</button>
+</header>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-title">🔍 فرص المضاربة اليومية</div>
+  <div class="hero-sub">أسهم Small Cap الأمريكية المناسبة للمضاربة — تتحدث تلقائياً كل ساعة</div>
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">التغيير</span>
+      <select class="filter-select" id="f-change" onchange="applyFilters()">
+        <option value="0">الكل</option>
+        <option value="2">+2% فأكثر</option>
+        <option value="5" selected>+5% فأكثر</option>
+        <option value="10">+10% فأكثر</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">الحجم</span>
+      <select class="filter-select" id="f-vol" onchange="applyFilters()">
+        <option value="0">الكل</option>
+        <option value="500000" selected>500K+</option>
+        <option value="1000000">1M+</option>
+        <option value="5000000">5M+</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">السعر</span>
+      <select class="filter-select" id="f-price" onchange="applyFilters()">
+        <option value="0,999" selected>الكل ($1-$20)</option>
+        <option value="0,5">$1 — $5</option>
+        <option value="5,10">$5 — $10</option>
+        <option value="10,20">$10 — $20</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">الترتيب</span>
+      <select class="filter-select" id="f-sort" onchange="applyFilters()">
+        <option value="volume">الحجم ↓</option>
+        <option value="change">التغيير ↓</option>
+        <option value="price">السعر ↓</option>
+      </select>
+    </div>
+    <button class="btn-refresh" onclick="loadScreener(true)">🔄 تحديث</button>
+    <span class="update-time" id="update-time"></span>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat"><div class="stat-val" id="s-total" style="color:var(--blue)">0</div><div class="stat-lbl">إجمالي الأسهم</div></div>
+  <div class="stat"><div class="stat-val" id="s-up" style="color:var(--green)">0</div><div class="stat-lbl">صاعدة اليوم</div></div>
+  <div class="stat"><div class="stat-val" id="s-hot" style="color:var(--red)">0</div><div class="stat-lbl">حجم عالي جداً</div></div>
+  <div class="stat"><div class="stat-val" id="s-avg-chg" style="color:var(--gold)">0%</div><div class="stat-lbl">متوسط التغيير</div></div>
+</div>
+
+<!-- Content -->
+<div class="content">
+  <div id="main-content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>جارٍ تحميل فرص المضاربة...</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = localStorage.getItem('mm_token');
+if (!token) window.location.href = '/login.html';
+document.getElementById('uname').textContent = localStorage.getItem('mm_name') || '';
+
+let allData = [];
+
+// ── Load ──
+async function loadScreener(force = false) {
+  try {
+    showToast('⏳ جارٍ التحديث...');
+    const r = await fetch('/api/screener' + (force ? '?refresh=1' : ''), {
+      headers: {'x-auth-token': token}
+    });
+    if (r.status === 401) { logout(); return; }
+    const res = await r.json();
+    if (!res.ok) { showToast('❌ خطأ في التحميل'); return; }
+
+    allData = res.data || [];
+
+    if (res.updatedAt) {
+      const d = new Date(res.updatedAt);
+      document.getElementById('update-time').textContent =
+        'آخر تحديث: ' + d.toLocaleTimeString('ar', {hour:'2-digit', minute:'2-digit'});
+    }
+
+    updateStats();
+    applyFilters();
+    showToast('✅ تم تحميل ' + allData.length + ' سهم');
+  } catch(e) {
+    showToast('❌ خطأ في الاتصال');
+    document.getElementById('main-content').innerHTML =
+      '<div class="empty">❌ خطأ في تحميل البيانات — تأكد من الاتصال</div>';
+  }
+}
+
+// ── Stats ──
+function updateStats() {
+  const up  = allData.filter(s => s.change > 0).length;
+  const hot = allData.filter(s => s.volume > 5000000).length;
+  const avgChg = allData.length > 0
+    ? (allData.reduce((a,s) => a + (s.change||0), 0) / allData.length).toFixed(1)
+    : 0;
+
+  document.getElementById('s-total').textContent = allData.length;
+  document.getElementById('s-up').textContent    = up;
+  document.getElementById('s-hot').textContent   = hot;
+  document.getElementById('s-avg-chg').textContent = (avgChg > 0 ? '+' : '') + avgChg + '%';
+}
+
+// ── Filters ──
+function applyFilters() {
+  const minChange = parseFloat(document.getElementById('f-change').value) || 0;
+  const minVol    = parseFloat(document.getElementById('f-vol').value)    || 0;
+  const priceRange= document.getElementById('f-price').value.split(',');
+  const minPrice  = parseFloat(priceRange[0]) || 0;
+  const maxPrice  = parseFloat(priceRange[1]) || 999;
+  const sortBy    = document.getElementById('f-sort').value;
+
+  let filtered = allData.filter(s =>
+    Math.abs(s.change || 0) >= minChange &&
+    (s.volume || 0) >= minVol &&
+    (s.price || 0) >= minPrice &&
+    (s.price || 0) <= maxPrice
+  );
+
+  filtered.sort((a, b) => {
+    if (sortBy === 'change') return Math.abs(b.change) - Math.abs(a.change);
+    if (sortBy === 'price')  return b.price - a.price;
+    return b.volume - a.volume;
+  });
+
+  renderTable(filtered);
+}
+
+// ── Render ──
+function renderTable(data) {
+  const el = document.getElementById('main-content');
+
+  if (!data.length) {
+    el.innerHTML = '<div class="empty">🔍 لا توجد أسهم بهذه الفلاتر — جرب تغيير الفلاتر</div>';
+    return;
+  }
+
+  let html = `<div class="tbl-wrap">
+    <table class="screener-table">
+      <thead><tr>
+        <th>#</th>
+        <th onclick="sortBy('symbol')">السهم</th>
+        <th onclick="sortBy('price')">السعر</th>
+        <th onclick="sortBy('change')">التغيير</th>
+        <th onclick="sortBy('volume')">الحجم</th>
+        <th>Market Cap</th>
+        <th>القطاع</th>
+        <th>إجراء</th>
+      </tr></thead>
+      <tbody>`;
+
+  data.forEach((s, i) => {
+    const chg      = parseFloat(s.change || 0);
+    const vol      = parseInt(s.volume || 0);
+    const cap      = parseInt(s.marketCap || 0);
+    const volM     = vol >= 1000000 ? (vol/1000000).toFixed(1)+'M' : (vol/1000).toFixed(0)+'K';
+    const capM     = cap >= 1000000 ? '$'+(cap/1000000).toFixed(1)+'M' : '$'+cap;
+    const chgClass = chg >= 0 ? 'change-up' : 'change-dn';
+    const chgTxt   = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+
+    let volBadge = 'vol-med';
+    if (vol > 5000000) volBadge = 'vol-hot';
+    else if (vol > 1000000) volBadge = 'vol-high';
+
+    html += `<tr onclick="openChart('${s.symbol}')">
+      <td style="color:var(--muted2);font-family:var(--mono);font-size:11px">${i+1}</td>
+      <td>
+        <div class="sym-name">${s.symbol}</div>
+        <div class="sym-full">${(s.name||'').slice(0,25)}</div>
+      </td>
+      <td style="font-family:var(--mono);font-size:12px;font-weight:600">$${parseFloat(s.price||0).toFixed(2)}</td>
+      <td><span class="${chgClass}">${chgTxt}</span></td>
+      <td><span class="vol-badge ${volBadge}">${volM}</span></td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted2)">${capM}</td>
+      <td style="font-size:10px;color:var(--muted2)">${s.sector||'—'}</td>
+      <td onclick="event.stopPropagation()">
+        <a class="chart-btn" onclick="openChart('${s.symbol}')">📊 شارت</a>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  html += `<div style="padding:12px;font-size:11px;color:var(--muted2);text-align:center">
+    عرض ${data.length} سهم من ${allData.length} — البيانات مؤخرة 15 دقيقة (الباقة المجانية)
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+function openChart(symbol) {
+  window.open('https://www.tradingview.com/chart/?symbol=' + symbol, '_blank');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function logout() {
+  try { await fetch('/api/logout', {method:'POST', headers:{'x-auth-token':token}}); } catch(e) {}
+  localStorage.clear(); window.location.href = '/login.html';
+}
+
+// تحميل عند البدء
+loadScreener();
+// تحديث كل ساعة
+setInterval(() => loadScreener(), 3600000);
+</script>
+</body>
+</html>
