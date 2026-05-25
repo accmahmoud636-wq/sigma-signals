@@ -59,16 +59,26 @@ async function initAdmin() {
   } catch(e) {}
 }
 
-// ─── Yahoo Finance ─────────────────────────────
-// يدعم الأسهم الأمريكية: AAPL, TSLA, NVDA ...
-// ويدعم الكريبتو: BTC-USD, ETH-USD ...
-async function getStockPrice(symbol) {
-  // حوّل الرمز: BTCUSDT → BTC-USD | AAPL → AAPL
-  let yahooSym = symbol;
-  if (/USDT$/i.test(symbol)) {
-    yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
-  }
+// ─── Binance: كريبتو ─────────────────────────────
+async function getBinanceSpotPrice(symbol) {
+  return new Promise((resolve) => {
+    https.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.toUpperCase()}`, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.price ? parseFloat(json.price) : null);
+        } catch(e) { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
 
+// ─── Yahoo Finance: أسهم أمريكية ─────────────────
+async function getYahooPrice(symbol) {
+  let yahooSym = symbol;
+  if (/USDT$/i.test(symbol)) yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
   return new Promise((resolve) => {
     const options = {
       hostname: 'query1.finance.yahoo.com',
@@ -90,6 +100,21 @@ async function getStockPrice(symbol) {
     req.on('error', () => resolve(null));
     req.end();
   });
+}
+
+// ─── Smart Price: Binance أولاً ثم Yahoo ──────────
+async function getStockPrice(symbol) {
+  const binancePrice = await getBinanceSpotPrice(symbol);
+  if (binancePrice) {
+    console.log(`💹 Binance: ${symbol} = $${binancePrice}`);
+    return binancePrice;
+  }
+  const yahooPrice = await getYahooPrice(symbol);
+  if (yahooPrice) {
+    console.log(`📈 Yahoo: ${symbol} = $${yahooPrice}`);
+    return yahooPrice;
+  }
+  return null;
 }
 
 // ─── Auto Update كل 60 ثانية ──────────────────
