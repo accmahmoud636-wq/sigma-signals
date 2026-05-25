@@ -207,7 +207,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
         <thead><tr>
           <th id="th-del"></th>
           <th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th>
-          <th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th>
+          <th>الهدف</th><th>وقف</th><th>نسبة الهدف</th><th>نسبة وقف</th><th>تقدم</th>
           <th>الحالة</th><th>استراتيجية</th><th>الوقت</th><th>شارت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
@@ -398,8 +398,9 @@ function renderCards(groups) {
         </div>
         <div class="card-levels">
           <div class="lv"><div class="lv-l">🎯 الهدف</div><div class="lv-v lv-tp">$${d.tp.toFixed(d.dp)}</div></div>
-          <div class="lv"><div class="lv-l">📈 نسبة</div><div class="lv-v lv-pct">+${d.tpPct}%</div></div>
+          <div class="lv"><div class="lv-l">📈 هدف%</div><div class="lv-v lv-pct">+${d.tpPct}%</div></div>
           <div class="lv"><div class="lv-l">🛑 وقف</div><div class="lv-v lv-sl">$${d.sl.toFixed(d.dp)}</div></div>
+          <div class="lv" style="grid-column:1/-1"><div class="lv-l">📉 وقف%</div><div class="lv-v" style="color:var(--red)">-${d.slPct}%</div></div>
         </div>
         <div class="card-prog">
           <div class="prog-top">
@@ -453,6 +454,7 @@ function renderTable(groups) {
         <td class="tp-cell">$${d.tp.toFixed(d.dp)}</td>
         <td class="sl-cell">$${d.sl.toFixed(d.dp)}</td>
         <td class="pct-cell">+${d.tpPct}%</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--red)">-${d.slPct}%</td>
         <td><div style="display:flex;align-items:center;gap:5px;min-width:90px">
           <div class="prog-track" style="flex:1"><div class="prog-fill" style="width:${d.prog.toFixed(0)}%;background:${d.progClr}"></div></div>
           <span style="font-family:var(--mono);font-size:10px;color:${d.progClr};width:28px">${d.prog.toFixed(0)}%</span>
