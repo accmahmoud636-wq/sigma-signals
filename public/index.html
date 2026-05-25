@@ -100,7 +100,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
 .group-header{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px}
 .group-sym{font-family:var(--mono);font-size:15px;font-weight:600;color:#fff}
-.signal-card{background:var(--card);border-radius:12px;border:1px solid var(--border);overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:default}
+.signal-card{background:var(--card);border-radius:12px;border:1px solid var(--border);overflow:hidden;transition:transform .2s,box-shadow .2s}
 .signal-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
 .signal-card.new{animation:cardIn .35s cubic-bezier(.2,.8,.2,1)}
 @keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -191,22 +191,19 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
       <button class="vbtn" id="vbtn-table" onclick="setView('table',this)">☰</button>
     </div>
     <button class="btn-icon" onclick="toggleThemePicker()" title="الثيم">🎨</button>
-    <button class="btn-icon" onclick="requestNotif()" id="notif-btn" title="إشعارات الموبايل">🔔</button>
-    
+    <button class="btn-icon" onclick="requestNotif()" id="notif-btn" title="إشعارات">🔔</button>
     <span style="font-family:var(--mono);font-size:11px;color:var(--muted2)" id="uname"></span>
     <button class="btn-logout" onclick="logout()">خروج</button>
   </div>
 </header>
 
-<!-- Theme Picker -->
 <div class="theme-picker" id="theme-picker">
-  <div class="theme-dot active" style="background:#d4af37" onclick="setTheme('dark',this)" title="ذهبي داكن"></div>
-  <div class="theme-dot" style="background:#f0f2f5;border:1px solid #ddd" onclick="setTheme('light',this)" title="فاتح"></div>
-  <div class="theme-dot" style="background:#4da6ff" onclick="setTheme('blue',this)" title="أزرق"></div>
-  <div class="theme-dot" style="background:#00d97e" onclick="setTheme('green',this)" title="أخضر"></div>
+  <div class="theme-dot active" style="background:#d4af37" onclick="setTheme('dark',this)"></div>
+  <div class="theme-dot" style="background:#f0f2f5;border:1px solid #ddd" onclick="setTheme('light',this)"></div>
+  <div class="theme-dot" style="background:#4da6ff" onclick="setTheme('blue',this)"></div>
+  <div class="theme-dot" style="background:#00d97e" onclick="setTheme('green',this)"></div>
 </div>
 
-<!-- Report -->
 <div class="report">
   <div class="rcard"><div class="rcard-val" id="r-total" style="color:var(--blue)">0</div><div class="rcard-lbl">إجمالي الإشارات</div></div>
   <div class="rcard"><div class="rcard-val" id="r-win" style="color:var(--green)">0</div><div class="rcard-lbl">صفقات رابحة ✅</div></div>
@@ -220,7 +217,6 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
   <div class="rcard"><div class="rcard-val" id="r-best" style="color:var(--green);font-size:12px">—</div><div class="rcard-lbl">أفضل استراتيجية</div></div>
 </div>
 
-<!-- Tabs -->
 <div class="tabs">
   <button class="tab active" onclick="setTab('all',this)">الكل <span class="cnt" id="c-all">0</span></button>
   <button class="tab" onclick="setTab('open',this)">🟢 مفتوحة <span class="cnt" id="c-open">0</span></button>
@@ -231,11 +227,8 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
   <span class="live-dot"></span>
 </div>
 
-<!-- Content -->
 <div class="content" id="content">
-  <!-- Cards View -->
   <div id="cards-view"></div>
-  <!-- Table View -->
   <div id="table-view" style="display:none">
     <div class="tbl-wrap">
       <table class="signals-table">
@@ -255,167 +248,179 @@ const token = localStorage.getItem('mm_token');
 if (!token) window.location.href = '/login.html';
 document.getElementById('uname').textContent = localStorage.getItem('mm_name') || '';
 
-let signals=[], tab='all', view='cards', lastSeen=0;
-const priceCache={}, updatedIds=new Set();
+let signals = [], tab = 'all', view = 'cards', lastSeen = 0;
+const updatedIds = new Set();
 
-// ── Theme ──────────────────────────────────────
+// ── Theme ──
 function setTheme(t, dot) {
-  document.documentElement.setAttribute('data-theme', t==='dark'?'':t);
+  document.documentElement.setAttribute('data-theme', t==='dark' ? '' : t);
   localStorage.setItem('mm_theme', t);
-  document.querySelectorAll('.theme-dot').forEach(d=>d.classList.remove('active'));
-  if(dot) dot.classList.add('active');
+  document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
+  if (dot) dot.classList.add('active');
   document.getElementById('theme-picker').classList.remove('show');
 }
-function toggleThemePicker(){
-  document.getElementById('theme-picker').classList.toggle('show');
-}
+function toggleThemePicker() { document.getElementById('theme-picker').classList.toggle('show'); }
 const savedTheme = localStorage.getItem('mm_theme');
-if(savedTheme && savedTheme!=='dark') setTheme(savedTheme);
+if (savedTheme && savedTheme !== 'dark') setTheme(savedTheme);
 
-// ── View Toggle ────────────────────────────────
+// ── View ──
 function setView(v, btn) {
   view = v;
   localStorage.setItem('mm_view', v);
-  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.vbtn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('cards-view').style.display = v==='cards'?'block':'none';
-  document.getElementById('table-view').style.display = v==='table'?'block':'none';
+  document.getElementById('cards-view').style.display = v==='cards' ? 'block' : 'none';
+  document.getElementById('table-view').style.display = v==='table' ? 'block' : 'none';
   render();
 }
 const savedView = localStorage.getItem('mm_view') || 'cards';
-if(savedView==='table') setView('table', document.getElementById('vbtn-table'));
+if (savedView === 'table') setView('table', document.getElementById('vbtn-table'));
 
-// ── Market Status ──────────────────────────────
-function updateMkt(){
-  const ny=new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
-  const d=ny.getDay(),h=ny.getHours(),m=ny.getMinutes();
-  const open=d>=1&&d<=5&&(h>9||(h===9&&m>=30))&&h<16;
-  const el=document.getElementById('mkt');
-  el.textContent=open?'● مفتوح':'○ مغلق';
-  el.className='mkt '+(open?'mkt-open':'mkt-closed');
+// ── Market Status ──
+function updateMkt() {
+  const ny = new Date(new Date().toLocaleString('en-US', {timeZone:'America/New_York'}));
+  const d=ny.getDay(), h=ny.getHours(), m=ny.getMinutes();
+  const open = d>=1 && d<=5 && (h>9||(h===9&&m>=30)) && h<16;
+  const el = document.getElementById('mkt');
+  el.textContent = open ? '● السوق مفتوح' : '○ السوق مغلق';
+  el.className = 'mkt ' + (open ? 'mkt-open' : 'mkt-closed');
 }
-setInterval(updateMkt,60000); updateMkt();
+setInterval(updateMkt, 60000); updateMkt();
 
-// ── Load ───────────────────────────────────────
-async function load(){
-  try{
-    const r=await fetch('/api/signals',{headers:{'x-auth-token':token}});
-    if(r.status===401||r.status===403){logout();return;}
-    const data=await r.json();
-    if(!Array.isArray(data))return;
-    if(data.length>lastSeen&&lastSeen>0){
+// ── Load Signals (كل 5 ثواني) ──
+async function load() {
+  try {
+    const r = await fetch('/api/signals', { headers: {'x-auth-token': token} });
+    if (r.status===401 || r.status===403) { logout(); return; }
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+    if (data.length > lastSeen && lastSeen > 0) {
       showToast('📡 إشارة جديدة!');
       playSound('new');
       sendPushNotif('📡 إشارة جديدة!', 'MILLIONAIRE — وصلت إشارة جديدة');
     }
-    lastSeen=data.length;
-    signals=data;
+    lastSeen = data.length;
+    signals = data;
     render();
     updateReport();
-  }catch(e){}
+  } catch(e) {}
 }
 load();
-setInterval(load,5000);
+setInterval(load, 5000);
 
-// ── Report ─────────────────────────────────────
-function updateReport(){
-  const open=signals.filter(s=>s.status==='open').length;
-  const target=signals.filter(s=>s.status==='target').length;
-  const stopped=signals.filter(s=>s.status==='stopped').length;
-  const closed=target+stopped;
-  const wr=closed>0?(target/closed*100).toFixed(1):null;
-  const sm={};
-  signals.filter(s=>s.status==='target').forEach(s=>{sm[s.strategy]=(sm[s.strategy]||0)+1;});
-  const best=Object.keys(sm).sort((a,b)=>sm[b]-sm[a])[0]||'—';
-  document.getElementById('r-total').textContent=signals.length;
-  document.getElementById('r-win').textContent=target;
-  document.getElementById('r-loss').textContent=stopped;
-  document.getElementById('r-open').textContent=open;
-  document.getElementById('r-wr').textContent=wr?wr+'%':'—';
-  document.getElementById('r-wr-bar').style.width=(wr||0)+'%';
-  document.getElementById('r-wr-bar').style.background=parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
-  document.getElementById('r-best').textContent=best;
-  document.getElementById('h-open').textContent=open;
-  document.getElementById('h-target').textContent=target;
+// ── Report ──
+function updateReport() {
+  const open    = signals.filter(s => s.status==='open').length;
+  const target  = signals.filter(s => s.status==='target').length;
+  const stopped = signals.filter(s => s.status==='stopped').length;
+  const closed  = target + stopped;
+  const wr      = closed > 0 ? (target/closed*100).toFixed(1) : null;
+  const sm = {};
+  signals.filter(s => s.status==='target').forEach(s => { sm[s.strategy]=(sm[s.strategy]||0)+1; });
+  const best = Object.keys(sm).sort((a,b)=>sm[b]-sm[a])[0] || '—';
+
+  document.getElementById('r-total').textContent = signals.length;
+  document.getElementById('r-win').textContent   = target;
+  document.getElementById('r-loss').textContent  = stopped;
+  document.getElementById('r-open').textContent  = open;
+  document.getElementById('r-wr').textContent    = wr ? wr+'%' : '—';
+  document.getElementById('r-wr-bar').style.width = (wr||0)+'%';
+  document.getElementById('r-wr-bar').style.background = parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
+  document.getElementById('r-best').textContent  = best;
+  document.getElementById('h-open').textContent  = open;
+  document.getElementById('h-target').textContent= target;
   document.getElementById('h-stopped').textContent=stopped;
-  document.getElementById('h-wr').textContent=wr?wr+'%':'—';
-  const counts={all:signals.length,open,target,stopped,BUY:signals.filter(s=>s.action==='BUY').length,SELL:signals.filter(s=>s.action==='SELL').length};
-  ['all','open','target','stopped','BUY','SELL'].forEach(k=>{
-    const el=document.getElementById('c-'+k); if(el) el.textContent=counts[k]||0;
+  document.getElementById('h-wr').textContent    = wr ? wr+'%' : '—';
+
+  const counts = { all:signals.length, open, target, stopped,
+    BUY:signals.filter(s=>s.action==='BUY').length,
+    SELL:signals.filter(s=>s.action==='SELL').length };
+  ['all','open','target','stopped','BUY','SELL'].forEach(k => {
+    const el = document.getElementById('c-'+k); if(el) el.textContent = counts[k]||0;
   });
 }
 
-// ── Filter ─────────────────────────────────────
-function getFiltered(){
-  let list=[...signals];
-  if(tab==='open') list=list.filter(s=>s.status==='open');
-  else if(tab==='target') list=list.filter(s=>s.status==='target');
-  else if(tab==='stopped') list=list.filter(s=>s.status==='stopped');
-  else if(tab==='BUY') list=list.filter(s=>s.action==='BUY');
-  else if(tab==='SELL') list=list.filter(s=>s.action==='SELL');
+// ── Filter & Group ──
+function getFiltered() {
+  let list = [...signals];
+  if (tab==='open')    list = list.filter(s=>s.status==='open');
+  else if (tab==='target')  list = list.filter(s=>s.status==='target');
+  else if (tab==='stopped') list = list.filter(s=>s.status==='stopped');
+  else if (tab==='BUY')     list = list.filter(s=>s.action==='BUY');
+  else if (tab==='SELL')    list = list.filter(s=>s.action==='SELL');
   return list;
 }
-
-// ── Group by Symbol ────────────────────────────
-function groupBySymbol(list){
-  const g={};
-  list.forEach(s=>{const k=s.symbol.toUpperCase();if(!g[k])g[k]=[];g[k].push(s);});
+function groupBySymbol(list) {
+  const g = {};
+  list.forEach(s => { const k=s.symbol.toUpperCase(); if(!g[k])g[k]=[]; g[k].push(s); });
   return Object.keys(g).sort().reduce((a,k)=>{a[k]=g[k];return a;},{});
 }
 
-// ── Signal helpers ─────────────────────────────
-function getSigData(s){
-  const isBuy=s.action==='BUY';
-  const entry=parseFloat(s.price)||0;
-  let tp=parseFloat(s.tp)||0;
-  const sl=parseFloat(s.sl)||0;
-  const slDist=Math.abs(entry-sl);
-  if(!tp||Math.abs(tp-entry)<0.00001) tp=isBuy?entry+slDist*2:entry-slDist*2;
-  const tpPct=entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
-  const dp=entry>=100?2:4;
-  const cur=priceCache[s.symbol.toUpperCase()];
-  const isProfit=cur?(isBuy?cur>entry:cur<entry):null;
-  const chgPct=cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
-  const reward=Math.abs(tp-entry);
-  let prog=0;
-  if(cur&&s.status==='open'){const moved=isBuy?Math.max(0,cur-entry):Math.max(0,entry-cur);prog=reward>0?Math.min(100,moved/reward*100):0;}
-  else if(s.status==='target') prog=100;
-  const progClr=prog>=75?'var(--green)':prog>=40?'var(--yellow)':'var(--blue)';
-  const stMap={open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف'},target:{cls:'s-target',txt:'🎯 هدف'}};
-  const st=stMap[s.status]||stMap.open;
-  const dt=new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
-  return {isBuy,entry,tp,sl,tpPct,dp,cur,isProfit,chgPct,prog,progClr,st,dt};
+// ── Signal Data ──
+// السعر الحالي يجي من currentPrice (محدّث من السيرفر عبر Yahoo Finance)
+function getSigData(s) {
+  const isBuy  = s.action === 'BUY';
+  const entry  = parseFloat(s.price) || 0;
+  const tp     = parseFloat(s.tp)    || 0;
+  const sl     = parseFloat(s.sl)    || 0;
+  const tpPct  = entry>0 ? (isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2) : '0.00';
+  const dp     = entry>=100 ? 2 : entry>=1 ? 4 : 6;
+
+  // ✅ السعر الحالي من السيرفر (Yahoo Finance)
+  const cur = s.currentPrice ? parseFloat(s.currentPrice) : null;
+
+  const isProfit = cur ? (isBuy ? cur>entry : cur<entry) : null;
+  const chgPct   = cur && entry>0 ? ((cur-entry)/entry*100).toFixed(2) : null;
+
+  const reward = Math.abs(tp - entry);
+  let prog = 0;
+  if (cur && s.status==='open' && reward>0) {
+    const moved = isBuy ? Math.max(0, cur-entry) : Math.max(0, entry-cur);
+    prog = Math.min(100, moved/reward*100);
+  } else if (s.status==='target') prog = 100;
+
+  const progClr = prog>=75 ? 'var(--green)' : prog>=40 ? 'var(--yellow)' : 'var(--blue)';
+  const stMap = {
+    open:    { cls:'s-open',    txt:'● مفتوحة' },
+    stopped: { cls:'s-stopped', txt:'🛑 وقف'   },
+    target:  { cls:'s-target',  txt:'🎯 هدف'   }
+  };
+  const st = stMap[s.status] || stMap.open;
+  const dt = new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+
+  return { isBuy, entry, tp, sl, tpPct, dp, cur, isProfit, chgPct, prog, progClr, st, dt };
 }
 
-// ── Render ─────────────────────────────────────
-function render(){
-  const list=getFiltered();
-  const groups=groupBySymbol(list);
-
-  if(view==='cards') renderCards(groups);
+// ── Render ──
+function render() {
+  const groups = groupBySymbol(getFiltered());
+  if (view==='cards') renderCards(groups);
   else renderTable(groups);
 }
 
-function renderCards(groups){
-  const el=document.getElementById('cards-view');
-  const syms=Object.keys(groups);
-  if(!syms.length){el.innerHTML=`<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;return;}
-  let html='';
-  syms.forEach(sym=>{
-    const g=groups[sym];
-    const oc=g.filter(s=>s.status==='open').length;
-    const tc=g.filter(s=>s.status==='target').length;
-    const sc=g.filter(s=>s.status==='stopped').length;
-    html+=`<div class="group-header">
+function renderCards(groups) {
+  const el = document.getElementById('cards-view');
+  const syms = Object.keys(groups);
+  if (!syms.length) {
+    el.innerHTML = `<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;
+    return;
+  }
+  let html = '';
+  syms.forEach(sym => {
+    const g   = groups[sym];
+    const oc  = g.filter(s=>s.status==='open').length;
+    const tc  = g.filter(s=>s.status==='target').length;
+    const sc  = g.filter(s=>s.status==='stopped').length;
+    html += `<div class="group-header">
       <span class="group-sym">${sym}</span>
       <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
       ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
       ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
       ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
     </div><div class="cards-grid">`;
-    g.forEach(s=>{
-      const d=getSigData(s);
-      html+=`<div class="signal-card new">
+    g.forEach(s => {
+      const d = getSigData(s);
+      html += `<div class="signal-card new">
         <div class="card-bar ${d.isBuy?'bar-buy':'bar-sell'}"></div>
         <div class="card-head">
           <span class="card-sym">${s.symbol}</span>
@@ -425,8 +430,8 @@ function renderCards(groups){
         <div class="card-cur">
           <span class="cur-lbl">الحالي</span>
           <div style="display:flex;align-items:center;gap:6px">
-            ${d.chgPct?`<span class="cur-val ${d.isProfit?'up':'dn'}">${d.chgPct>=0?'+':''}${d.chgPct}%</span>`:''}
-            <span class="cur-val ${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">${d.cur?'$'+d.cur.toFixed(d.dp):'—'}</span>
+            ${d.chgPct?`<span class="cur-val ${d.isProfit?'up':'dn'}">${parseFloat(d.chgPct)>=0?'+':''}${d.chgPct}%</span>`:''}
+            <span class="cur-val ${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">${d.cur?'$'+d.cur.toFixed(d.dp):'جارٍ التحديث...'}</span>
           </div>
         </div>
         <div class="card-levels">
@@ -445,47 +450,50 @@ function renderCards(groups){
           <span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span>
           <div style="display:flex;align-items:center;gap:8px">
             <div class="card-meta">⚡${s.strategy||'—'}<br>${d.dt}</div>
-            ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}',this)" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center" title="حذف">🗑</button>`:''}
+            ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}',this)" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">🗑</button>`:''}
           </div>
         </div>
       </div>`;
     });
-    html+='</div>';
+    html += '</div>';
   });
-  el.innerHTML=html;
+  el.innerHTML = html;
 }
 
-function renderTable(groups){
-  const tbody=document.getElementById('tbody');
-  const syms=Object.keys(groups);
-  if(!syms.length){tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>';return;}
-  let html='';
-  syms.forEach(sym=>{
-    const g=groups[sym];
-    const oc=g.filter(s=>s.status==='open').length;
-    const tc=g.filter(s=>s.status==='target').length;
-    const sc=g.filter(s=>s.status==='stopped').length;
-    html+=`<tr class="group-row"><td colspan="11"><div style="display:flex;align-items:center;gap:8px">
+function renderTable(groups) {
+  const tbody = document.getElementById('tbody');
+  const syms  = Object.keys(groups);
+  if (!syms.length) { tbody.innerHTML='<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>'; return; }
+  let html = '';
+  syms.forEach(sym => {
+    const g  = groups[sym];
+    const oc = g.filter(s=>s.status==='open').length;
+    const tc = g.filter(s=>s.status==='target').length;
+    const sc = g.filter(s=>s.status==='stopped').length;
+    html += `<tr class="group-row"><td colspan="12"><div style="display:flex;align-items:center;gap:8px">
       <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:#fff">${sym}</span>
       <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
       ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
       ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
       ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
     </div></td></tr>`;
-    g.forEach(s=>{
-      const d=getSigData(s);
-      const progClr=d.prog>=75?'var(--green)':d.prog>=40?'var(--yellow)':'var(--blue)';
-      html+=`<tr>
-        <td><div class="sym-cell"><div class="sym-icon ${d.isBuy?'buy':'sell'}">${s.symbol.replace('USDT','').slice(0,3)}</div><span style="font-family:var(--mono);font-size:12px">${s.symbol}</span></div></td>
+    g.forEach(s => {
+      const d = getSigData(s);
+      html += `<tr>
+        <td>${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}',this)" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>`:''}</td>
+        <td><div class="sym-cell"><div class="sym-icon ${d.isBuy?'buy':'sell'}">${s.symbol.slice(0,3)}</div><span style="font-family:var(--mono);font-size:12px">${s.symbol}</span></div></td>
         <td><span class="dir-txt ${d.isBuy?'dir-buy-txt':'dir-sell-txt'}">${d.isBuy?'▲ شراء':'▼ بيع'}</span></td>
         <td style="font-family:var(--mono);font-size:11px">$${d.entry.toFixed(d.dp)}</td>
-        <td style="font-family:var(--mono);font-size:11px" class="${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">${d.cur?'$'+d.cur.toFixed(d.dp):'—'} ${d.chgPct?`<small>${d.chgPct>=0?'+':''}${d.chgPct}%</small>`:''}</td>
+        <td style="font-family:var(--mono);font-size:11px" class="${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">
+          ${d.cur ? '$'+d.cur.toFixed(d.dp) : '<span style="color:var(--muted2);font-size:10px">جارٍ...</span>'}
+          ${d.chgPct?`<small style="font-size:9px"> ${parseFloat(d.chgPct)>=0?'+':''}${d.chgPct}%</small>`:''}
+        </td>
         <td class="tp-cell">$${d.tp.toFixed(d.dp)}</td>
         <td class="sl-cell">$${d.sl.toFixed(d.dp)}</td>
         <td class="pct-cell">+${d.tpPct}%</td>
         <td><div style="display:flex;align-items:center;gap:5px;min-width:90px">
-          <div class="prog-track" style="flex:1"><div class="prog-fill" style="width:${d.prog.toFixed(0)}%;background:${progClr}"></div></div>
-          <span style="font-family:var(--mono);font-size:10px;color:${progClr};width:28px">${d.prog.toFixed(0)}%</span>
+          <div class="prog-track" style="flex:1"><div class="prog-fill" style="width:${d.prog.toFixed(0)}%;background:${d.progClr}"></div></div>
+          <span style="font-family:var(--mono);font-size:10px;color:${d.progClr};width:28px">${d.prog.toFixed(0)}%</span>
         </div></td>
         <td><span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span></td>
         <td class="strat-cell">${s.strategy||'—'}</td>
@@ -493,188 +501,132 @@ function renderTable(groups){
       </tr>`;
     });
   });
-  tbody.innerHTML=html;
+  tbody.innerHTML = html;
 }
 
-function setTab(t,btn){
-  tab=t;
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+function setTab(t, btn) {
+  tab = t;
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   render();
 }
 
-// ── Price Monitor ──────────────────────────────
-async function checkPrices(){
-  const open=signals.filter(s=>s.status==='open');
-  if(!open.length)return;
-  const syms=[...new Set(open.map(s=>s.symbol.toUpperCase()))];
-  try{
-    const r=await fetch('https://api.binance.com/api/v3/ticker/price?symbols=['+syms.map(s=>'"'+s+'"').join(',')+']');
-    if(!r.ok)return;
-    const prices=await r.json();
-    prices.forEach(p=>{priceCache[p.symbol]=parseFloat(p.price);});
-    for(const s of open){
-      const price=priceCache[s.symbol.toUpperCase()];
-      if(!price||updatedIds.has(s._id||s.id))continue;
-      const d=getSigData(s);
-      let ns=null;
-      if(d.isBuy){if(price>=d.tp)ns='target';else if(price<=d.sl)ns='stopped';}
-      else{if(price<=d.tp)ns='target';else if(price>=d.sl)ns='stopped';}
-      if(ns){
-        updatedIds.add(s._id||s.id);
-        await fetch('/api/signals/'+(s._id||s.id),{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':token},body:JSON.stringify({status:ns,closePrice:price})});
-        s.status=ns;s.closePrice=price;
-        const msg=ns==='target'?`🎯 ${s.symbol} حقق الهدف! +${d.tpPct}%`:`🛑 ${s.symbol} وقف الخسارة`;
-        showToast(msg);
-        playSound(ns);
-        sendPushNotif(msg,'MILLIONAIRE · إشارة محدّثة');
-      }
-    }
-    render();
-  }catch(e){}
-}
-setInterval(checkPrices,15000);
-setTimeout(checkPrices,3000);
-
-// ── Sound ──────────────────────────────────────
-const AudioCtx=window.AudioContext||window.webkitAudioContext;
-let audioCtx=null;
-function playSound(type){
-  const s=JSON.parse(localStorage.getItem('mm_settings')||'{}');
-  if(s.sound===false)return;
-  try{
-    if(!audioCtx)audioCtx=new AudioCtx();
-    const vol=(parseInt(s.volume||50)/100)*0.4;
-    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-    o.connect(g);g.connect(audioCtx.destination);
-    if(type==='new'){o.frequency.setValueAtTime(440,audioCtx.currentTime);o.frequency.setValueAtTime(880,audioCtx.currentTime+.2);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4);}
-    else if(type==='target'){o.frequency.setValueAtTime(523,audioCtx.currentTime);o.frequency.setValueAtTime(784,audioCtx.currentTime+.2);o.frequency.setValueAtTime(1047,audioCtx.currentTime+.4);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.7);o.start();o.stop(audioCtx.currentTime+.7);}
-    else if(type==='stopped'){o.frequency.setValueAtTime(300,audioCtx.currentTime);o.frequency.setValueAtTime(200,audioCtx.currentTime+.2);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4);}
-  }catch(e){}
-}
-
-// ── Push Notifications ─────────────────────────
-async function requestNotif(){
-  if(!('Notification' in window)){showToast('المتصفح لا يدعم الإشعارات');return;}
-  const perm=await Notification.requestPermission();
-  if(perm==='granted'){
-    document.getElementById('notif-btn').textContent='🔔';
-    document.getElementById('notif-btn').style.color='var(--green)';
-    showToast('✅ تم تفعيل الإشعارات!');
-    new Notification('MILLIONAIRE',{body:'تم تفعيل الإشعارات بنجاح 🎉',icon:''});
-  } else {
-    showToast('❌ تم رفض الإشعارات من المتصفح');
-  }
-}
-
-function sendPushNotif(title,body){
-  if(Notification.permission==='granted'){
-    new Notification(title,{body,icon:'',tag:'millionaire-signal'});
-  }
-}
-
-// تحقق من حالة الإشعارات
-if(Notification.permission==='granted'){
-  document.getElementById('notif-btn').style.color='var(--green)';
-}
-// ── Webhook Admin Only ─────────────────────────
-if(localStorage.getItem('mm_role')==='admin'){
-  const bar=document.createElement('div');
-  bar.style.cssText='background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0';
-  bar.innerHTML='<span style="color:var(--muted2)">Webhook:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="navigator.clipboard?.writeText(this.textContent);showToast(\'✓ تم النسخ\')">'+(location.origin+'/webhook')+'</span>';
-  document.body.appendChild(bar);
-}
-
-function showToast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.classList.add('show');
-  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);
-}
-
-
-// ── Delete Signals (Admin) ─────────────────
-let isAdminUser = localStorage.getItem('mm_role') === 'admin';
-
-function initAdminFeatures() {
-  if (!isAdminUser) return;
-  // إظهار عمود الحذف
-  const thDel = document.getElementById('th-del');
-  if(thDel) thDel.textContent = '🗑️';
-
-  // إضافة شريط الحذف
-  const toolbar = document.createElement('div');
-  toolbar.id = 'delete-toolbar';
-  toolbar.style.cssText = 'display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 16px;display:none;align-items:center;gap:10px;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,.5)';
-  toolbar.innerHTML = '<span id="selected-count" style="font-size:12px;color:var(--muted2)">0 محدد</span><button onclick="deleteSelected()" style="background:rgba(255,77,77,.15);border:1px solid rgba(255,77,77,.3);color:var(--red);padding:5px 14px;border-radius:6px;font-family:var(--ar);font-size:12px;cursor:pointer">🗑️ حذف المحددة</button><button onclick="clearSelection()" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted2);padding:5px 14px;border-radius:6px;font-family:var(--ar);font-size:12px;cursor:pointer">إلغاء</button>';
-  document.body.appendChild(toolbar);
-
-  // مراقبة تغيير الـ checkboxes
-  document.addEventListener('change', e => {
-    if (e.target.classList.contains('sig-check') || e.target.id === 'check-all') {
-      updateToolbar();
+// ── إشعارات التحديث (target/stopped) ──
+// السيرفر يغير الحالة تلقائياً، الفرونت يكتشفها عند الـ load كل 5 ثواني
+function checkForStatusChanges(newData) {
+  newData.forEach(ns => {
+    const old = signals.find(s => (s._id||s.id) === (ns._id||ns.id));
+    if (!old) return;
+    if (old.status==='open' && ns.status==='target') {
+      const d = getSigData(ns);
+      showToast(`🎯 ${ns.symbol} حقق الهدف! +${d.tpPct}%`);
+      playSound('target');
+      sendPushNotif(`🎯 ${ns.symbol} حقق الهدف!`, `+${d.tpPct}% — MILLIONAIRE`);
+    } else if (old.status==='open' && ns.status==='stopped') {
+      showToast(`🛑 ${ns.symbol} وقف الخسارة`);
+      playSound('stopped');
+      sendPushNotif(`🛑 ${ns.symbol} وقف الخسارة`, 'MILLIONAIRE');
     }
   });
 }
 
-function updateToolbar() {
-  const checked = document.querySelectorAll('.sig-check:checked');
-  const toolbar = document.getElementById('delete-toolbar');
-  if (!toolbar) return;
-  if (checked.length > 0) {
-    toolbar.style.display = 'flex';
-    document.getElementById('selected-count').textContent = checked.length + ' محدد';
-  } else {
-    toolbar.style.display = 'none';
-  }
+// ── Override load لتشغيل checkForStatusChanges ──
+const _origLoad = load;
+async function loadWithCheck() {
+  try {
+    const r = await fetch('/api/signals', { headers: {'x-auth-token': token} });
+    if (r.status===401||r.status===403) { logout(); return; }
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+    if (signals.length > 0) checkForStatusChanges(data);
+    if (data.length > lastSeen && lastSeen > 0) {
+      showToast('📡 إشارة جديدة!'); playSound('new');
+      sendPushNotif('📡 إشارة جديدة!', 'MILLIONAIRE — وصلت إشارة جديدة');
+    }
+    lastSeen = data.length;
+    signals  = data;
+    render(); updateReport();
+  } catch(e) {}
+}
+// استبدل setInterval بالـ version الجديدة
+clearInterval(window._loadInterval);
+window._loadInterval = setInterval(loadWithCheck, 5000);
+
+// ── Sound ──
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function playSound(type) {
+  const s = JSON.parse(localStorage.getItem('mm_settings')||'{}');
+  if (s.sound===false) return;
+  try {
+    if (!audioCtx) audioCtx = new AudioCtx();
+    const vol = (parseInt(s.volume||50)/100)*0.4;
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    if (type==='new') {
+      o.frequency.setValueAtTime(440,audioCtx.currentTime);
+      o.frequency.setValueAtTime(880,audioCtx.currentTime+.2);
+      g.gain.setValueAtTime(vol,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);
+      o.start(); o.stop(audioCtx.currentTime+.4);
+    } else if (type==='target') {
+      o.frequency.setValueAtTime(523,audioCtx.currentTime);
+      o.frequency.setValueAtTime(784,audioCtx.currentTime+.2);
+      o.frequency.setValueAtTime(1047,audioCtx.currentTime+.4);
+      g.gain.setValueAtTime(vol,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.7);
+      o.start(); o.stop(audioCtx.currentTime+.7);
+    } else if (type==='stopped') {
+      o.frequency.setValueAtTime(300,audioCtx.currentTime);
+      o.frequency.setValueAtTime(200,audioCtx.currentTime+.2);
+      g.gain.setValueAtTime(vol,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);
+      o.start(); o.stop(audioCtx.currentTime+.4);
+    }
+  } catch(e) {}
 }
 
-function toggleAll(cb) {
-  document.querySelectorAll('.sig-check').forEach(c => c.checked = cb.checked);
-  updateToolbar();
+// ── Push Notifications ──
+async function requestNotif() {
+  if (!('Notification' in window)) { showToast('المتصفح لا يدعم الإشعارات'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm==='granted') {
+    document.getElementById('notif-btn').style.color = 'var(--green)';
+    showToast('✅ تم تفعيل الإشعارات!');
+  } else { showToast('❌ تم رفض الإشعارات'); }
+}
+function sendPushNotif(title, body) {
+  if (Notification.permission==='granted') new Notification(title,{body,tag:'millionaire-signal'});
+}
+if (Notification.permission==='granted') document.getElementById('notif-btn').style.color='var(--green)';
+
+// ── Webhook bar (Admin) ──
+if (localStorage.getItem('mm_role')==='admin') {
+  const bar = document.createElement('div');
+  bar.style.cssText = 'background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0';
+  bar.innerHTML = '<span style="color:var(--muted2)">Webhook:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="navigator.clipboard?.writeText(this.textContent);showToast(\'✓ تم النسخ\')">'+(location.origin+'/webhook')+'</span>';
+  document.body.appendChild(bar);
 }
 
-function clearSelection() {
-  document.querySelectorAll('.sig-check').forEach(c => c.checked = false);
-  const cb = document.getElementById('check-all');
-  if (cb) cb.checked = false;
-  updateToolbar();
-}
-
-async function deleteSig(id, btn) {
+// ── Delete (Admin) ──
+async function deleteSig(id) {
   if (!confirm('حذف هذه الإشارة؟')) return;
   try {
     await fetch('/api/signals/'+id, {method:'DELETE', headers:{'x-auth-token':token}});
-    signals = signals.filter(s=>(s._id||s.id)!==id);
-    render();
-    updateReport();
-    showToast('✓ تم الحذف');
+    signals = signals.filter(s => (s._id||s.id) !== id);
+    render(); updateReport(); showToast('✓ تم الحذف');
   } catch(e) { showToast('❌ خطأ في الحذف'); }
 }
 
-async function deleteSelected() {
-  const checked = [...document.querySelectorAll('.sig-check:checked')].map(c=>c.value);
-  if (!checked.length) return;
-  if (!confirm('حذف ' + checked.length + ' إشارة؟')) return;
-  try {
-    await fetch('/api/signals/delete-many', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-auth-token':token},
-      body: JSON.stringify({ids: checked})
-    });
-    signals = signals.filter(s=>!checked.includes(s._id||s.id));
-    render();
-    updateReport();
-    clearSelection();
-    showToast('✓ تم حذف ' + checked.length + ' إشارة');
-  } catch(e) { showToast('❌ خطأ في الحذف'); }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 3000);
 }
 
-// تشغيل بعد تحميل الصفحة
-setTimeout(initAdminFeatures, 500);
-
-async function logout(){
-  try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
-  localStorage.clear();window.location.href='/login.html';
+async function logout() {
+  try { await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}}); } catch(e) {}
+  localStorage.clear(); window.location.href='/login.html';
 }
 
 document.addEventListener('click',()=>{if(!audioCtx)try{audioCtx=new AudioCtx();}catch(e){}},{once:true});
