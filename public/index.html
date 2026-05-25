@@ -342,6 +342,7 @@ function getSigData(s) {
   const tpPct=entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
   const dp=entry>=100?2:entry>=1?4:6;
   const cur=s.currentPrice?parseFloat(s.currentPrice):null;
+  const slPct  = entry>0&&sl>0 ? (isBuy?(entry-sl)/entry*100:(sl-entry)/entry*100).toFixed(2) : '0.00';
   const isProfit=cur?(isBuy?cur>entry:cur<entry):null;
   const chgPct=cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
   const reward=Math.abs(tp-entry);
@@ -352,7 +353,7 @@ function getSigData(s) {
   const stMap={open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف'},target:{cls:'s-target',txt:'🎯 هدف'}};
   const st=stMap[s.status]||stMap.open;
   const dt=new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
-  return {isBuy,entry,tp,sl,tpPct,dp,cur,isProfit,chgPct,prog,progClr,st,dt};
+  return {isBuy,entry,tp,sl,tpPct,slPct,dp,cur,isProfit,chgPct,prog,progClr,st,dt};
 }
 
 // ── Render ──
