@@ -1,595 +1,733 @@
-const express  = require('express');
-const http     = require('http');
-const path     = require('path');
-const crypto   = require('crypto');
-const mongoose = require('mongoose');
-const https    = require('https');
-
-const app    = express();
-const server = http.createServer(app);
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// ─── MongoDB ───────────────────────────────────
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://millionaire:Mm1234512345@cluster0.w50zpog.mongodb.net/millionaire?retryWrites=true&w=majority&appName=Cluster0';
-
-// ─── Telegram Config ───────────────────────────
-const TG_TOKEN   = process.env.TG_TOKEN   || '8714883723:AAEgnEJhS7r7xe9Zk0Yc3Qp-gMxEGs-kbRw';
-const TG_CHAT_ID = process.env.TG_CHAT_ID || '1225882653';
-
-async function sendTelegram(msg) {
-  return new Promise((resolve) => {
-    const text    = encodeURIComponent(msg);
-    const options = {
-      hostname: 'api.telegram.org',
-      path: `/bot${TG_TOKEN}/sendMessage?chat_id=${TG_CHAT_ID}&text=${text}&parse_mode=HTML`,
-      method: 'GET'
-    };
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch(e) { resolve(null); }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.end();
-  });
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#060810">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>MILLIONAIRE · الصفقات</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--card:#0f1521;
+  --border:rgba(212,175,55,.12);--border2:rgba(212,175,55,.2);
+  --gold:#d4af37;--gold2:#f5d070;--gold3:rgba(212,175,55,.08);
+  --green:#00d97e;--red:#ff4d4d;--blue:#4da6ff;--yellow:#f0b429;
+  --text:#d0dce8;--muted:#445566;--muted2:#607080;
+  --mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif;
+  --shadow:0 8px 32px rgba(0,0,0,.5);
 }
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB متصل'))
-  .catch(e => console.error('❌ MongoDB:', e.message));
+[data-theme="light"]{--bg:#f0f2f5;--bg2:#ffffff;--bg3:#f5f7fa;--card:#ffffff;--border:rgba(0,0,0,.08);--border2:rgba(0,0,0,.15);--text:#1a1f2e;--muted:#8892a4;--muted2:#5a6478;--shadow:0 4px 20px rgba(0,0,0,.1);}
+[data-theme="blue"]{--bg:#050d1a;--bg2:#071020;--bg3:#091525;--card:#0a1830;--border:rgba(77,166,255,.12);--border2:rgba(77,166,255,.25);--gold:#4da6ff;--gold2:#80c4ff;--gold3:rgba(77,166,255,.08);}
+[data-theme="green"]{--bg:#050e08;--bg2:#071410;--bg3:#091815;--card:#0a1c18;--border:rgba(0,217,126,.1);--border2:rgba(0,217,126,.2);--gold:#00d97e;--gold2:#00f090;--gold3:rgba(0,217,126,.08);}
 
-// ─── Schemas ───────────────────────────────────
-const SignalSchema = new mongoose.Schema({
-  symbol:         { type: String, required: true },
-  action:         { type: String, required: true },
-  price:          { type: Number, required: true },
-  sl:             Number,
-  tp:             Number,
-  currentPrice:   Number,
-  strategy:       { type: String, default: 'TradingView' },
-  status:         { type: String, default: 'open', enum: ['open','target','stopped'] },
-  closePrice:     Number,
-  closedAt:       Date,
-  receivedAt:     { type: Date, default: Date.now },
-  sentiment:      { type: Number,  default: null },
-  sentimentLabel: { type: String,  default: null },
-  sentimentNews:  { type: Array,   default: [] },
-  sentimentAt:    { type: Date,    default: null },
-  analysis:       { type: Object,  default: null },
-  analysisAt:     { type: Date,    default: null }
-}, { timestamps: true });
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--ar);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .3s,color .3s}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:100}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.logo-text{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--gold);letter-spacing:2px}
+.logo-by{font-family:var(--mono);font-size:8px;color:var(--muted2)}
+.hstats{display:flex;gap:1px;margin-right:auto}
+.hs{padding:0 10px;height:52px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid var(--border)}
+.hs-n{font-family:var(--mono);font-size:14px;font-weight:600}
+.hs-l{font-size:9px;color:var(--muted2);margin-top:1px}
+.mkt{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px}
+.mkt-open{color:var(--green);background:rgba(0,217,126,.08);border:1px solid rgba(0,217,126,.2)}
+.mkt-closed{color:var(--muted2);background:var(--bg3);border:1px solid var(--border)}
+.header-actions{display:flex;align-items:center;gap:6px}
+.btn-icon{background:transparent;border:1px solid var(--border2);color:var(--muted2);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.btn-icon:hover{border-color:var(--gold);color:var(--gold)}
+.btn-logout{background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px}
+.view-toggle{display:flex;gap:4px;background:var(--bg3);padding:3px;border-radius:7px;border:1px solid var(--border)}
+.vbtn{padding:3px 10px;border-radius:5px;border:none;background:transparent;color:var(--muted2);font-size:11px;cursor:pointer;transition:all .15s}
+.vbtn.active{background:var(--gold3);color:var(--gold);border:1px solid var(--border2)}
+.theme-picker{position:absolute;top:58px;left:10px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px;display:none;z-index:200;box-shadow:var(--shadow)}
+.theme-picker.show{display:flex;gap:8px}
+.theme-dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.theme-dot:hover,.theme-dot.active{transform:scale(1.2);border-color:#fff}
+.report{padding:10px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.rcard{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:8px 12px}
+.rcard-val{font-family:var(--mono);font-size:17px;font-weight:600;margin-bottom:2px}
+.rcard-lbl{font-size:10px;color:var(--muted2)}
+.wr-bar{height:3px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.wr-fill{height:100%;border-radius:2px;transition:width .5s}
+.tabs{padding:8px 16px;display:flex;gap:6px;border-bottom:1px solid var(--border);background:var(--bg2);align-items:center;flex-wrap:wrap;flex-shrink:0}
+.tab{padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:11px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px}
+.tab:hover{border-color:var(--gold);color:var(--gold)}
+.tab.active{background:var(--gold3);border-color:var(--gold);color:var(--gold)}
+.cnt{background:var(--bg3);padding:1px 5px;border-radius:8px;font-family:var(--mono);font-size:9px}
+.tab.active .cnt{background:rgba(212,175,55,.15)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;margin-right:auto}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.content{flex:1;overflow:auto;padding:16px}
+.tbl-wrap{overflow-x:auto}
+.signals-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
+.signals-table thead th{padding:8px 10px;color:var(--muted2);font-weight:400;font-family:var(--mono);font-size:10px;text-align:right;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap;position:sticky;top:0}
+.signals-table tbody td{padding:8px 10px;border-bottom:1px solid rgba(212,175,55,.04);text-align:right;vertical-align:middle}
+.signals-table tbody tr:hover td{background:rgba(212,175,55,.02)}
+.group-row td{background:rgba(212,175,55,.04);padding:6px 10px;border-bottom:1px solid rgba(212,175,55,.08)}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.group-header{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.group-sym{font-family:var(--mono);font-size:15px;font-weight:600;color:#fff}
+.signal-card{background:var(--card);border-radius:12px;border:1px solid var(--border);overflow:hidden;transition:transform .2s,box-shadow .2s}
+.signal-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.signal-card.new{animation:cardIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.card-bar{height:3px}
+.bar-buy{background:linear-gradient(90deg,var(--green),transparent)}
+.bar-sell{background:linear-gradient(90deg,var(--red),transparent)}
+.card-head{padding:10px 12px 6px;display:flex;justify-content:space-between;align-items:flex-start}
+.card-sym{font-family:var(--mono);font-size:16px;font-weight:600;color:#fff}
+.dir-badge{padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:10px;font-weight:600}
+.dir-buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.25)}
+.dir-sell{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.25)}
+.card-price{padding:2px 12px 8px;font-family:var(--mono);font-size:20px;font-weight:600;color:#fff}
+.card-price small{font-size:10px;color:var(--muted2);font-weight:400;margin-right:6px}
+.card-levels{margin:0 12px 8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.lv{background:var(--bg3);border-radius:5px;padding:5px 7px;border:1px solid rgba(28,39,51,.9)}
+.lv-l{font-size:9px;color:var(--muted2);margin-bottom:2px}
+.lv-v{font-family:var(--mono);font-size:11px;font-weight:500}
+.lv-tp{color:var(--green)}.lv-sl{color:var(--red)}.lv-pct{color:var(--yellow)}
+.card-prog{margin:0 12px 8px}
+.prog-top{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
+.prog-track{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;transition:width .5s}
+.card-cur{margin:0 12px 8px;background:var(--bg3);border-radius:5px;padding:5px 8px;display:flex;justify-content:space-between;align-items:center}
+.cur-lbl{font-size:10px;color:var(--muted2)}
+.cur-val{font-family:var(--mono);font-size:12px;font-weight:500}
+.up{color:var(--green)}.dn{color:var(--red)}.neu{color:var(--muted2)}
+.card-foot{padding:7px 12px;border-top:1px solid rgba(28,39,51,.7);display:flex;justify-content:space-between;align-items:center}
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500}
+.s-open{background:rgba(0,217,126,.08);color:var(--green);border:1px solid rgba(0,217,126,.15)}
+.s-stopped{background:rgba(255,77,77,.08);color:var(--red);border:1px solid rgba(255,77,77,.15)}
+.s-target{background:rgba(240,180,41,.08);color:var(--yellow);border:1px solid rgba(240,180,41,.15)}
+.s-dot{width:4px;height:4px;border-radius:50%}
+.s-open .s-dot{background:var(--green);animation:pulse 2s infinite}
+.card-meta{text-align:left;font-size:9px;color:var(--muted)}
+.sym-cell{display:flex;align-items:center;gap:7px}
+.sym-icon{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;font-family:var(--mono);flex-shrink:0}
+.sym-icon.buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.2)}
+.sym-icon.sell{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.2)}
+.dir-txt{font-family:var(--mono);font-size:11px;font-weight:600}
+.dir-buy-txt{color:var(--green)}.dir-sell-txt{color:var(--red)}
+.tp-cell{color:var(--green);font-family:var(--mono);font-size:11px}
+.sl-cell{color:var(--red);font-family:var(--mono);font-size:11px}
+.pct-cell{font-family:var(--mono);font-size:11px;color:var(--yellow)}
+.strat-cell{font-size:10px;color:var(--muted2)}
+.time-cell{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-icon{font-size:40px;margin-bottom:12px;display:block;opacity:.3}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-const UserSchema = new mongoose.Schema({
-  username:  { type: String, required: true, unique: true },
-  password:  { type: String, required: true },
-  name:      { type: String, required: true },
-  email:     String,
-  role:      { type: String, default: 'user', enum: ['user','admin'] },
-  active:    { type: Boolean, default: true },
-  expiresAt: Date,
-  token:     String,
-  lastLogin: Date,
-  createdAt: { type: Date, default: Date.now }
-});
+/* ── زرار الشارت ── */
+.btn-chart{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(77,166,255,.1);
+  border:1px solid rgba(77,166,255,.3);
+  color:var(--blue);
+  padding:3px 8px;border-radius:5px;
+  cursor:pointer;font-size:10px;font-family:var(--ar);
+  text-decoration:none;white-space:nowrap;
+  transition:all .15s;
+}
+.btn-chart:hover{background:rgba(77,166,255,.2);border-color:var(--blue);}
 
-const Signal = mongoose.model('Signal', SignalSchema);
-const User   = mongoose.model('User',   UserSchema);
+@media(max-width:640px){
+  .hstats{display:none}.logo-by{display:none}
+  .report{grid-template-columns:repeat(2,1fr);padding:8px}
+  .rcard-val{font-size:15px}.content{padding:10px}
+  .cards-grid{grid-template-columns:1fr}
+  .tabs{padding:6px 10px;gap:4px}.tab{padding:4px 10px;font-size:10px}
+}
+</style>
+</head>
+<body>
 
-// ─── Admin Init ────────────────────────────────
-async function initAdmin() {
+<header>
+  <div class="logo">
+    <div class="logo-icon">💰</div>
+    <div><div class="logo-text">MILLIONAIRE</div><div class="logo-by">by Mahmoud Ahmed</div></div>
+  </div>
+  <div class="hstats">
+    <div class="hs"><div class="hs-n" id="h-open" style="color:var(--green)">0</div><div class="hs-l">مفتوحة</div></div>
+    <div class="hs"><div class="hs-n" id="h-target" style="color:var(--yellow)">0</div><div class="hs-l">الهدف</div></div>
+    <div class="hs"><div class="hs-n" id="h-stopped" style="color:var(--red)">0</div><div class="hs-l">وقف</div></div>
+    <div class="hs"><div class="hs-n" id="h-wr" style="color:var(--gold)">—</div><div class="hs-l">Win Rate</div></div>
+  </div>
+  <div class="mkt mkt-closed" id="mkt"></div>
+  <div class="header-actions">
+    <div class="view-toggle">
+      <button class="vbtn active" id="vbtn-cards" onclick="setView('cards',this)">⊞</button>
+      <button class="vbtn" id="vbtn-table" onclick="setView('table',this)">☰</button>
+    </div>
+    <button class="btn-icon" onclick="toggleThemePicker()" title="الثيم">🎨</button>
+    <button class="btn-icon" onclick="requestNotif()" id="notif-btn" title="إشعارات">🔔</button>
+    <span style="font-family:var(--mono);font-size:11px;color:var(--muted2)" id="uname"></span>
+    <button class="btn-logout" onclick="logout()">خروج</button>
+  </div>
+</header>
+
+<div class="theme-picker" id="theme-picker">
+  <div class="theme-dot active" style="background:#d4af37" onclick="setTheme('dark',this)"></div>
+  <div class="theme-dot" style="background:#f0f2f5;border:1px solid #ddd" onclick="setTheme('light',this)"></div>
+  <div class="theme-dot" style="background:#4da6ff" onclick="setTheme('blue',this)"></div>
+  <div class="theme-dot" style="background:#00d97e" onclick="setTheme('green',this)"></div>
+</div>
+
+<div class="report">
+  <div class="rcard"><div class="rcard-val" id="r-total" style="color:var(--blue)">0</div><div class="rcard-lbl">إجمالي الإشارات</div></div>
+  <div class="rcard"><div class="rcard-val" id="r-win" style="color:var(--green)">0</div><div class="rcard-lbl">صفقات رابحة ✅</div></div>
+  <div class="rcard"><div class="rcard-val" id="r-loss" style="color:var(--red)">0</div><div class="rcard-lbl">صفقات خاسرة ❌</div></div>
+  <div class="rcard"><div class="rcard-val" id="r-open" style="color:var(--muted2)">0</div><div class="rcard-lbl">مفتوحة الآن 🟢</div></div>
+  <div class="rcard">
+    <div class="rcard-val" id="r-wr" style="color:var(--gold)">—</div>
+    <div class="rcard-lbl">نسبة النجاح</div>
+    <div class="wr-bar"><div class="wr-fill" id="r-wr-bar" style="width:0%"></div></div>
+  </div>
+  <div class="rcard"><div class="rcard-val" id="r-best" style="color:var(--green);font-size:12px">—</div><div class="rcard-lbl">أفضل استراتيجية</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="setTab('all',this)">الكل <span class="cnt" id="c-all">0</span></button>
+  <button class="tab" onclick="setTab('open',this)">🟢 مفتوحة <span class="cnt" id="c-open">0</span></button>
+  <button class="tab" onclick="setTab('target',this)">🎯 الهدف <span class="cnt" id="c-target">0</span></button>
+  <button class="tab" onclick="setTab('stopped',this)">🛑 وقف <span class="cnt" id="c-stopped">0</span></button>
+  <button class="tab" onclick="setTab('BUY',this)">▲ شراء <span class="cnt" id="c-buy">0</span></button>
+  <button class="tab" onclick="setTab('SELL',this)">▼ بيع <span class="cnt" id="c-sell">0</span></button>
+  <span class="live-dot"></span>
+</div>
+
+<div class="content" id="content">
+  <div id="cards-view"></div>
+  <div id="table-view" style="display:none">
+    <div class="tbl-wrap">
+      <table class="signals-table">
+        <thead><tr>
+          <th id="th-del"></th>
+          <th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th>
+          <th>الهدف</th><th>وقف</th><th>نسبة الهدف</th><th>نسبة وقف</th><th>تقدم</th>
+          <th>الحالة</th><th>استراتيجية</th><th>الوقت</th><th>الأخبار</th><th>مضاربة؟</th><th>شارت</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = localStorage.getItem('mm_token');
+if (!token) window.location.href = '/login.html';
+document.getElementById('uname').textContent = localStorage.getItem('mm_name') || '';
+
+let signals = [], tab = 'all', view = 'cards', lastSeen = 0;
+const updatedIds = new Set();
+
+// ── Sentiment ──────────────────────────────────
+function sentimentBadge(s) {
+  if (s === null || s === undefined) return '<span style="font-size:10px;color:var(--muted2)">—</span>';
+  const score = parseFloat(s);
+  const color = score >= 60 ? 'var(--green)' : score >= 40 ? 'var(--yellow)' : 'var(--red)';
+  const icon  = score >= 60 ? '🟢' : score >= 40 ? '⚪' : '🔴';
+  const label = score >= 60 ? 'إيجابي' : score >= 40 ? 'محايد' : 'سلبي';
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+    <span style="font-size:11px">${icon} ${label}</span>
+    <span style="font-family:var(--mono);font-size:10px;color:${color};font-weight:600">${score}%</span>
+  </div>`;
+}
+
+async function showNewsModal(id, symbol) {
   try {
-    const exists = await User.findOne({ username: 'admin' });
-    if (!exists) {
-      await User.create({ username:'admin', password:'admin123', name:'Admin', email:'admin@millionaire.com', role:'admin', active:true });
-      console.log('✅ Admin created');
+    const r = await fetch('/api/sentiment/' + id, { headers: {'x-auth-token': token} });
+    const data = await r.json();
+    const news = data.sentimentNews || [];
+    const score = data.sentiment;
+    const label = data.sentimentLabel;
+    const color = score >= 60 ? '#00d97e' : score >= 40 ? '#f0b429' : '#ff4d4d';
+
+    let html = `<div id="news-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:20px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:#fff">${symbol} — الأخبار</span>
+          <button onclick="document.getElementById('news-modal').remove()" style="background:transparent;border:none;color:var(--muted2);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:${color}">${score}%</div>
+          <div style="font-size:13px;color:var(--muted2)">Sentiment Score — ${label}</div>
+          <div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="height:100%;width:${score}%;background:${color};border-radius:3px"></div>
+          </div>
+        </div>`;
+
+    if (news.length) {
+      news.forEach(n => {
+        html += `<a href="${n.url}" target="_blank" style="display:block;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;text-decoration:none">
+          <div style="font-size:12px;color:var(--text);margin-bottom:4px">${n.title}</div>
+          <div style="font-size:10px;color:var(--muted2)">${n.source} — ${new Date(n.publishedAt).toLocaleDateString('ar')}</div>
+        </a>`;
+      });
+    } else {
+      html += `<div style="text-align:center;color:var(--muted2);padding:20px">لا توجد أخبار متاحة</div>`;
     }
+
+    html += `<button onclick="refreshSentiment('${id}','${symbol}')" style="width:100%;background:var(--gold3);border:1px solid var(--border2);color:var(--gold);padding:8px;border-radius:8px;cursor:pointer;font-family:var(--ar);font-size:12px;margin-top:8px">🔄 تحديث التحليل</button>
+      </div></div>`;
+
+    const existing = document.getElementById('news-modal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+  } catch(e) { showToast('❌ خطأ في جلب الأخبار'); }
+}
+
+async function refreshSentiment(id, symbol) {
+  try {
+    await fetch('/api/sentiment/' + id + '/refresh', { method:'POST', headers:{'x-auth-token':token} });
+    showToast('🔄 جارٍ تحليل أخبار ' + symbol + '...');
+    document.getElementById('news-modal')?.remove();
+    setTimeout(load, 5000);
+  } catch(e) { showToast('❌ خطأ'); }
+}
+
+// ── تحليل صلاحية المضاربة ──────────────────────
+async function showAnalysis(id, symbol) {
+  showToast('⏳ جارٍ تحليل ' + symbol + '...');
+  try {
+    const r    = await fetch('/api/analysis/' + id, { headers: {'x-auth-token': token} });
+    const data = await r.json();
+    const a    = data.analysis;
+
+    if (!a) { showToast('❌ لا توجد بيانات لـ ' + symbol); return; }
+
+    const suitColor = a.suitable ? '#00d97e' : '#ff4d4d';
+    const suitIcon  = a.suitable ? '✅' : '❌';
+    const suitText  = a.suitable ? 'مناسب للمضاربة اليومية' : 'غير مناسب للمضاربة اليومية';
+
+    const volM   = (a.volume / 1000000).toFixed(2);
+    const volClr = a.reasons?.volume ? '#00d97e' : '#ff4d4d';
+    const atrClr = a.reasons?.atr    ? '#00d97e' : '#ff4d4d';
+    const prClr  = a.reasons?.price  ? '#00d97e' : '#ff4d4d';
+
+    const html = `<div id="analysis-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:20px;max-width:420px;width:90%">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:#fff">${symbol} — تحليل المضاربة</span>
+          <button onclick="document.getElementById('analysis-modal').remove()" style="background:transparent;border:none;color:var(--muted2);font-size:20px;cursor:pointer">✕</button>
+        </div>
+
+        <div style="background:var(--bg3);border-radius:10px;padding:16px;text-align:center;margin-bottom:16px;border:2px solid ${suitColor}">
+          <div style="font-size:32px;margin-bottom:4px">${suitIcon}</div>
+          <div style="font-size:15px;font-weight:700;color:${suitColor}">${suitText}</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">📊 الحجم اليومي</div>
+            <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${volClr}">${volM}M</div>
+            <div style="font-size:9px;color:${volClr}">${a.reasons?.volume ? '✅ فوق مليون' : '❌ أقل من مليون'}</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">📈 التذبذب اليومي</div>
+            <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${atrClr}">${a.volatility}%</div>
+            <div style="font-size:9px;color:${atrClr}">${a.reasons?.atr ? '✅ تذبذب جيد' : '❌ تذبذب منخفض'}</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">💧 السيولة</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue)">${a.liquidity}</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">📉 التغير</div>
+            <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${parseFloat(a.change)>=0?'var(--green)':'var(--red)'}">${a.change>=0?'+':''}${a.change}%</div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg3);border-radius:8px;padding:10px;font-family:var(--mono);font-size:11px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="color:var(--muted2)">افتتاح</span><span>$${a.open}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="color:var(--muted2)">أعلى</span><span style="color:var(--green)">$${a.high}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="color:var(--muted2)">أدنى</span><span style="color:var(--red)">$${a.low}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--muted2)">إغلاق</span><span>$${a.close}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('analysis-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+  } catch(e) { showToast('❌ خطأ في التحليل'); }
+}
+
+function analysisBadge(a) {
+  if (!a) return '<span style="font-size:10px;color:var(--muted2)">—</span>';
+  return a.suitable
+    ? '<span style="font-size:11px;color:var(--green)">✅ مناسب</span>'
+    : '<span style="font-size:11px;color:var(--red)">❌ غير مناسب</span>';
+}
+
+// ── فتح شارت TradingView ──────────────────────
+function openChart(symbol) {
+  const url = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
+  window.open(url, '_blank');
+}
+
+function chartBtn(symbol) {
+  return `<a class="btn-chart" onclick="openChart('${symbol}')" title="افتح الشارت على TradingView">📊 شارت</a>`;
+}
+
+// ── Theme ──
+function setTheme(t, dot) {
+  document.documentElement.setAttribute('data-theme', t==='dark' ? '' : t);
+  localStorage.setItem('mm_theme', t);
+  document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
+  if (dot) dot.classList.add('active');
+  document.getElementById('theme-picker').classList.remove('show');
+}
+function toggleThemePicker() { document.getElementById('theme-picker').classList.toggle('show'); }
+const savedTheme = localStorage.getItem('mm_theme');
+if (savedTheme && savedTheme !== 'dark') setTheme(savedTheme);
+
+// ── View ──
+function setView(v, btn) {
+  view = v;
+  localStorage.setItem('mm_view', v);
+  document.querySelectorAll('.vbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cards-view').style.display = v==='cards' ? 'block' : 'none';
+  document.getElementById('table-view').style.display = v==='table' ? 'block' : 'none';
+  render();
+}
+const savedView = localStorage.getItem('mm_view') || 'cards';
+if (savedView === 'table') setView('table', document.getElementById('vbtn-table'));
+
+// ── Market Status ──
+function updateMkt() {
+  const ny = new Date(new Date().toLocaleString('en-US', {timeZone:'America/New_York'}));
+  const d=ny.getDay(), h=ny.getHours(), m=ny.getMinutes();
+  const open = d>=1 && d<=5 && (h>9||(h===9&&m>=30)) && h<16;
+  const el = document.getElementById('mkt');
+  el.textContent = open ? '● السوق مفتوح' : '○ السوق مغلق';
+  el.className = 'mkt ' + (open ? 'mkt-open' : 'mkt-closed');
+}
+setInterval(updateMkt, 60000); updateMkt();
+
+// ── Load ──
+async function load() {
+  try {
+    const r = await fetch('/api/signals', { headers: {'x-auth-token': token} });
+    if (r.status===401 || r.status===403) { logout(); return; }
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+    if (data.length > lastSeen && lastSeen > 0) {
+      showToast('📡 إشارة جديدة!'); playSound('new');
+      sendPushNotif('📡 إشارة جديدة!', 'MILLIONAIRE — وصلت إشارة جديدة');
+    }
+    lastSeen = data.length;
+    signals = data;
+    render(); updateReport();
   } catch(e) {}
 }
+load();
+setInterval(load, 5000);
 
+// ── Report ──
+function updateReport() {
+  const open=signals.filter(s=>s.status==='open').length;
+  const target=signals.filter(s=>s.status==='target').length;
+  const stopped=signals.filter(s=>s.status==='stopped').length;
+  const closed=target+stopped;
+  const wr=closed>0?(target/closed*100).toFixed(1):null;
+  const sm={};
+  signals.filter(s=>s.status==='target').forEach(s=>{sm[s.strategy]=(sm[s.strategy]||0)+1;});
+  const best=Object.keys(sm).sort((a,b)=>sm[b]-sm[a])[0]||'—';
+  document.getElementById('r-total').textContent=signals.length;
+  document.getElementById('r-win').textContent=target;
+  document.getElementById('r-loss').textContent=stopped;
+  document.getElementById('r-open').textContent=open;
+  document.getElementById('r-wr').textContent=wr?wr+'%':'—';
+  document.getElementById('r-wr-bar').style.width=(wr||0)+'%';
+  document.getElementById('r-wr-bar').style.background=parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
+  document.getElementById('r-best').textContent=best;
+  document.getElementById('h-open').textContent=open;
+  document.getElementById('h-target').textContent=target;
+  document.getElementById('h-stopped').textContent=stopped;
+  document.getElementById('h-wr').textContent=wr?wr+'%':'—';
+  const counts={all:signals.length,open,target,stopped,BUY:signals.filter(s=>s.action==='BUY').length,SELL:signals.filter(s=>s.action==='SELL').length};
+  ['all','open','target','stopped','BUY','SELL'].forEach(k=>{const el=document.getElementById('c-'+k);if(el)el.textContent=counts[k]||0;});
+}
 
-// ─── Polygon.io — تحليل صلاحية المضاربة ──────
-const POLYGON_KEY = process.env.POLYGON_KEY || 'RBT7Arouh5Y7kfqYWJazzDSKrJqyXZ7w';
+// ── Filter & Group ──
+function getFiltered() {
+  let list=[...signals];
+  if(tab==='open') list=list.filter(s=>s.status==='open');
+  else if(tab==='target') list=list.filter(s=>s.status==='target');
+  else if(tab==='stopped') list=list.filter(s=>s.status==='stopped');
+  else if(tab==='BUY') list=list.filter(s=>s.action==='BUY');
+  else if(tab==='SELL') list=list.filter(s=>s.action==='SELL');
+  return list;
+}
+function groupBySymbol(list) {
+  const g={};
+  list.forEach(s=>{const k=s.symbol.toUpperCase();if(!g[k])g[k]=[];g[k].push(s);});
+  return Object.keys(g).sort().reduce((a,k)=>{a[k]=g[k];return a;},{});
+}
 
-async function getStockAnalysis(symbol) {
-  return new Promise((resolve) => {
-    // جيب بيانات آخر يوم تداول
-    const path = `/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_KEY}`;
-    const options = {
-      hostname: 'api.polygon.io',
-      path,
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    };
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const r    = json?.results?.[0];
-          if (!r) return resolve(null);
+// ── Signal Data ──
+function getSigData(s) {
+  const isBuy=s.action==='BUY';
+  const entry=parseFloat(s.price)||0;
+  const tp=parseFloat(s.tp)||0;
+  const sl=parseFloat(s.sl)||0;
+  const tpPct=entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
+  const dp=entry>=100?2:entry>=1?4:6;
+  const cur=s.currentPrice?parseFloat(s.currentPrice):null;
+  const slPct  = entry>0&&sl>0 ? (isBuy?(entry-sl)/entry*100:(sl-entry)/entry*100).toFixed(2) : '0.00';
+  const isProfit=cur?(isBuy?cur>entry:cur<entry):null;
+  const chgPct=cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
+  const reward=Math.abs(tp-entry);
+  let prog=0;
+  if(cur&&s.status==='open'&&reward>0){const moved=isBuy?Math.max(0,cur-entry):Math.max(0,entry-cur);prog=Math.min(100,moved/reward*100);}
+  else if(s.status==='target') prog=100;
+  const progClr=prog>=75?'var(--green)':prog>=40?'var(--yellow)':'var(--blue)';
+  const stMap={open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف'},target:{cls:'s-target',txt:'🎯 هدف'}};
+  const st=stMap[s.status]||stMap.open;
+  const dt=new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+  return {isBuy,entry,tp,sl,tpPct,slPct,dp,cur,isProfit,chgPct,prog,progClr,st,dt};
+}
 
-          const volume     = r.v || 0;
-          const high       = r.h || 0;
-          const low        = r.l || 0;
-          const close      = r.c || 0;
-          const open       = r.o || 0;
-          const volatility = close > 0 ? ((high - low) / close * 100).toFixed(2) : 0;
-          const change     = open  > 0 ? ((close - open) / open * 100).toFixed(2) : 0;
+// ── Render ──
+function render() {
+  const groups=groupBySymbol(getFiltered());
+  if(view==='cards') renderCards(groups);
+  else renderTable(groups);
+}
 
-          // معايير المضاربة اليومية
-          const volOk  = volume >= 1000000;
-          const atrOk  = parseFloat(volatility) >= 2;
-          const priceOk = close >= 1;
-          const suitable = volOk && atrOk && priceOk;
-
-          // تقييم السيولة
-          let liquidity = 'ضعيفة';
-          if (volume >= 10000000) liquidity = 'ممتازة';
-          else if (volume >= 5000000) liquidity = 'جيدة جداً';
-          else if (volume >= 1000000) liquidity = 'جيدة';
-
-          resolve({
-            suitable,
-            volume:     volume,
-            volatility: parseFloat(volatility),
-            change:     parseFloat(change),
-            high, low, close, open,
-            liquidity,
-            reasons: {
-              volume:    volOk,
-              atr:       atrOk,
-              price:     priceOk
-            }
-          });
-        } catch(e) { resolve(null); }
-      });
+function renderCards(groups) {
+  const el=document.getElementById('cards-view');
+  const syms=Object.keys(groups);
+  if(!syms.length){el.innerHTML=`<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;return;}
+  let html='';
+  syms.forEach(sym=>{
+    const g=groups[sym];
+    const oc=g.filter(s=>s.status==='open').length;
+    const tc=g.filter(s=>s.status==='target').length;
+    const sc=g.filter(s=>s.status==='stopped').length;
+    html+=`<div class="group-header">
+      <span class="group-sym">${sym}</span>
+      <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
+      ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
+      ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
+      ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
+      ${chartBtn(sym)}
+    </div><div class="cards-grid">`;
+    g.forEach(s=>{
+      const d=getSigData(s);
+      html+=`<div class="signal-card new">
+        <div class="card-bar ${d.isBuy?'bar-buy':'bar-sell'}"></div>
+        <div class="card-head">
+          <span class="card-sym">${s.symbol}</span>
+          <span class="dir-badge ${d.isBuy?'dir-buy':'dir-sell'}">${d.isBuy?'▲ شراء':'▼ بيع'}</span>
+        </div>
+        <div class="card-price">$${d.entry.toFixed(d.dp)}<small>دخول</small></div>
+        <div class="card-cur">
+          <span class="cur-lbl">الحالي</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            ${d.chgPct?`<span class="cur-val ${d.isProfit?'up':'dn'}">${parseFloat(d.chgPct)>=0?'+':''}${d.chgPct}%</span>`:''}
+            <span class="cur-val ${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">${d.cur?'$'+d.cur.toFixed(d.dp):'جارٍ التحديث...'}</span>
+          </div>
+        </div>
+        <div class="card-levels">
+          <div class="lv"><div class="lv-l">🎯 الهدف</div><div class="lv-v lv-tp">$${d.tp.toFixed(d.dp)}</div></div>
+          <div class="lv"><div class="lv-l">📈 هدف%</div><div class="lv-v lv-pct">+${d.tpPct}%</div></div>
+          <div class="lv"><div class="lv-l">🛑 وقف</div><div class="lv-v lv-sl">$${d.sl.toFixed(d.dp)}</div></div>
+          <div class="lv" style="grid-column:1/-1"><div class="lv-l">📉 وقف%</div><div class="lv-v" style="color:var(--red)">-${d.slPct}%</div></div>
+        </div>
+        <div class="card-prog">
+          <div class="prog-top">
+            <span style="font-size:10px;color:var(--muted2)">التقدم نحو الهدف</span>
+            <span style="font-family:var(--mono);font-size:10px;color:${d.progClr}">${d.prog.toFixed(0)}%</span>
+          </div>
+          <div class="prog-track"><div class="prog-fill" style="width:${d.prog.toFixed(0)}%;background:${d.progClr}"></div></div>
+        </div>
+        <div class="card-foot">
+          <span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div onclick="showNewsModal('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">
+              ${sentimentBadge(s.sentiment)}
+            </div>
+            <div onclick="showAnalysis('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">
+              ${analysisBadge(s.analysis)}
+            </div>
+            ${chartBtn(s.symbol)}
+            ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}')" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">🗑</button>`:''}
+          </div>
+        </div>
+      </div>`;
     });
-    req.on('error', () => resolve(null));
-    req.end();
+    html+='</div>';
   });
+  el.innerHTML=html;
 }
 
-// ─── Binance: كريبتو ─────────────────────────────
-async function getBinanceSpotPrice(symbol) {
-  return new Promise((resolve) => {
-    https.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.toUpperCase()}`, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          resolve(json.price ? parseFloat(json.price) : null);
-        } catch(e) { resolve(null); }
-      });
-    }).on('error', () => resolve(null));
+function renderTable(groups) {
+  const tbody=document.getElementById('tbody');
+  const syms=Object.keys(groups);
+  if(!syms.length){tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>';return;}
+  let html='';
+  syms.forEach(sym=>{
+    const g=groups[sym];
+    const oc=g.filter(s=>s.status==='open').length;
+    const tc=g.filter(s=>s.status==='target').length;
+    const sc=g.filter(s=>s.status==='stopped').length;
+    html+=`<tr class="group-row"><td colspan="13"><div style="display:flex;align-items:center;gap:8px">
+      <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:#fff">${sym}</span>
+      <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
+      ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
+      ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
+      ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
+    </div></td></tr>`;
+    g.forEach(s=>{
+      const d=getSigData(s);
+      html+=`<tr>
+        <td>${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}')" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>`:''}</td>
+        <td><div class="sym-cell"><div class="sym-icon ${d.isBuy?'buy':'sell'}">${s.symbol.slice(0,3)}</div><span style="font-family:var(--mono);font-size:12px">${s.symbol}</span></div></td>
+        <td><span class="dir-txt ${d.isBuy?'dir-buy-txt':'dir-sell-txt'}">${d.isBuy?'▲ شراء':'▼ بيع'}</span></td>
+        <td style="font-family:var(--mono);font-size:11px">$${d.entry.toFixed(d.dp)}</td>
+        <td style="font-family:var(--mono);font-size:11px" class="${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">
+          ${d.cur?'$'+d.cur.toFixed(d.dp):'<span style="color:var(--muted2);font-size:10px">جارٍ...</span>'}
+          ${d.chgPct?`<small style="font-size:9px"> ${parseFloat(d.chgPct)>=0?'+':''}${d.chgPct}%</small>`:''}
+        </td>
+        <td class="tp-cell">$${d.tp.toFixed(d.dp)}</td>
+        <td class="sl-cell">$${d.sl.toFixed(d.dp)}</td>
+        <td class="pct-cell">+${d.tpPct}%</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--red)">-${d.slPct}%</td>
+        <td><div style="display:flex;align-items:center;gap:5px;min-width:90px">
+          <div class="prog-track" style="flex:1"><div class="prog-fill" style="width:${d.prog.toFixed(0)}%;background:${d.progClr}"></div></div>
+          <span style="font-family:var(--mono);font-size:10px;color:${d.progClr};width:28px">${d.prog.toFixed(0)}%</span>
+        </div></td>
+        <td><span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span></td>
+        <td class="strat-cell">${s.strategy||'—'}</td>
+        <td class="time-cell">${d.dt}</td>
+        <td style="cursor:pointer" onclick="showNewsModal('${s._id||s.id}','${s.symbol}')">${sentimentBadge(s.sentiment)}</td>
+        <td style="cursor:pointer" onclick="showAnalysis('${s._id||s.id}','${s.symbol}')">${analysisBadge(s.analysis)}</td>
+        <td>${chartBtn(s.symbol)}</td>
+      </tr>`;
+    });
   });
+  tbody.innerHTML=html;
 }
 
-
-// ─── NewsAPI — جيب آخر الأخبار ────────────────
-const NEWS_API_KEY = process.env.NEWS_API_KEY || '854ddf963cba41048bf747785ac26ebd';
-
-async function getNewsForSymbol(symbol) {
-  // حوّل الرمز لاسم قابل للبحث
-  const query = symbol.replace(/USDT$/i,'').replace(/USD$/i,'');
-  return new Promise((resolve) => {
-    const path = `/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${NEWS_API_KEY}`;
-    const options = {
-      hostname: 'newsapi.org',
-      path,
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    };
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const articles = (json.articles || []).map(a => ({
-            title:       a.title,
-            description: a.description,
-            url:         a.url,
-            publishedAt: a.publishedAt,
-            source:      a.source?.name
-          }));
-          resolve(articles);
-        } catch(e) { resolve([]); }
-      });
-    });
-    req.on('error', () => resolve([]));
-    req.end();
-  });
+function setTab(t,btn){
+  tab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
 }
 
-// ─── Claude AI — Sentiment Analysis ───────────
-async function analyzeSentiment(symbol, articles) {
-  if (!articles.length) return { score: 50, label: 'محايد' };
-  try {
-    const headlines = articles.map((a,i) => `${i+1}. ${a.title}`).join('\n');
-    const prompt = `أنت محلل مالي. حلل مشاعر هذه الأخبار المتعلقة بـ ${symbol} وأعطني:
-1. نسبة مئوية من 0 إلى 100 (100 = إيجابي جداً، 0 = سلبي جداً، 50 = محايد)
-2. تصنيف: إيجابي أو سلبي أو محايد
-
-الأخبار:
-${headlines}
-
-أجب بـ JSON فقط بهذا الشكل بدون أي نص إضافي:
-{"score": 75, "label": "إيجابي"}`;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         process.env.ANTHROPIC_API_KEY || '',
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model:      'claude-haiku-4-5-20251001',
-        max_tokens: 100,
-        messages:   [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-    const text = data?.content?.[0]?.text || '{"score":50,"label":"محايد"}';
-    const clean = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
-  } catch(e) {
-    return { score: 50, label: 'محايد' };
-  }
-}
-
-// ─── تحليل Sentiment للإشارة ──────────────────
-async function updateSentiment(signal) {
-  try {
-    const articles = await getNewsForSymbol(signal.symbol);
-    const result   = await analyzeSentiment(signal.symbol, articles);
-    await Signal.findByIdAndUpdate(signal._id, {
-      sentiment:      result.score,
-      sentimentLabel: result.label,
-      sentimentNews:  articles.slice(0, 5),
-      sentimentAt:    new Date()
-    });
-    console.log(`📰 Sentiment ${signal.symbol}: ${result.score}% ${result.label}`);
-  } catch(e) {
-    console.error('❌ Sentiment error:', e.message);
-  }
-}
-
-// ─── Yahoo Finance: أسهم أمريكية ─────────────────
-async function getYahooPrice(symbol) {
-  let yahooSym = symbol;
-  if (/USDT$/i.test(symbol)) yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
-  return new Promise((resolve) => {
-    const options = {
-      hostname: 'query1.finance.yahoo.com',
-      path: `/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1m&range=1d`,
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-    };
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try {
-          const json  = JSON.parse(data);
-          const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
-          resolve(price ? parseFloat(price) : null);
-        } catch(e) { resolve(null); }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.end();
-  });
-}
-
-// ─── Smart Price: Binance أولاً ثم Yahoo ──────────
-async function getStockPrice(symbol) {
-  const binancePrice = await getBinanceSpotPrice(symbol);
-  if (binancePrice) {
-    console.log(`💹 Binance: ${symbol} = $${binancePrice}`);
-    return binancePrice;
-  }
-  const yahooPrice = await getYahooPrice(symbol);
-  if (yahooPrice) {
-    console.log(`📈 Yahoo: ${symbol} = $${yahooPrice}`);
-    return yahooPrice;
-  }
-  return null;
-}
-
-// ─── Auto Update كل 60 ثانية ──────────────────
-async function updateCurrentPrices() {
-  try {
-    const openSignals = await Signal.find({ status: 'open' });
-    if (!openSignals.length) return;
-
-    for (const signal of openSignals) {
-      const price = await getStockPrice(signal.symbol);
-      if (!price) { console.log(`⚠️ لا سعر لـ ${signal.symbol}`); continue; }
-
-      const update = { currentPrice: price };
-
-      if (signal.action === 'BUY') {
-        if (signal.tp && price >= signal.tp) {
-          Object.assign(update, { status:'target', closePrice:price, closedAt:new Date() });
-          console.log(`🎯 هدف! ${signal.symbol} @ $${price}`);
-        } else if (signal.sl && price <= signal.sl) {
-          Object.assign(update, { status:'stopped', closePrice:price, closedAt:new Date() });
-          console.log(`🛑 وقف! ${signal.symbol} @ $${price}`);
-        }
-      } else if (signal.action === 'SELL') {
-        if (signal.tp && price <= signal.tp) {
-          Object.assign(update, { status:'target', closePrice:price, closedAt:new Date() });
-          console.log(`🎯 هدف! ${signal.symbol} @ $${price}`);
-        } else if (signal.sl && price >= signal.sl) {
-          Object.assign(update, { status:'stopped', closePrice:price, closedAt:new Date() });
-          console.log(`🛑 وقف! ${signal.symbol} @ $${price}`);
-        }
-      }
-
-      await Signal.findByIdAndUpdate(signal._id, update);
+// ── Status Changes ──
+function checkForStatusChanges(newData) {
+  newData.forEach(ns=>{
+    const old=signals.find(s=>(s._id||s.id)===(ns._id||ns.id));
+    if(!old) return;
+    if(old.status==='open'&&ns.status==='target'){
+      const d=getSigData(ns);
+      showToast(`🎯 ${ns.symbol} حقق الهدف! +${d.tpPct}%`);
+      playSound('target');
+      sendPushNotif(`🎯 ${ns.symbol} حقق الهدف!`,`+${d.tpPct}% — MILLIONAIRE`);
+    } else if(old.status==='open'&&ns.status==='stopped'){
+      showToast(`🛑 ${ns.symbol} وقف الخسارة`);
+      playSound('stopped');
+      sendPushNotif(`🛑 ${ns.symbol} وقف الخسارة`,'MILLIONAIRE');
     }
-    console.log(`🔄 تحديث ${openSignals.length} إشارة`);
-  } catch(e) { console.error('❌ updateCurrentPrices:', e.message); }
+  });
 }
 
-mongoose.connection.once('open', () => {
-  initAdmin();
-  updateCurrentPrices();
-  setInterval(updateCurrentPrices, 60000);
-});
-
-// ─── Auth ──────────────────────────────────────
-async function auth(req, res, next) {
-  const token = req.headers['x-auth-token'];
-  if (!token) return res.status(401).json({ error: 'غير مصرح' });
-  const user = await User.findOne({ token, active: true });
-  if (!user) return res.status(401).json({ error: 'جلسة منتهية' });
-  if (user.expiresAt && new Date(user.expiresAt) < new Date())
-    return res.status(403).json({ error: 'انتهى الاشتراك' });
-  req.user = user;
-  next();
+async function loadWithCheck() {
+  try {
+    const r=await fetch('/api/signals',{headers:{'x-auth-token':token}});
+    if(r.status===401||r.status===403){logout();return;}
+    const data=await r.json();
+    if(!Array.isArray(data)) return;
+    if(signals.length>0) checkForStatusChanges(data);
+    if(data.length>lastSeen&&lastSeen>0){showToast('📡 إشارة جديدة!');playSound('new');sendPushNotif('📡 إشارة جديدة!','MILLIONAIRE — وصلت إشارة جديدة');}
+    lastSeen=data.length; signals=data;
+    render(); updateReport();
+  } catch(e){}
 }
-async function adminOnly(req, res, next) {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'ليس لديك صلاحية' });
-  next();
+clearInterval(window._loadInterval);
+window._loadInterval=setInterval(loadWithCheck,5000);
+
+// ── Sound ──
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let audioCtx=null;
+function playSound(type){
+  const s=JSON.parse(localStorage.getItem('mm_settings')||'{}');
+  if(s.sound===false) return;
+  try{
+    if(!audioCtx) audioCtx=new AudioCtx();
+    const vol=(parseInt(s.volume||50)/100)*0.4;
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    if(type==='new'){o.frequency.setValueAtTime(440,audioCtx.currentTime);o.frequency.setValueAtTime(880,audioCtx.currentTime+.2);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4);}
+    else if(type==='target'){o.frequency.setValueAtTime(523,audioCtx.currentTime);o.frequency.setValueAtTime(784,audioCtx.currentTime+.2);o.frequency.setValueAtTime(1047,audioCtx.currentTime+.4);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.7);o.start();o.stop(audioCtx.currentTime+.7);}
+    else if(type==='stopped'){o.frequency.setValueAtTime(300,audioCtx.currentTime);o.frequency.setValueAtTime(200,audioCtx.currentTime+.2);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4);}
+  }catch(e){}
 }
 
-// ─── Auth Routes ───────────────────────────────
-app.post('/api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username, password });
-    if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خاطئة' });
-    if (!user.active) return res.status(403).json({ error: 'الحساب موقوف' });
-    if (user.expiresAt && new Date(user.expiresAt) < new Date())
-      return res.status(403).json({ error: 'انتهى اشتراكك' });
-    user.token     = crypto.randomBytes(32).toString('hex');
-    user.lastLogin = new Date();
-    await user.save();
-    res.json({ token: user.token, name: user.name, role: user.role, expiresAt: user.expiresAt });
-  } catch(e) { res.status(500).json({ error: 'خطأ في السيرفر' }); }
-});
+// ── Push Notifications ──
+async function requestNotif(){
+  if(!('Notification' in window)){showToast('المتصفح لا يدعم الإشعارات');return;}
+  const perm=await Notification.requestPermission();
+  if(perm==='granted'){document.getElementById('notif-btn').style.color='var(--green)';showToast('✅ تم تفعيل الإشعارات!');}
+  else showToast('❌ تم رفض الإشعارات');
+}
+function sendPushNotif(title,body){
+  if(Notification.permission==='granted') new Notification(title,{body,tag:'millionaire-signal'});
+}
+if(Notification.permission==='granted') document.getElementById('notif-btn').style.color='var(--green)';
 
-app.post('/api/logout', auth, async (req, res) => {
-  req.user.token = null;
-  await req.user.save();
-  res.json({ ok: true });
-});
+// ── Webhook bar (Admin) ──
+if(localStorage.getItem('mm_role')==='admin'){
+  const bar=document.createElement('div');
+  bar.style.cssText='background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0';
+  bar.innerHTML='<span style="color:var(--muted2)">Webhook:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="navigator.clipboard?.writeText(this.textContent);showToast(\'✓ تم النسخ\')">'+(location.origin+'/webhook')+'</span>';
+  document.body.appendChild(bar);
+}
 
-app.get('/api/me', auth, (req, res) => {
-  res.json({ name: req.user.name, role: req.user.role, expiresAt: req.user.expiresAt });
-});
-
-app.put('/api/me/password', auth, async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  if (req.user.password !== oldPassword) return res.status(400).json({ error: 'كلمة المرور القديمة خاطئة' });
-  req.user.password = newPassword;
-  await req.user.save();
-  res.json({ ok: true });
-});
-
-// ─── Signals ───────────────────────────────────
-app.get('/api/signals', auth, async (req, res) => {
-  const query = { receivedAt: { $gte: req.user.createdAt || new Date(0) } };
-  if (req.user.role === 'admin') delete query.receivedAt;
-  const signals = await Signal.find(query).sort({ receivedAt: -1 }).limit(500);
-  res.json(signals);
-});
-
-app.put('/api/signals/:id', auth, async (req, res) => {
-  try {
-    const { status, closePrice } = req.body;
-    const sig = await Signal.findByIdAndUpdate(req.params.id, { status, closePrice, closedAt: new Date() }, { new: true });
-    res.json({ ok: true, signal: sig });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-app.delete('/api/signals/:id', auth, adminOnly, async (req, res) => {
-  await Signal.findByIdAndDelete(req.params.id);
-  res.json({ ok: true });
-});
-
-app.post('/api/signals/delete-many', auth, adminOnly, async (req, res) => {
-  const { ids } = req.body;
-  await Signal.deleteMany({ _id: { $in: ids } });
-  res.json({ ok: true });
-});
-
-// ─── Prices API (للفرونت-إند) ─────────────────
-// الفرونت يكلم سيرفرنا بدل ما يكلم Yahoo مباشرة
-app.get('/api/prices', auth, async (req, res) => {
-  const { symbols } = req.query;
-  if (!symbols) return res.json({});
-  const syms = symbols.split(',').filter(Boolean);
-  const result = {};
-  for (const sym of syms) {
-    const price = await getStockPrice(sym);
-    if (price) result[sym.toUpperCase()] = price;
-  }
-  res.json(result);
-});
-
-// ─── TradingView Webhook ───────────────────────
-app.post('/webhook', async (req, res) => {
-  try {
-    const data = req.body;
-    if (!data.action || !data.symbol) return res.status(400).json({ error: 'بيانات ناقصة' });
-
-    if (['STOPPED','CLOSED'].includes(data.action.toUpperCase())) {
-      await Signal.findOneAndUpdate(
-        { symbol: data.symbol.toUpperCase(), status: 'open' },
-        { status: 'stopped', closedAt: new Date(), closePrice: data.price }
-      );
-      return res.json({ ok: true });
+// ── Delete (Admin) ──
+async function deleteSig(id){
+  if(!confirm('حذف هذه الإشارة؟')) return;
+  try{
+    const r=await fetch('/api/signals/'+id,{method:'DELETE',headers:{'x-auth-token':token}});
+    if(!r.ok){
+      const err=await r.json().catch(()=>({}));
+      showToast('❌ '+(err.error||'خطأ في الحذف'));
+      return;
     }
+    signals=signals.filter(s=>(s._id||s.id)!==id);
+    render();updateReport();showToast('✓ تم الحذف');
+  }catch(e){showToast('❌ خطأ في الاتصال');}
+}
 
-    const entry = parseFloat(data.price);
-    const sl    = parseFloat(data.sl) || parseFloat((entry * 0.98).toFixed(4));
-    const tp    = parseFloat(data.tp) || parseFloat((entry * 1.05).toFixed(4));
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);
+}
 
-    const signal = await Signal.create({
-      symbol: data.symbol.toUpperCase(), action: data.action.toUpperCase(),
-      price: entry, sl, tp,
-      strategy: data.strategy || 'TradingView',
-      status: 'open', receivedAt: new Date()
-    });
+async function logout(){
+  try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
+  localStorage.clear();window.location.href='/login.html';
+}
 
-    console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | SL:$${sl} | TP:$${tp}`);
-    // تحليل Sentiment تلقائياً
-    updateSentiment(signal).catch(console.error);
-
-    // ── إشعار تيليجرام ──
-    const isBuy  = signal.action === 'BUY';
-    const slPct  = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
-    const tpPct  = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
-    const tgMsg  = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
-                   '💰 دخول: <b>$' + entry + '</b>\n' +
-                   '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
-                   '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
-                   '⚡ استراتيجية: ' + signal.strategy + '\n\n' +
-                   '🕐 ' + new Date().toLocaleString('ar');
-    sendTelegram(tgMsg).catch(console.error);
-
-    res.json({ ok: true, signal });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── Admin ─────────────────────────────────────
-app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
-  res.json(await User.find().select('-token'));
-});
-
-app.post('/api/admin/users', auth, adminOnly, async (req, res) => {
-  try {
-    const { username, password, name, email, days } = req.body;
-    const expiresAt = days ? new Date(Date.now() + days * 86400000) : null;
-    const user = await User.create({ username, password, name, email, role:'user', active:true, expiresAt });
-    res.json({ ok: true, user });
-  } catch(e) {
-    if (e.code === 11000) return res.status(400).json({ error: 'اسم المستخدم موجود' });
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.put('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
-  try {
-    const { active, days, password, name } = req.body;
-    const update = {};
-    if (active !== undefined) update.active = active;
-    if (days)     update.expiresAt = new Date(Date.now() + days * 86400000);
-    if (password) update.password = password;
-    if (name)     update.name = name;
-    await User.findByIdAndUpdate(req.params.id, update);
-    res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
-  await User.findByIdAndDelete(req.params.id);
-  res.json({ ok: true });
-});
-
-app.delete('/api/admin/signals', auth, adminOnly, async (req, res) => {
-  await Signal.deleteMany({});
-  res.json({ ok: true });
-});
-
-app.post('/api/admin/signals', auth, adminOnly, async (req, res) => {
-  try {
-    const { symbol, action, price, sl, tp, strategy } = req.body;
-    const entry = parseFloat(price);
-    const slVal = parseFloat(sl) || parseFloat((entry * 0.98).toFixed(4));
-    const tpVal = parseFloat(tp) || parseFloat((entry * 1.05).toFixed(4));
-    const signal = await Signal.create({
-      symbol: symbol.toUpperCase(), action: action.toUpperCase(),
-      price: entry, sl: slVal, tp: tpVal,
-      strategy: strategy || 'Manual', status: 'open', receivedAt: new Date()
-    });
-    res.json({ ok: true, signal });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── Stats ─────────────────────────────────────
-app.get('/api/stats', auth, async (req, res) => {
-  const total   = await Signal.countDocuments();
-  const open    = await Signal.countDocuments({ status:'open' });
-  const target  = await Signal.countDocuments({ status:'target' });
-  const stopped = await Signal.countDocuments({ status:'stopped' });
-  const winRate = total > 0 ? ((target / (target + stopped)) * 100).toFixed(1) : 0;
-  res.json({ total, open, target, stopped, winRate });
-});
-
-// ─── Stock Analysis API ──────────────────────────
-app.get('/api/analysis/:id', auth, async (req, res) => {
-  try {
-    const sig = await Signal.findById(req.params.id).select('analysis analysisAt symbol');
-    if (!sig) return res.status(404).json({ error: 'مش موجود' });
-
-    // لو التحليل قديم أكتر من 6 ساعات أو مش موجود — حدّثه
-    const needsUpdate = !sig.analysisAt || (Date.now() - new Date(sig.analysisAt)) > 6 * 3600000;
-    if (needsUpdate) {
-      const result = await getStockAnalysis(sig.symbol);
-      if (result) {
-        await Signal.findByIdAndUpdate(req.params.id, { analysis: result, analysisAt: new Date() });
-        return res.json({ ok: true, analysis: result, symbol: sig.symbol });
-      }
-    }
-    res.json({ ok: true, analysis: sig.analysis, symbol: sig.symbol });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── Sentiment API ───────────────────────────────
-app.get('/api/sentiment/:id', auth, async (req, res) => {
-  try {
-    const sig = await Signal.findById(req.params.id).select('sentiment sentimentLabel sentimentNews sentimentAt symbol');
-    if (!sig) return res.status(404).json({ error: 'مش موجود' });
-    res.json(sig);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// تحديث Sentiment يدوي
-app.post('/api/sentiment/:id/refresh', auth, async (req, res) => {
-  try {
-    const sig = await Signal.findById(req.params.id);
-    if (!sig) return res.status(404).json({ error: 'مش موجود' });
-    updateSentiment(sig).catch(console.error);
-    res.json({ ok: true, message: 'جارٍ التحليل...' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── Pages ─────────────────────────────────────
-app.get('/',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/admin',    (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'settings.html')));
-app.get('/reports',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'reports.html')));
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`✅ MILLIONAIRE شغال على بورت ${PORT}`));
+document.addEventListener('click',()=>{if(!audioCtx)try{audioCtx=new AudioCtx();}catch(e){}},{once:true});
+</script>
+</body>
+</html>
