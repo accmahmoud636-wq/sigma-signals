@@ -548,10 +548,15 @@ if(localStorage.getItem('mm_role')==='admin'){
 async function deleteSig(id){
   if(!confirm('حذف هذه الإشارة؟')) return;
   try{
-    await fetch('/api/signals/'+id,{method:'DELETE',headers:{'x-auth-token':token}});
+    const r=await fetch('/api/signals/'+id,{method:'DELETE',headers:{'x-auth-token':token}});
+    if(!r.ok){
+      const err=await r.json().catch(()=>({}));
+      showToast('❌ '+(err.error||'خطأ في الحذف'));
+      return;
+    }
     signals=signals.filter(s=>(s._id||s.id)!==id);
     render();updateReport();showToast('✓ تم الحذف');
-  }catch(e){showToast('❌ خطأ في الحذف');}
+  }catch(e){showToast('❌ خطأ في الاتصال');}
 }
 
 function showToast(msg){
