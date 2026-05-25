@@ -154,6 +154,81 @@ async function getStockAnalysis(symbol) {
   });
 }
 
+// ─── FMP Screener ─────────────────────────────
+const FMP_KEY = process.env.FMP_KEY || 'baKT9TF8PnzBCl288HmBpYPhjouMOLkj';
+
+async function fetchScreener() {
+  return new Promise((resolve) => {
+    const params = [
+      'marketCapMoreThan=1000000',
+      'marketCapLowerThan=300000000',
+      'priceMoreThan=1',
+      'priceLowerThan=20',
+      'volumeMoreThan=500000',
+      'isEtf=false',
+      'isActivelyTrading=true',
+      'exchange=NYSE,NASDAQ',
+      `apikey=${FMP_KEY}`
+    ].join('&');
+
+    const options = {
+      hostname: 'financialmodelingprep.com',
+      path: `/stable/company-screener?${params}`,
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    };
+
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (!Array.isArray(json)) return resolve([]);
+
+          // فلتر وترتيب
+          const filtered = json
+            .filter(s =>
+              s.price >= 1 && s.price <= 20 &&
+              s.volume > 500000 &&
+              s.marketCap < 300000000
+            )
+            .sort((a, b) => b.volume - a.volume)
+            .slice(0, 50)
+            .map(s => ({
+              symbol:    s.symbol,
+              name:      s.companyName,
+              price:     s.price,
+              change:    s.changesPercentage,
+              volume:    s.volume,
+              marketCap: s.marketCap,
+              sector:    s.sector,
+              exchange:  s.exchangeShortName
+            }));
+
+          resolve(filtered);
+        } catch(e) { resolve([]); }
+      });
+    });
+    req.on('error', () => resolve([]));
+    req.end();
+  });
+}
+
+// Cache الـ screener عشان نوفر الطلبات
+let screenerCache = { data: [], updatedAt: null };
+
+async function updateScreenerCache() {
+  try {
+    const data = await fetchScreener();
+    screenerCache = { data, updatedAt: new Date() };
+    console.log(`📊 Screener: ${data.length} سهم`);
+  } catch(e) {
+    console.error('❌ Screener error:', e.message);
+  }
+}
+
+
 // ─── Binance: كريبتو ─────────────────────────────
 async function getBinanceSpotPrice(symbol) {
   return new Promise((resolve) => {
@@ -342,6 +417,8 @@ async function updateCurrentPrices() {
 
 mongoose.connection.once('open', () => {
   initAdmin();
+  updateScreenerCache();                    // تحديث فوري
+  setInterval(updateScreenerCache, 3600000); // كل ساعة
   updateCurrentPrices();
   setInterval(updateCurrentPrices, 60000);
 });
@@ -547,6 +624,18 @@ app.get('/api/stats', auth, async (req, res) => {
   res.json({ total, open, target, stopped, winRate });
 });
 
+// ─── Screener API ────────────────────────────────
+app.get('/api/screener', auth, async (req, res) => {
+  try {
+    // لو Cache قديم أكتر من ساعة أو فاضي — حدّثه
+    const needsUpdate = !screenerCache.updatedAt ||
+      (Date.now() - new Date(screenerCache.updatedAt)) > 3600000;
+
+    if (needsUpdate) await updateScreenerCache();
+    res.json({ ok: true, data: screenerCache.data, updatedAt: screenerCache.updatedAt });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Stock Analysis API ──────────────────────────
 app.get('/api/analysis/:id', auth, async (req, res) => {
   try {
@@ -590,6 +679,7 @@ app.get('/',         (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/admin',    (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'settings.html')));
 app.get('/reports',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'reports.html')));
+app.get('/screener', (req, res) => res.sendFile(path.join(__dirname, 'public', 'screener.html')));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ MILLIONAIRE شغال على بورت ${PORT}`));
