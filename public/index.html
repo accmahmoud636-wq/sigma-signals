@@ -8,7 +8,6 @@
 <title>MILLIONAIRE · الصفقات</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-/* ── THEMES ── */
 :root{
   --bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--card:#0f1521;
   --border:rgba(212,175,55,.12);--border2:rgba(212,175,55,.2);
@@ -18,27 +17,12 @@
   --mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif;
   --shadow:0 8px 32px rgba(0,0,0,.5);
 }
-[data-theme="light"]{
-  --bg:#f0f2f5;--bg2:#ffffff;--bg3:#f5f7fa;--card:#ffffff;
-  --border:rgba(0,0,0,.08);--border2:rgba(0,0,0,.15);
-  --text:#1a1f2e;--muted:#8892a4;--muted2:#5a6478;
-  --shadow:0 4px 20px rgba(0,0,0,.1);
-}
-[data-theme="blue"]{
-  --bg:#050d1a;--bg2:#071020;--bg3:#091525;--card:#0a1830;
-  --border:rgba(77,166,255,.12);--border2:rgba(77,166,255,.25);
-  --gold:#4da6ff;--gold2:#80c4ff;--gold3:rgba(77,166,255,.08);
-}
-[data-theme="green"]{
-  --bg:#050e08;--bg2:#071410;--bg3:#091815;--card:#0a1c18;
-  --border:rgba(0,217,126,.1);--border2:rgba(0,217,126,.2);
-  --gold:#00d97e;--gold2:#00f090;--gold3:rgba(0,217,126,.08);
-}
+[data-theme="light"]{--bg:#f0f2f5;--bg2:#ffffff;--bg3:#f5f7fa;--card:#ffffff;--border:rgba(0,0,0,.08);--border2:rgba(0,0,0,.15);--text:#1a1f2e;--muted:#8892a4;--muted2:#5a6478;--shadow:0 4px 20px rgba(0,0,0,.1);}
+[data-theme="blue"]{--bg:#050d1a;--bg2:#071020;--bg3:#091525;--card:#0a1830;--border:rgba(77,166,255,.12);--border2:rgba(77,166,255,.25);--gold:#4da6ff;--gold2:#80c4ff;--gold3:rgba(77,166,255,.08);}
+[data-theme="green"]{--bg:#050e08;--bg2:#071410;--bg3:#091815;--card:#0a1c18;--border:rgba(0,217,126,.1);--border2:rgba(0,217,126,.2);--gold:#00d97e;--gold2:#00f090;--gold3:rgba(0,217,126,.08);}
 
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--ar);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .3s,color .3s}
-
-/* ── HEADER ── */
 header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:100}
 .logo{display:flex;align-items:center;gap:8px}
 .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
@@ -55,27 +39,19 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .btn-icon{background:transparent;border:1px solid var(--border2);color:var(--muted2);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .btn-icon:hover{border-color:var(--gold);color:var(--gold)}
 .btn-logout{background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px}
-
-/* ── VIEW TOGGLE ── */
 .view-toggle{display:flex;gap:4px;background:var(--bg3);padding:3px;border-radius:7px;border:1px solid var(--border)}
 .vbtn{padding:3px 10px;border-radius:5px;border:none;background:transparent;color:var(--muted2);font-size:11px;cursor:pointer;transition:all .15s}
 .vbtn.active{background:var(--gold3);color:var(--gold);border:1px solid var(--border2)}
-
-/* ── THEME PICKER ── */
 .theme-picker{position:absolute;top:58px;left:10px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px;display:none;z-index:200;box-shadow:var(--shadow)}
 .theme-picker.show{display:flex;gap:8px}
 .theme-dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
 .theme-dot:hover,.theme-dot.active{transform:scale(1.2);border-color:#fff}
-
-/* ── REPORT ── */
 .report{padding:10px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0}
 .rcard{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:8px 12px}
 .rcard-val{font-family:var(--mono);font-size:17px;font-weight:600;margin-bottom:2px}
 .rcard-lbl{font-size:10px;color:var(--muted2)}
 .wr-bar{height:3px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
 .wr-fill{height:100%;border-radius:2px;transition:width .5s}
-
-/* ── TABS ── */
 .tabs{padding:8px 16px;display:flex;gap:6px;border-bottom:1px solid var(--border);background:var(--bg2);align-items:center;flex-wrap:wrap;flex-shrink:0}
 .tab{padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:11px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px}
 .tab:hover{border-color:var(--gold);color:var(--gold)}
@@ -84,19 +60,13 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .tab.active .cnt{background:rgba(212,175,55,.15)}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;margin-right:auto}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
-/* ── CONTENT ── */
 .content{flex:1;overflow:auto;padding:16px}
-
-/* ── TABLE VIEW ── */
 .tbl-wrap{overflow-x:auto}
-.signals-table{width:100%;border-collapse:collapse;font-size:12px;min-width:850px}
+.signals-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
 .signals-table thead th{padding:8px 10px;color:var(--muted2);font-weight:400;font-family:var(--mono);font-size:10px;text-align:right;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap;position:sticky;top:0}
 .signals-table tbody td{padding:8px 10px;border-bottom:1px solid rgba(212,175,55,.04);text-align:right;vertical-align:middle}
 .signals-table tbody tr:hover td{background:rgba(212,175,55,.02)}
 .group-row td{background:rgba(212,175,55,.04);padding:6px 10px;border-bottom:1px solid rgba(212,175,55,.08)}
-
-/* ── CARDS VIEW ── */
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
 .group-header{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px}
 .group-sym{font-family:var(--mono);font-size:15px;font-weight:600;color:#fff}
@@ -135,8 +105,6 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .s-dot{width:4px;height:4px;border-radius:50%}
 .s-open .s-dot{background:var(--green);animation:pulse 2s infinite}
 .card-meta{text-align:left;font-size:9px;color:var(--muted)}
-
-/* ── COMMON ── */
 .sym-cell{display:flex;align-items:center;gap:7px}
 .sym-icon{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;font-family:var(--mono);flex-shrink:0}
 .sym-icon.buy{background:rgba(0,217,126,.12);color:var(--green);border:1px solid rgba(0,217,126,.2)}
@@ -150,21 +118,28 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .time-cell{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
 .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
 .empty-icon{font-size:40px;margin-bottom:12px;display:block;opacity:.3}
-
-/* ── TOAST ── */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;box-shadow:var(--shadow)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ── MOBILE ── */
+/* ── زرار الشارت ── */
+.btn-chart{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(77,166,255,.1);
+  border:1px solid rgba(77,166,255,.3);
+  color:var(--blue);
+  padding:3px 8px;border-radius:5px;
+  cursor:pointer;font-size:10px;font-family:var(--ar);
+  text-decoration:none;white-space:nowrap;
+  transition:all .15s;
+}
+.btn-chart:hover{background:rgba(77,166,255,.2);border-color:var(--blue);}
+
 @media(max-width:640px){
-  .hstats{display:none}
-  .logo-by{display:none}
+  .hstats{display:none}.logo-by{display:none}
   .report{grid-template-columns:repeat(2,1fr);padding:8px}
-  .rcard-val{font-size:15px}
-  .content{padding:10px}
+  .rcard-val{font-size:15px}.content{padding:10px}
   .cards-grid{grid-template-columns:1fr}
-  .tabs{padding:6px 10px;gap:4px}
-  .tab{padding:4px 10px;font-size:10px}
+  .tabs{padding:6px 10px;gap:4px}.tab{padding:4px 10px;font-size:10px}
 }
 </style>
 </head>
@@ -173,10 +148,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 <header>
   <div class="logo">
     <div class="logo-icon">💰</div>
-    <div>
-      <div class="logo-text">MILLIONAIRE</div>
-      <div class="logo-by">by Mahmoud Ahmed</div>
-    </div>
+    <div><div class="logo-text">MILLIONAIRE</div><div class="logo-by">by Mahmoud Ahmed</div></div>
   </div>
   <div class="hstats">
     <div class="hs"><div class="hs-n" id="h-open" style="color:var(--green)">0</div><div class="hs-l">مفتوحة</div></div>
@@ -233,7 +205,10 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
     <div class="tbl-wrap">
       <table class="signals-table">
         <thead><tr>
-          <th id="th-del"></th><th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th><th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th><th>الحالة</th><th>استراتيجية</th><th>الوقت</th>
+          <th id="th-del"></th>
+          <th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th>
+          <th>الهدف</th><th>وقف</th><th>نسبة</th><th>تقدم</th>
+          <th>الحالة</th><th>استراتيجية</th><th>الوقت</th><th>شارت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -250,6 +225,16 @@ document.getElementById('uname').textContent = localStorage.getItem('mm_name') |
 
 let signals = [], tab = 'all', view = 'cards', lastSeen = 0;
 const updatedIds = new Set();
+
+// ── فتح شارت TradingView ──────────────────────
+function openChart(symbol) {
+  const url = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
+  window.open(url, '_blank');
+}
+
+function chartBtn(symbol) {
+  return `<a class="btn-chart" onclick="openChart('${symbol}')" title="افتح الشارت على TradingView">📊 شارت</a>`;
+}
 
 // ── Theme ──
 function setTheme(t, dot) {
@@ -287,7 +272,7 @@ function updateMkt() {
 }
 setInterval(updateMkt, 60000); updateMkt();
 
-// ── Load Signals (كل 5 ثواني) ──
+// ── Load ──
 async function load() {
   try {
     const r = await fetch('/api/signals', { headers: {'x-auth-token': token} });
@@ -295,14 +280,12 @@ async function load() {
     const data = await r.json();
     if (!Array.isArray(data)) return;
     if (data.length > lastSeen && lastSeen > 0) {
-      showToast('📡 إشارة جديدة!');
-      playSound('new');
+      showToast('📡 إشارة جديدة!'); playSound('new');
       sendPushNotif('📡 إشارة جديدة!', 'MILLIONAIRE — وصلت إشارة جديدة');
     }
     lastSeen = data.length;
     signals = data;
-    render();
-    updateReport();
+    render(); updateReport();
   } catch(e) {}
 }
 load();
@@ -310,117 +293,96 @@ setInterval(load, 5000);
 
 // ── Report ──
 function updateReport() {
-  const open    = signals.filter(s => s.status==='open').length;
-  const target  = signals.filter(s => s.status==='target').length;
-  const stopped = signals.filter(s => s.status==='stopped').length;
-  const closed  = target + stopped;
-  const wr      = closed > 0 ? (target/closed*100).toFixed(1) : null;
-  const sm = {};
-  signals.filter(s => s.status==='target').forEach(s => { sm[s.strategy]=(sm[s.strategy]||0)+1; });
-  const best = Object.keys(sm).sort((a,b)=>sm[b]-sm[a])[0] || '—';
-
-  document.getElementById('r-total').textContent = signals.length;
-  document.getElementById('r-win').textContent   = target;
-  document.getElementById('r-loss').textContent  = stopped;
-  document.getElementById('r-open').textContent  = open;
-  document.getElementById('r-wr').textContent    = wr ? wr+'%' : '—';
-  document.getElementById('r-wr-bar').style.width = (wr||0)+'%';
-  document.getElementById('r-wr-bar').style.background = parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
-  document.getElementById('r-best').textContent  = best;
-  document.getElementById('h-open').textContent  = open;
-  document.getElementById('h-target').textContent= target;
+  const open=signals.filter(s=>s.status==='open').length;
+  const target=signals.filter(s=>s.status==='target').length;
+  const stopped=signals.filter(s=>s.status==='stopped').length;
+  const closed=target+stopped;
+  const wr=closed>0?(target/closed*100).toFixed(1):null;
+  const sm={};
+  signals.filter(s=>s.status==='target').forEach(s=>{sm[s.strategy]=(sm[s.strategy]||0)+1;});
+  const best=Object.keys(sm).sort((a,b)=>sm[b]-sm[a])[0]||'—';
+  document.getElementById('r-total').textContent=signals.length;
+  document.getElementById('r-win').textContent=target;
+  document.getElementById('r-loss').textContent=stopped;
+  document.getElementById('r-open').textContent=open;
+  document.getElementById('r-wr').textContent=wr?wr+'%':'—';
+  document.getElementById('r-wr-bar').style.width=(wr||0)+'%';
+  document.getElementById('r-wr-bar').style.background=parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
+  document.getElementById('r-best').textContent=best;
+  document.getElementById('h-open').textContent=open;
+  document.getElementById('h-target').textContent=target;
   document.getElementById('h-stopped').textContent=stopped;
-  document.getElementById('h-wr').textContent    = wr ? wr+'%' : '—';
-
-  const counts = { all:signals.length, open, target, stopped,
-    BUY:signals.filter(s=>s.action==='BUY').length,
-    SELL:signals.filter(s=>s.action==='SELL').length };
-  ['all','open','target','stopped','BUY','SELL'].forEach(k => {
-    const el = document.getElementById('c-'+k); if(el) el.textContent = counts[k]||0;
-  });
+  document.getElementById('h-wr').textContent=wr?wr+'%':'—';
+  const counts={all:signals.length,open,target,stopped,BUY:signals.filter(s=>s.action==='BUY').length,SELL:signals.filter(s=>s.action==='SELL').length};
+  ['all','open','target','stopped','BUY','SELL'].forEach(k=>{const el=document.getElementById('c-'+k);if(el)el.textContent=counts[k]||0;});
 }
 
 // ── Filter & Group ──
 function getFiltered() {
-  let list = [...signals];
-  if (tab==='open')    list = list.filter(s=>s.status==='open');
-  else if (tab==='target')  list = list.filter(s=>s.status==='target');
-  else if (tab==='stopped') list = list.filter(s=>s.status==='stopped');
-  else if (tab==='BUY')     list = list.filter(s=>s.action==='BUY');
-  else if (tab==='SELL')    list = list.filter(s=>s.action==='SELL');
+  let list=[...signals];
+  if(tab==='open') list=list.filter(s=>s.status==='open');
+  else if(tab==='target') list=list.filter(s=>s.status==='target');
+  else if(tab==='stopped') list=list.filter(s=>s.status==='stopped');
+  else if(tab==='BUY') list=list.filter(s=>s.action==='BUY');
+  else if(tab==='SELL') list=list.filter(s=>s.action==='SELL');
   return list;
 }
 function groupBySymbol(list) {
-  const g = {};
-  list.forEach(s => { const k=s.symbol.toUpperCase(); if(!g[k])g[k]=[]; g[k].push(s); });
+  const g={};
+  list.forEach(s=>{const k=s.symbol.toUpperCase();if(!g[k])g[k]=[];g[k].push(s);});
   return Object.keys(g).sort().reduce((a,k)=>{a[k]=g[k];return a;},{});
 }
 
 // ── Signal Data ──
-// السعر الحالي يجي من currentPrice (محدّث من السيرفر عبر Yahoo Finance)
 function getSigData(s) {
-  const isBuy  = s.action === 'BUY';
-  const entry  = parseFloat(s.price) || 0;
-  const tp     = parseFloat(s.tp)    || 0;
-  const sl     = parseFloat(s.sl)    || 0;
-  const tpPct  = entry>0 ? (isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2) : '0.00';
-  const dp     = entry>=100 ? 2 : entry>=1 ? 4 : 6;
-
-  // ✅ السعر الحالي من السيرفر (Yahoo Finance)
-  const cur = s.currentPrice ? parseFloat(s.currentPrice) : null;
-
-  const isProfit = cur ? (isBuy ? cur>entry : cur<entry) : null;
-  const chgPct   = cur && entry>0 ? ((cur-entry)/entry*100).toFixed(2) : null;
-
-  const reward = Math.abs(tp - entry);
-  let prog = 0;
-  if (cur && s.status==='open' && reward>0) {
-    const moved = isBuy ? Math.max(0, cur-entry) : Math.max(0, entry-cur);
-    prog = Math.min(100, moved/reward*100);
-  } else if (s.status==='target') prog = 100;
-
-  const progClr = prog>=75 ? 'var(--green)' : prog>=40 ? 'var(--yellow)' : 'var(--blue)';
-  const stMap = {
-    open:    { cls:'s-open',    txt:'● مفتوحة' },
-    stopped: { cls:'s-stopped', txt:'🛑 وقف'   },
-    target:  { cls:'s-target',  txt:'🎯 هدف'   }
-  };
-  const st = stMap[s.status] || stMap.open;
-  const dt = new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
-
-  return { isBuy, entry, tp, sl, tpPct, dp, cur, isProfit, chgPct, prog, progClr, st, dt };
+  const isBuy=s.action==='BUY';
+  const entry=parseFloat(s.price)||0;
+  const tp=parseFloat(s.tp)||0;
+  const sl=parseFloat(s.sl)||0;
+  const tpPct=entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
+  const dp=entry>=100?2:entry>=1?4:6;
+  const cur=s.currentPrice?parseFloat(s.currentPrice):null;
+  const isProfit=cur?(isBuy?cur>entry:cur<entry):null;
+  const chgPct=cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
+  const reward=Math.abs(tp-entry);
+  let prog=0;
+  if(cur&&s.status==='open'&&reward>0){const moved=isBuy?Math.max(0,cur-entry):Math.max(0,entry-cur);prog=Math.min(100,moved/reward*100);}
+  else if(s.status==='target') prog=100;
+  const progClr=prog>=75?'var(--green)':prog>=40?'var(--yellow)':'var(--blue)';
+  const stMap={open:{cls:'s-open',txt:'● مفتوحة'},stopped:{cls:'s-stopped',txt:'🛑 وقف'},target:{cls:'s-target',txt:'🎯 هدف'}};
+  const st=stMap[s.status]||stMap.open;
+  const dt=new Date(s.receivedAt).toLocaleString('ar',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+  return {isBuy,entry,tp,sl,tpPct,dp,cur,isProfit,chgPct,prog,progClr,st,dt};
 }
 
 // ── Render ──
 function render() {
-  const groups = groupBySymbol(getFiltered());
-  if (view==='cards') renderCards(groups);
+  const groups=groupBySymbol(getFiltered());
+  if(view==='cards') renderCards(groups);
   else renderTable(groups);
 }
 
 function renderCards(groups) {
-  const el = document.getElementById('cards-view');
-  const syms = Object.keys(groups);
-  if (!syms.length) {
-    el.innerHTML = `<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;
-    return;
-  }
-  let html = '';
-  syms.forEach(sym => {
-    const g   = groups[sym];
-    const oc  = g.filter(s=>s.status==='open').length;
-    const tc  = g.filter(s=>s.status==='target').length;
-    const sc  = g.filter(s=>s.status==='stopped').length;
-    html += `<div class="group-header">
+  const el=document.getElementById('cards-view');
+  const syms=Object.keys(groups);
+  if(!syms.length){el.innerHTML=`<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;return;}
+  let html='';
+  syms.forEach(sym=>{
+    const g=groups[sym];
+    const oc=g.filter(s=>s.status==='open').length;
+    const tc=g.filter(s=>s.status==='target').length;
+    const sc=g.filter(s=>s.status==='stopped').length;
+    html+=`<div class="group-header">
       <span class="group-sym">${sym}</span>
       <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
       ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
       ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
       ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
+      ${chartBtn(sym)}
     </div><div class="cards-grid">`;
-    g.forEach(s => {
-      const d = getSigData(s);
-      html += `<div class="signal-card new">
+    g.forEach(s=>{
+      const d=getSigData(s);
+      html+=`<div class="signal-card new">
         <div class="card-bar ${d.isBuy?'bar-buy':'bar-sell'}"></div>
         <div class="card-head">
           <span class="card-sym">${s.symbol}</span>
@@ -448,44 +410,44 @@ function renderCards(groups) {
         </div>
         <div class="card-foot">
           <span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div class="card-meta">⚡${s.strategy||'—'}<br>${d.dt}</div>
-            ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}',this)" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">🗑</button>`:''}
+          <div style="display:flex;align-items:center;gap:6px">
+            ${chartBtn(s.symbol)}
+            ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}')" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">🗑</button>`:''}
           </div>
         </div>
       </div>`;
     });
-    html += '</div>';
+    html+='</div>';
   });
-  el.innerHTML = html;
+  el.innerHTML=html;
 }
 
 function renderTable(groups) {
-  const tbody = document.getElementById('tbody');
-  const syms  = Object.keys(groups);
-  if (!syms.length) { tbody.innerHTML='<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>'; return; }
-  let html = '';
-  syms.forEach(sym => {
-    const g  = groups[sym];
-    const oc = g.filter(s=>s.status==='open').length;
-    const tc = g.filter(s=>s.status==='target').length;
-    const sc = g.filter(s=>s.status==='stopped').length;
-    html += `<tr class="group-row"><td colspan="12"><div style="display:flex;align-items:center;gap:8px">
+  const tbody=document.getElementById('tbody');
+  const syms=Object.keys(groups);
+  if(!syms.length){tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>';return;}
+  let html='';
+  syms.forEach(sym=>{
+    const g=groups[sym];
+    const oc=g.filter(s=>s.status==='open').length;
+    const tc=g.filter(s=>s.status==='target').length;
+    const sc=g.filter(s=>s.status==='stopped').length;
+    html+=`<tr class="group-row"><td colspan="13"><div style="display:flex;align-items:center;gap:8px">
       <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:#fff">${sym}</span>
       <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
       ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
       ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
       ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
     </div></td></tr>`;
-    g.forEach(s => {
-      const d = getSigData(s);
-      html += `<tr>
-        <td>${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}',this)" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>`:''}</td>
+    g.forEach(s=>{
+      const d=getSigData(s);
+      html+=`<tr>
+        <td>${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}')" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>`:''}</td>
         <td><div class="sym-cell"><div class="sym-icon ${d.isBuy?'buy':'sell'}">${s.symbol.slice(0,3)}</div><span style="font-family:var(--mono);font-size:12px">${s.symbol}</span></div></td>
         <td><span class="dir-txt ${d.isBuy?'dir-buy-txt':'dir-sell-txt'}">${d.isBuy?'▲ شراء':'▼ بيع'}</span></td>
         <td style="font-family:var(--mono);font-size:11px">$${d.entry.toFixed(d.dp)}</td>
         <td style="font-family:var(--mono);font-size:11px" class="${d.isProfit===null?'neu':d.isProfit?'up':'dn'}">
-          ${d.cur ? '$'+d.cur.toFixed(d.dp) : '<span style="color:var(--muted2);font-size:10px">جارٍ...</span>'}
+          ${d.cur?'$'+d.cur.toFixed(d.dp):'<span style="color:var(--muted2);font-size:10px">جارٍ...</span>'}
           ${d.chgPct?`<small style="font-size:9px"> ${parseFloat(d.chgPct)>=0?'+':''}${d.chgPct}%</small>`:''}
         </td>
         <td class="tp-cell">$${d.tp.toFixed(d.dp)}</td>
@@ -498,135 +460,109 @@ function renderTable(groups) {
         <td><span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span></td>
         <td class="strat-cell">${s.strategy||'—'}</td>
         <td class="time-cell">${d.dt}</td>
+        <td>${chartBtn(s.symbol)}</td>
       </tr>`;
     });
   });
-  tbody.innerHTML = html;
+  tbody.innerHTML=html;
 }
 
-function setTab(t, btn) {
-  tab = t;
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+function setTab(t,btn){
+  tab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   render();
 }
 
-// ── إشعارات التحديث (target/stopped) ──
-// السيرفر يغير الحالة تلقائياً، الفرونت يكتشفها عند الـ load كل 5 ثواني
+// ── Status Changes ──
 function checkForStatusChanges(newData) {
-  newData.forEach(ns => {
-    const old = signals.find(s => (s._id||s.id) === (ns._id||ns.id));
-    if (!old) return;
-    if (old.status==='open' && ns.status==='target') {
-      const d = getSigData(ns);
+  newData.forEach(ns=>{
+    const old=signals.find(s=>(s._id||s.id)===(ns._id||ns.id));
+    if(!old) return;
+    if(old.status==='open'&&ns.status==='target'){
+      const d=getSigData(ns);
       showToast(`🎯 ${ns.symbol} حقق الهدف! +${d.tpPct}%`);
       playSound('target');
-      sendPushNotif(`🎯 ${ns.symbol} حقق الهدف!`, `+${d.tpPct}% — MILLIONAIRE`);
-    } else if (old.status==='open' && ns.status==='stopped') {
+      sendPushNotif(`🎯 ${ns.symbol} حقق الهدف!`,`+${d.tpPct}% — MILLIONAIRE`);
+    } else if(old.status==='open'&&ns.status==='stopped'){
       showToast(`🛑 ${ns.symbol} وقف الخسارة`);
       playSound('stopped');
-      sendPushNotif(`🛑 ${ns.symbol} وقف الخسارة`, 'MILLIONAIRE');
+      sendPushNotif(`🛑 ${ns.symbol} وقف الخسارة`,'MILLIONAIRE');
     }
   });
 }
 
-// ── Override load لتشغيل checkForStatusChanges ──
-const _origLoad = load;
 async function loadWithCheck() {
   try {
-    const r = await fetch('/api/signals', { headers: {'x-auth-token': token} });
-    if (r.status===401||r.status===403) { logout(); return; }
-    const data = await r.json();
-    if (!Array.isArray(data)) return;
-    if (signals.length > 0) checkForStatusChanges(data);
-    if (data.length > lastSeen && lastSeen > 0) {
-      showToast('📡 إشارة جديدة!'); playSound('new');
-      sendPushNotif('📡 إشارة جديدة!', 'MILLIONAIRE — وصلت إشارة جديدة');
-    }
-    lastSeen = data.length;
-    signals  = data;
+    const r=await fetch('/api/signals',{headers:{'x-auth-token':token}});
+    if(r.status===401||r.status===403){logout();return;}
+    const data=await r.json();
+    if(!Array.isArray(data)) return;
+    if(signals.length>0) checkForStatusChanges(data);
+    if(data.length>lastSeen&&lastSeen>0){showToast('📡 إشارة جديدة!');playSound('new');sendPushNotif('📡 إشارة جديدة!','MILLIONAIRE — وصلت إشارة جديدة');}
+    lastSeen=data.length; signals=data;
     render(); updateReport();
-  } catch(e) {}
+  } catch(e){}
 }
-// استبدل setInterval بالـ version الجديدة
 clearInterval(window._loadInterval);
-window._loadInterval = setInterval(loadWithCheck, 5000);
+window._loadInterval=setInterval(loadWithCheck,5000);
 
 // ── Sound ──
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
-function playSound(type) {
-  const s = JSON.parse(localStorage.getItem('mm_settings')||'{}');
-  if (s.sound===false) return;
-  try {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    const vol = (parseInt(s.volume||50)/100)*0.4;
-    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    if (type==='new') {
-      o.frequency.setValueAtTime(440,audioCtx.currentTime);
-      o.frequency.setValueAtTime(880,audioCtx.currentTime+.2);
-      g.gain.setValueAtTime(vol,audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);
-      o.start(); o.stop(audioCtx.currentTime+.4);
-    } else if (type==='target') {
-      o.frequency.setValueAtTime(523,audioCtx.currentTime);
-      o.frequency.setValueAtTime(784,audioCtx.currentTime+.2);
-      o.frequency.setValueAtTime(1047,audioCtx.currentTime+.4);
-      g.gain.setValueAtTime(vol,audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.7);
-      o.start(); o.stop(audioCtx.currentTime+.7);
-    } else if (type==='stopped') {
-      o.frequency.setValueAtTime(300,audioCtx.currentTime);
-      o.frequency.setValueAtTime(200,audioCtx.currentTime+.2);
-      g.gain.setValueAtTime(vol,audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);
-      o.start(); o.stop(audioCtx.currentTime+.4);
-    }
-  } catch(e) {}
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let audioCtx=null;
+function playSound(type){
+  const s=JSON.parse(localStorage.getItem('mm_settings')||'{}');
+  if(s.sound===false) return;
+  try{
+    if(!audioCtx) audioCtx=new AudioCtx();
+    const vol=(parseInt(s.volume||50)/100)*0.4;
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    if(type==='new'){o.frequency.setValueAtTime(440,audioCtx.currentTime);o.frequency.setValueAtTime(880,audioCtx.currentTime+.2);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4);}
+    else if(type==='target'){o.frequency.setValueAtTime(523,audioCtx.currentTime);o.frequency.setValueAtTime(784,audioCtx.currentTime+.2);o.frequency.setValueAtTime(1047,audioCtx.currentTime+.4);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.7);o.start();o.stop(audioCtx.currentTime+.7);}
+    else if(type==='stopped'){o.frequency.setValueAtTime(300,audioCtx.currentTime);o.frequency.setValueAtTime(200,audioCtx.currentTime+.2);g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4);}
+  }catch(e){}
 }
 
 // ── Push Notifications ──
-async function requestNotif() {
-  if (!('Notification' in window)) { showToast('المتصفح لا يدعم الإشعارات'); return; }
-  const perm = await Notification.requestPermission();
-  if (perm==='granted') {
-    document.getElementById('notif-btn').style.color = 'var(--green)';
-    showToast('✅ تم تفعيل الإشعارات!');
-  } else { showToast('❌ تم رفض الإشعارات'); }
+async function requestNotif(){
+  if(!('Notification' in window)){showToast('المتصفح لا يدعم الإشعارات');return;}
+  const perm=await Notification.requestPermission();
+  if(perm==='granted'){document.getElementById('notif-btn').style.color='var(--green)';showToast('✅ تم تفعيل الإشعارات!');}
+  else showToast('❌ تم رفض الإشعارات');
 }
-function sendPushNotif(title, body) {
-  if (Notification.permission==='granted') new Notification(title,{body,tag:'millionaire-signal'});
+function sendPushNotif(title,body){
+  if(Notification.permission==='granted') new Notification(title,{body,tag:'millionaire-signal'});
 }
-if (Notification.permission==='granted') document.getElementById('notif-btn').style.color='var(--green)';
+if(Notification.permission==='granted') document.getElementById('notif-btn').style.color='var(--green)';
 
 // ── Webhook bar (Admin) ──
-if (localStorage.getItem('mm_role')==='admin') {
-  const bar = document.createElement('div');
-  bar.style.cssText = 'background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0';
-  bar.innerHTML = '<span style="color:var(--muted2)">Webhook:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="navigator.clipboard?.writeText(this.textContent);showToast(\'✓ تم النسخ\')">'+(location.origin+'/webhook')+'</span>';
+if(localStorage.getItem('mm_role')==='admin'){
+  const bar=document.createElement('div');
+  bar.style.cssText='background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0';
+  bar.innerHTML='<span style="color:var(--muted2)">Webhook:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="navigator.clipboard?.writeText(this.textContent);showToast(\'✓ تم النسخ\')">'+(location.origin+'/webhook')+'</span>';
   document.body.appendChild(bar);
 }
 
 // ── Delete (Admin) ──
-async function deleteSig(id) {
-  if (!confirm('حذف هذه الإشارة؟')) return;
-  try {
-    await fetch('/api/signals/'+id, {method:'DELETE', headers:{'x-auth-token':token}});
-    signals = signals.filter(s => (s._id||s.id) !== id);
-    render(); updateReport(); showToast('✓ تم الحذف');
-  } catch(e) { showToast('❌ خطأ في الحذف'); }
+async function deleteSig(id){
+  if(!confirm('حذف هذه الإشارة؟')) return;
+  try{
+    await fetch('/api/signals/'+id,{method:'DELETE',headers:{'x-auth-token':token}});
+    signals=signals.filter(s=>(s._id||s.id)!==id);
+    render();updateReport();showToast('✓ تم الحذف');
+  }catch(e){showToast('❌ خطأ في الحذف');}
 }
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 3000);
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);
 }
 
-async function logout() {
-  try { await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}}); } catch(e) {}
-  localStorage.clear(); window.location.href='/login.html';
+async function logout(){
+  try{await fetch('/api/logout',{method:'POST',headers:{'x-auth-token':token}});}catch(e){}
+  localStorage.clear();window.location.href='/login.html';
 }
 
 document.addEventListener('click',()=>{if(!audioCtx)try{audioCtx=new AudioCtx();}catch(e){}},{once:true});
