@@ -58,7 +58,9 @@ const SignalSchema = new mongoose.Schema({
   sentiment:      { type: Number,  default: null },
   sentimentLabel: { type: String,  default: null },
   sentimentNews:  { type: Array,   default: [] },
-  sentimentAt:    { type: Date,    default: null }
+  sentimentAt:    { type: Date,    default: null },
+  analysis:       { type: Object,  default: null },
+  analysisAt:     { type: Date,    default: null }
 }, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({
@@ -86,6 +88,70 @@ async function initAdmin() {
       console.log('✅ Admin created');
     }
   } catch(e) {}
+}
+
+
+// ─── Polygon.io — تحليل صلاحية المضاربة ──────
+const POLYGON_KEY = process.env.POLYGON_KEY || 'RBT7Arouh5Y7kfqYWJazzDSKrJqyXZ7w';
+
+async function getStockAnalysis(symbol) {
+  return new Promise((resolve) => {
+    // جيب بيانات آخر يوم تداول
+    const path = `/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_KEY}`;
+    const options = {
+      hostname: 'api.polygon.io',
+      path,
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const r    = json?.results?.[0];
+          if (!r) return resolve(null);
+
+          const volume     = r.v || 0;
+          const high       = r.h || 0;
+          const low        = r.l || 0;
+          const close      = r.c || 0;
+          const open       = r.o || 0;
+          const volatility = close > 0 ? ((high - low) / close * 100).toFixed(2) : 0;
+          const change     = open  > 0 ? ((close - open) / open * 100).toFixed(2) : 0;
+
+          // معايير المضاربة اليومية
+          const volOk  = volume >= 1000000;
+          const atrOk  = parseFloat(volatility) >= 2;
+          const priceOk = close >= 1;
+          const suitable = volOk && atrOk && priceOk;
+
+          // تقييم السيولة
+          let liquidity = 'ضعيفة';
+          if (volume >= 10000000) liquidity = 'ممتازة';
+          else if (volume >= 5000000) liquidity = 'جيدة جداً';
+          else if (volume >= 1000000) liquidity = 'جيدة';
+
+          resolve({
+            suitable,
+            volume:     volume,
+            volatility: parseFloat(volatility),
+            change:     parseFloat(change),
+            high, low, close, open,
+            liquidity,
+            reasons: {
+              volume:    volOk,
+              atr:       atrOk,
+              price:     priceOk
+            }
+          });
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
 }
 
 // ─── Binance: كريبتو ─────────────────────────────
@@ -479,6 +545,25 @@ app.get('/api/stats', auth, async (req, res) => {
   const stopped = await Signal.countDocuments({ status:'stopped' });
   const winRate = total > 0 ? ((target / (target + stopped)) * 100).toFixed(1) : 0;
   res.json({ total, open, target, stopped, winRate });
+});
+
+// ─── Stock Analysis API ──────────────────────────
+app.get('/api/analysis/:id', auth, async (req, res) => {
+  try {
+    const sig = await Signal.findById(req.params.id).select('analysis analysisAt symbol');
+    if (!sig) return res.status(404).json({ error: 'مش موجود' });
+
+    // لو التحليل قديم أكتر من 6 ساعات أو مش موجود — حدّثه
+    const needsUpdate = !sig.analysisAt || (Date.now() - new Date(sig.analysisAt)) > 6 * 3600000;
+    if (needsUpdate) {
+      const result = await getStockAnalysis(sig.symbol);
+      if (result) {
+        await Signal.findByIdAndUpdate(req.params.id, { analysis: result, analysisAt: new Date() });
+        return res.json({ ok: true, analysis: result, symbol: sig.symbol });
+      }
+    }
+    res.json({ ok: true, analysis: sig.analysis, symbol: sig.symbol });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Sentiment API ───────────────────────────────
