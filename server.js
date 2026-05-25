@@ -13,6 +13,31 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── MongoDB ───────────────────────────────────
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://millionaire:Mm1234512345@cluster0.w50zpog.mongodb.net/millionaire?retryWrites=true&w=majority&appName=Cluster0';
+
+// ─── Telegram Config ───────────────────────────
+const TG_TOKEN   = process.env.TG_TOKEN   || '8714883723:AAEgnEJhS7r7xe9Zk0Yc3Qp-gMxEGs-kbRw';
+const TG_CHAT_ID = process.env.TG_CHAT_ID || '1225882653';
+
+async function sendTelegram(msg) {
+  return new Promise((resolve) => {
+    const text    = encodeURIComponent(msg);
+    const options = {
+      hostname: 'api.telegram.org',
+      path: `/bot${TG_TOKEN}/sendMessage?chat_id=${TG_CHAT_ID}&text=${text}&parse_mode=HTML`,
+      method: 'GET'
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB متصل'))
   .catch(e => console.error('❌ MongoDB:', e.message));
@@ -276,6 +301,19 @@ app.post('/webhook', async (req, res) => {
     });
 
     console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | SL:$${sl} | TP:$${tp}`);
+
+    // ── إشعار تيليجرام ──
+    const isBuy  = signal.action === 'BUY';
+    const slPct  = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
+    const tpPct  = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
+    const tgMsg  = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
+                   '💰 دخول: <b>$' + entry + '</b>\n' +
+                   '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
+                   '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
+                   '⚡ استراتيجية: ' + signal.strategy + '\n\n' +
+                   '🕐 ' + new Date().toLocaleString('ar');
+    sendTelegram(tgMsg).catch(console.error);
+
     res.json({ ok: true, signal });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
