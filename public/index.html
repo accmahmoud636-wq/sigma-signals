@@ -208,7 +208,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
           <th id="th-del"></th>
           <th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th>
           <th>الهدف</th><th>وقف</th><th>نسبة الهدف</th><th>نسبة وقف</th><th>تقدم</th>
-          <th>الحالة</th><th>استراتيجية</th><th>الوقت</th><th>شارت</th>
+          <th>الحالة</th><th>استراتيجية</th><th>الوقت</th><th>الأخبار</th><th>شارت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -225,6 +225,71 @@ document.getElementById('uname').textContent = localStorage.getItem('mm_name') |
 
 let signals = [], tab = 'all', view = 'cards', lastSeen = 0;
 const updatedIds = new Set();
+
+// ── Sentiment ──────────────────────────────────
+function sentimentBadge(s) {
+  if (s === null || s === undefined) return '<span style="font-size:10px;color:var(--muted2)">—</span>';
+  const score = parseFloat(s);
+  const color = score >= 60 ? 'var(--green)' : score >= 40 ? 'var(--yellow)' : 'var(--red)';
+  const icon  = score >= 60 ? '🟢' : score >= 40 ? '⚪' : '🔴';
+  const label = score >= 60 ? 'إيجابي' : score >= 40 ? 'محايد' : 'سلبي';
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+    <span style="font-size:11px">${icon} ${label}</span>
+    <span style="font-family:var(--mono);font-size:10px;color:${color};font-weight:600">${score}%</span>
+  </div>`;
+}
+
+async function showNewsModal(id, symbol) {
+  try {
+    const r = await fetch('/api/sentiment/' + id, { headers: {'x-auth-token': token} });
+    const data = await r.json();
+    const news = data.sentimentNews || [];
+    const score = data.sentiment;
+    const label = data.sentimentLabel;
+    const color = score >= 60 ? '#00d97e' : score >= 40 ? '#f0b429' : '#ff4d4d';
+
+    let html = `<div id="news-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:20px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:#fff">${symbol} — الأخبار</span>
+          <button onclick="document.getElementById('news-modal').remove()" style="background:transparent;border:none;color:var(--muted2);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:${color}">${score}%</div>
+          <div style="font-size:13px;color:var(--muted2)">Sentiment Score — ${label}</div>
+          <div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="height:100%;width:${score}%;background:${color};border-radius:3px"></div>
+          </div>
+        </div>`;
+
+    if (news.length) {
+      news.forEach(n => {
+        html += `<a href="${n.url}" target="_blank" style="display:block;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;text-decoration:none">
+          <div style="font-size:12px;color:var(--text);margin-bottom:4px">${n.title}</div>
+          <div style="font-size:10px;color:var(--muted2)">${n.source} — ${new Date(n.publishedAt).toLocaleDateString('ar')}</div>
+        </a>`;
+      });
+    } else {
+      html += `<div style="text-align:center;color:var(--muted2);padding:20px">لا توجد أخبار متاحة</div>`;
+    }
+
+    html += `<button onclick="refreshSentiment('${id}','${symbol}')" style="width:100%;background:var(--gold3);border:1px solid var(--border2);color:var(--gold);padding:8px;border-radius:8px;cursor:pointer;font-family:var(--ar);font-size:12px;margin-top:8px">🔄 تحديث التحليل</button>
+      </div></div>`;
+
+    const existing = document.getElementById('news-modal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+  } catch(e) { showToast('❌ خطأ في جلب الأخبار'); }
+}
+
+async function refreshSentiment(id, symbol) {
+  try {
+    await fetch('/api/sentiment/' + id + '/refresh', { method:'POST', headers:{'x-auth-token':token} });
+    showToast('🔄 جارٍ تحليل أخبار ' + symbol + '...');
+    document.getElementById('news-modal')?.remove();
+    setTimeout(load, 5000);
+  } catch(e) { showToast('❌ خطأ'); }
+}
 
 // ── فتح شارت TradingView ──────────────────────
 function openChart(symbol) {
@@ -413,6 +478,9 @@ function renderCards(groups) {
         <div class="card-foot">
           <span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span>
           <div style="display:flex;align-items:center;gap:6px">
+            <div onclick="showNewsModal('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">
+              ${sentimentBadge(s.sentiment)}
+            </div>
             ${chartBtn(s.symbol)}
             ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}')" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">🗑</button>`:''}
           </div>
@@ -463,6 +531,7 @@ function renderTable(groups) {
         <td><span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span></td>
         <td class="strat-cell">${s.strategy||'—'}</td>
         <td class="time-cell">${d.dt}</td>
+        <td style="cursor:pointer" onclick="showNewsModal('${s._id||s.id}','${s.symbol}')">${sentimentBadge(s.sentiment)}</td>
         <td>${chartBtn(s.symbol)}</td>
       </tr>`;
     });
