@@ -44,17 +44,21 @@ mongoose.connect(MONGO_URI)
 
 // ─── Schemas ───────────────────────────────────
 const SignalSchema = new mongoose.Schema({
-  symbol:       { type: String, required: true },
-  action:       { type: String, required: true },
-  price:        { type: Number, required: true },
-  sl:           Number,
-  tp:           Number,
-  currentPrice: Number,
-  strategy:     { type: String, default: 'TradingView' },
-  status:       { type: String, default: 'open', enum: ['open','target','stopped'] },
-  closePrice:   Number,
-  closedAt:     Date,
-  receivedAt:   { type: Date, default: Date.now }
+  symbol:         { type: String, required: true },
+  action:         { type: String, required: true },
+  price:          { type: Number, required: true },
+  sl:             Number,
+  tp:             Number,
+  currentPrice:   Number,
+  strategy:       { type: String, default: 'TradingView' },
+  status:         { type: String, default: 'open', enum: ['open','target','stopped'] },
+  closePrice:     Number,
+  closedAt:       Date,
+  receivedAt:     { type: Date, default: Date.now },
+  sentiment:      { type: Number,  default: null },
+  sentimentLabel: { type: String,  default: null },
+  sentimentNews:  { type: Array,   default: [] },
+  sentimentAt:    { type: Date,    default: null }
 }, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({
@@ -98,6 +102,98 @@ async function getBinanceSpotPrice(symbol) {
       });
     }).on('error', () => resolve(null));
   });
+}
+
+
+// ─── NewsAPI — جيب آخر الأخبار ────────────────
+const NEWS_API_KEY = process.env.NEWS_API_KEY || '854ddf963cba41048bf747785ac26ebd';
+
+async function getNewsForSymbol(symbol) {
+  // حوّل الرمز لاسم قابل للبحث
+  const query = symbol.replace(/USDT$/i,'').replace(/USD$/i,'');
+  return new Promise((resolve) => {
+    const path = `/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${NEWS_API_KEY}`;
+    const options = {
+      hostname: 'newsapi.org',
+      path,
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const articles = (json.articles || []).map(a => ({
+            title:       a.title,
+            description: a.description,
+            url:         a.url,
+            publishedAt: a.publishedAt,
+            source:      a.source?.name
+          }));
+          resolve(articles);
+        } catch(e) { resolve([]); }
+      });
+    });
+    req.on('error', () => resolve([]));
+    req.end();
+  });
+}
+
+// ─── Claude AI — Sentiment Analysis ───────────
+async function analyzeSentiment(symbol, articles) {
+  if (!articles.length) return { score: 50, label: 'محايد' };
+  try {
+    const headlines = articles.map((a,i) => `${i+1}. ${a.title}`).join('\n');
+    const prompt = `أنت محلل مالي. حلل مشاعر هذه الأخبار المتعلقة بـ ${symbol} وأعطني:
+1. نسبة مئوية من 0 إلى 100 (100 = إيجابي جداً، 0 = سلبي جداً، 50 = محايد)
+2. تصنيف: إيجابي أو سلبي أو محايد
+
+الأخبار:
+${headlines}
+
+أجب بـ JSON فقط بهذا الشكل بدون أي نص إضافي:
+{"score": 75, "label": "إيجابي"}`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages:   [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data?.content?.[0]?.text || '{"score":50,"label":"محايد"}';
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch(e) {
+    return { score: 50, label: 'محايد' };
+  }
+}
+
+// ─── تحليل Sentiment للإشارة ──────────────────
+async function updateSentiment(signal) {
+  try {
+    const articles = await getNewsForSymbol(signal.symbol);
+    const result   = await analyzeSentiment(signal.symbol, articles);
+    await Signal.findByIdAndUpdate(signal._id, {
+      sentiment:      result.score,
+      sentimentLabel: result.label,
+      sentimentNews:  articles.slice(0, 5),
+      sentimentAt:    new Date()
+    });
+    console.log(`📰 Sentiment ${signal.symbol}: ${result.score}% ${result.label}`);
+  } catch(e) {
+    console.error('❌ Sentiment error:', e.message);
+  }
 }
 
 // ─── Yahoo Finance: أسهم أمريكية ─────────────────
@@ -301,6 +397,8 @@ app.post('/webhook', async (req, res) => {
     });
 
     console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | SL:$${sl} | TP:$${tp}`);
+    // تحليل Sentiment تلقائياً
+    updateSentiment(signal).catch(console.error);
 
     // ── إشعار تيليجرام ──
     const isBuy  = signal.action === 'BUY';
@@ -381,6 +479,25 @@ app.get('/api/stats', auth, async (req, res) => {
   const stopped = await Signal.countDocuments({ status:'stopped' });
   const winRate = total > 0 ? ((target / (target + stopped)) * 100).toFixed(1) : 0;
   res.json({ total, open, target, stopped, winRate });
+});
+
+// ─── Sentiment API ───────────────────────────────
+app.get('/api/sentiment/:id', auth, async (req, res) => {
+  try {
+    const sig = await Signal.findById(req.params.id).select('sentiment sentimentLabel sentimentNews sentimentAt symbol');
+    if (!sig) return res.status(404).json({ error: 'مش موجود' });
+    res.json(sig);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// تحديث Sentiment يدوي
+app.post('/api/sentiment/:id/refresh', auth, async (req, res) => {
+  try {
+    const sig = await Signal.findById(req.params.id);
+    if (!sig) return res.status(404).json({ error: 'مش موجود' });
+    updateSentiment(sig).catch(console.error);
+    res.json({ ok: true, message: 'جارٍ التحليل...' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Pages ─────────────────────────────────────
