@@ -120,18 +120,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .empty-icon{font-size:40px;margin-bottom:12px;display:block;opacity:.3}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;box-shadow:var(--shadow)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-
-/* ── زرار الشارت ── */
-.btn-chart{
-  display:inline-flex;align-items:center;gap:4px;
-  background:rgba(77,166,255,.1);
-  border:1px solid rgba(77,166,255,.3);
-  color:var(--blue);
-  padding:3px 8px;border-radius:5px;
-  cursor:pointer;font-size:10px;font-family:var(--ar);
-  text-decoration:none;white-space:nowrap;
-  transition:all .15s;
-}
+.btn-chart{display:inline-flex;align-items:center;gap:4px;background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.3);color:var(--blue);padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-family:var(--ar);text-decoration:none;white-space:nowrap;transition:all .15s;}
 .btn-chart:hover{background:rgba(77,166,255,.2);border-color:var(--blue);}
 
 @media(max-width:640px){
@@ -208,7 +197,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
           <th id="th-del"></th>
           <th>السهم</th><th>اتجاه</th><th>دخول</th><th>الحالي</th>
           <th>الهدف</th><th>وقف</th><th>نسبة الهدف</th><th>نسبة وقف</th><th>تقدم</th>
-          <th>الحالة</th><th>استراتيجية</th><th>الوقت</th><th>الأخبار</th><th>مضاربة؟</th><th>شارت</th>
+          <th>الحالة</th><th>الوقت</th><th>الأخبار</th><th>مضاربة؟</th><th>شارت</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -316,12 +305,10 @@ async function showAnalysis(id, symbol) {
           <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:#fff">${symbol} — تحليل المضاربة</span>
           <button onclick="document.getElementById('analysis-modal').remove()" style="background:transparent;border:none;color:var(--muted2);font-size:20px;cursor:pointer">✕</button>
         </div>
-
         <div style="background:var(--bg3);border-radius:10px;padding:16px;text-align:center;margin-bottom:16px;border:2px solid ${suitColor}">
           <div style="font-size:32px;margin-bottom:4px">${suitIcon}</div>
           <div style="font-size:15px;font-weight:700;color:${suitColor}">${suitText}</div>
         </div>
-
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
           <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
             <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">📊 الحجم اليومي</div>
@@ -342,7 +329,6 @@ async function showAnalysis(id, symbol) {
             <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${parseFloat(a.change)>=0?'var(--green)':'var(--red)'}">${a.change>=0?'+':''}${a.change}%</div>
           </div>
         </div>
-
         <div style="background:var(--bg3);border-radius:8px;padding:10px;font-family:var(--mono);font-size:11px">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px">
             <span style="color:var(--muted2)">افتتاح</span><span>$${a.open}</span>
@@ -463,7 +449,7 @@ function updateReport() {
   ['all','open','target','stopped','BUY','SELL'].forEach(k=>{const el=document.getElementById('c-'+k);if(el)el.textContent=counts[k]||0;});
 }
 
-// ── Filter & Group ──
+// ── Filter & Group by Strategy ──
 function getFiltered() {
   let list=[...signals];
   if(tab==='open') list=list.filter(s=>s.status==='open');
@@ -473,9 +459,14 @@ function getFiltered() {
   else if(tab==='SELL') list=list.filter(s=>s.action==='SELL');
   return list;
 }
-function groupBySymbol(list) {
+
+function groupByStrategy(list) {
   const g={};
-  list.forEach(s=>{const k=s.symbol.toUpperCase();if(!g[k])g[k]=[];g[k].push(s);});
+  list.forEach(s=>{
+    const k=(s.strategy||'غير محدد').trim();
+    if(!g[k])g[k]=[];
+    g[k].push(s);
+  });
   return Object.keys(g).sort().reduce((a,k)=>{a[k]=g[k];return a;},{});
 }
 
@@ -488,7 +479,7 @@ function getSigData(s) {
   const tpPct=entry>0?(isBuy?(tp-entry)/entry*100:(entry-tp)/entry*100).toFixed(2):'0.00';
   const dp=entry>=100?2:entry>=1?4:6;
   const cur=s.currentPrice?parseFloat(s.currentPrice):null;
-  const slPct  = entry>0&&sl>0 ? (isBuy?(entry-sl)/entry*100:(sl-entry)/entry*100).toFixed(2) : '0.00';
+  const slPct=entry>0&&sl>0?(isBuy?(entry-sl)/entry*100:(sl-entry)/entry*100).toFixed(2):'0.00';
   const isProfit=cur?(isBuy?cur>entry:cur<entry):null;
   const chgPct=cur&&entry>0?((cur-entry)/entry*100).toFixed(2):null;
   const reward=Math.abs(tp-entry);
@@ -504,35 +495,40 @@ function getSigData(s) {
 
 // ── Render ──
 function render() {
-  const groups=groupBySymbol(getFiltered());
+  const groups=groupByStrategy(getFiltered());
   if(view==='cards') renderCards(groups);
   else renderTable(groups);
 }
 
+// ── Render Cards (مجمّع حسب الاستراتيجية) ──
 function renderCards(groups) {
   const el=document.getElementById('cards-view');
-  const syms=Object.keys(groups);
-  if(!syms.length){el.innerHTML=`<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;return;}
+  const strats=Object.keys(groups);
+  if(!strats.length){el.innerHTML=`<div class="empty-state"><span class="empty-icon">📡</span>لا توجد إشارات — في انتظار TradingView...</div>`;return;}
   let html='';
-  syms.forEach(sym=>{
-    const g=groups[sym];
+  strats.forEach(strat=>{
+    const g=groups[strat];
     const oc=g.filter(s=>s.status==='open').length;
     const tc=g.filter(s=>s.status==='target').length;
     const sc=g.filter(s=>s.status==='stopped').length;
-    html+=`<div class="group-header">
-      <span class="group-sym">${sym}</span>
-      <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
+    const syms=[...new Set(g.map(s=>s.symbol.toUpperCase()))];
+    html+=`<div class="group-header" style="margin-top:16px">
+      <span style="font-size:12px;color:var(--gold2);background:var(--gold3);border:1px solid var(--border2);padding:3px 12px;border-radius:6px;font-weight:700">📊 ${strat}</span>
+      <span style="font-size:11px;color:var(--muted2)">${g.length} إشارة</span>
+      <span style="font-size:10px;color:var(--muted2)">— ${syms.join(' · ')}</span>
       ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
       ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
       ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
-      ${chartBtn(sym)}
     </div><div class="cards-grid">`;
     g.forEach(s=>{
       const d=getSigData(s);
       html+=`<div class="signal-card new">
         <div class="card-bar ${d.isBuy?'bar-buy':'bar-sell'}"></div>
         <div class="card-head">
-          <span class="card-sym">${s.symbol}</span>
+          <div>
+            <div class="card-sym">${s.symbol}</div>
+            <div style="margin-top:4px">${chartBtn(s.symbol)}</div>
+          </div>
           <span class="dir-badge ${d.isBuy?'dir-buy':'dir-sell'}">${d.isBuy?'▲ شراء':'▼ بيع'}</span>
         </div>
         <div class="card-price">$${d.entry.toFixed(d.dp)}<small>دخول</small></div>
@@ -559,13 +555,8 @@ function renderCards(groups) {
         <div class="card-foot">
           <span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span>
           <div style="display:flex;align-items:center;gap:6px">
-            <div onclick="showNewsModal('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">
-              ${sentimentBadge(s.sentiment)}
-            </div>
-            <div onclick="showAnalysis('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">
-              ${analysisBadge(s.analysis)}
-            </div>
-            ${chartBtn(s.symbol)}
+            <div onclick="showNewsModal('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">${sentimentBadge(s.sentiment)}</div>
+            <div onclick="showAnalysis('${s._id||s.id}','${s.symbol}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;text-align:center">${analysisBadge(s.analysis)}</div>
             ${localStorage.getItem('mm_role')==='admin'?`<button onclick="deleteSig('${s._id||s.id}')" style="background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.3);color:var(--red);width:24px;height:24px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">🗑</button>`:''}
           </div>
         </div>
@@ -576,23 +567,26 @@ function renderCards(groups) {
   el.innerHTML=html;
 }
 
+// ── Render Table (مجمّع حسب الاستراتيجية) ──
 function renderTable(groups) {
   const tbody=document.getElementById('tbody');
-  const syms=Object.keys(groups);
-  if(!syms.length){tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>';return;}
+  const strats=Object.keys(groups);
+  if(!strats.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--muted)">لا توجد إشارات</td></tr>';return;}
   let html='';
-  syms.forEach(sym=>{
-    const g=groups[sym];
+  strats.forEach(strat=>{
+    const g=groups[strat];
     const oc=g.filter(s=>s.status==='open').length;
     const tc=g.filter(s=>s.status==='target').length;
     const sc=g.filter(s=>s.status==='stopped').length;
-    html+=`<tr class="group-row"><td colspan="13"><div style="display:flex;align-items:center;gap:8px">
-      <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:#fff">${sym}</span>
-      <span style="font-size:11px;color:var(--muted2)">${g.length}</span>
-      ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
-      ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
-      ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
-    </div></td></tr>`;
+    html+=`<tr class="group-row"><td colspan="15">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold2);background:var(--gold3);border:1px solid var(--border2);padding:2px 12px;border-radius:6px">📊 ${strat}</span>
+        <span style="font-size:11px;color:var(--muted2)">${g.length} إشارة</span>
+        ${oc>0?`<span style="font-size:10px;color:var(--green);background:rgba(0,217,126,.1);border:1px solid rgba(0,217,126,.2);padding:1px 6px;border-radius:10px">🟢${oc}</span>`:''}
+        ${tc>0?`<span style="font-size:10px;color:var(--yellow);background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.2);padding:1px 6px;border-radius:10px">🎯${tc}</span>`:''}
+        ${sc>0?`<span style="font-size:10px;color:var(--red);background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.2);padding:1px 6px;border-radius:10px">🛑${sc}</span>`:''}
+      </div>
+    </td></tr>`;
     g.forEach(s=>{
       const d=getSigData(s);
       html+=`<tr>
@@ -613,7 +607,6 @@ function renderTable(groups) {
           <span style="font-family:var(--mono);font-size:10px;color:${d.progClr};width:28px">${d.prog.toFixed(0)}%</span>
         </div></td>
         <td><span class="status-chip ${d.st.cls}"><span class="s-dot"></span>${d.st.txt}</span></td>
-        <td class="strat-cell">${s.strategy||'—'}</td>
         <td class="time-cell">${d.dt}</td>
         <td style="cursor:pointer" onclick="showNewsModal('${s._id||s.id}','${s.symbol}')">${sentimentBadge(s.sentiment)}</td>
         <td style="cursor:pointer" onclick="showAnalysis('${s._id||s.id}','${s.symbol}')">${analysisBadge(s.analysis)}</td>
