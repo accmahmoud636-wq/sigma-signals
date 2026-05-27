@@ -91,7 +91,7 @@ async function initAdmin() {
   } catch(e) {}
 }
 
-// ─── تحديد جلسة السوق (New York Time) ──────────
+// ─── تحديد جلسة السوق ──────────────────────────
 function getMarketSession() {
   const ny       = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const day      = ny.getDay();
@@ -105,6 +105,43 @@ function getMarketSession() {
 
 // ─── Polygon.io ────────────────────────────────
 const POLYGON_KEY = process.env.POLYGON_KEY || 'RBT7Arouh5Y7kfqYWJazzDSKrJqyXZ7w';
+
+// ✅ Polygon: السعر الحالي الفوري (يشمل pre/post market)
+async function getPolygonPrice(symbol) {
+  return new Promise((resolve) => {
+    // Snapshot endpoint — بيرجع آخر سعر متاح
+    const options = {
+      hostname: 'api.polygon.io',
+      path: `/v2/snapshot/locale/us/markets/stocks/tickers/${symbol.toUpperCase()}?apiKey=${POLYGON_KEY}`,
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json    = JSON.parse(data);
+          const ticker  = json?.ticker;
+          if (!ticker) return resolve(null);
+
+          // آخر صفقة فعلية
+          const lastTrade = ticker?.lastTrade?.p;
+          // سعر اليوم
+          const dayClose  = ticker?.day?.c;
+          // سعر الإغلاق السابق
+          const prevClose = ticker?.prevDay?.c;
+
+          const price = lastTrade || dayClose || prevClose || null;
+          if (price) console.log(`🔷 Polygon: ${symbol} = $${price}`);
+          resolve(price ? parseFloat(price) : null);
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
 
 async function getStockAnalysis(symbol) {
   return new Promise((resolve) => {
@@ -185,7 +222,7 @@ async function getNewsForSymbol(symbol) {
       res.on('data', d => data += d);
       res.on('end', () => {
         try {
-          const json = JSON.parse(data);
+          const json     = JSON.parse(data);
           const articles = (json.articles || []).map(a => ({
             title:       a.title,
             description: a.description,
@@ -255,12 +292,12 @@ async function updateSentiment(signal) {
   }
 }
 
-// ─── Yahoo Finance — مع دعم Pre/Post + Fallback ─
+// ─── Yahoo Finance — Pre/Post/Market ───────────
 async function getYahooPrice(symbol) {
   let yahooSym = symbol;
   if (/USDT$/i.test(symbol)) yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
 
-  // ── محاولة 1: query1 + v7 (extended hours) ──
+  // محاولة 1: query1 v7
   const price1 = await new Promise((resolve) => {
     const options = {
       hostname: 'query1.finance.yahoo.com',
@@ -287,12 +324,9 @@ async function getYahooPrice(symbol) {
     req.end();
   });
 
-  if (price1) {
-    console.log(`📈 Yahoo v7: ${symbol} = $${price1}`);
-    return price1;
-  }
+  if (price1) { console.log(`📈 Yahoo v7: ${symbol} = $${price1}`); return price1; }
 
-  // ── محاولة 2: query2 + v8/chart (للأسهم OTC) ──
+  // محاولة 2: query2 v8
   const price2 = await new Promise((resolve) => {
     const options = {
       hostname: 'query2.finance.yahoo.com',
@@ -319,23 +353,29 @@ async function getYahooPrice(symbol) {
     req.end();
   });
 
-  if (price2) {
-    console.log(`📈 Yahoo v8: ${symbol} = $${price2}`);
-    return price2;
-  }
-
+  if (price2) { console.log(`📈 Yahoo v8: ${symbol} = $${price2}`); return price2; }
   return null;
 }
 
-// ─── Smart Price: Binance أولاً ثم Yahoo ────────
+// ─── ✅ Smart Price: Binance → Yahoo → Polygon ──
+// الترتيب: كريبتو أولاً، ثم Yahoo، ثم Polygon كـ fallback نهائي
 async function getStockPrice(symbol) {
+  // 1. Binance (للكريبتو)
   const binancePrice = await getBinanceSpotPrice(symbol);
   if (binancePrice) {
     console.log(`💹 Binance: ${symbol} = $${binancePrice}`);
     return binancePrice;
   }
+
+  // 2. Yahoo Finance (أسهم عادية + extended hours)
   const yahooPrice = await getYahooPrice(symbol);
   if (yahooPrice) return yahooPrice;
+
+  // 3. Polygon.io (fallback للأسهم OTC وكل حاجة تانية)
+  const polygonPrice = await getPolygonPrice(symbol);
+  if (polygonPrice) return polygonPrice;
+
+  console.log(`⚠️ لا سعر متاح لـ ${symbol}`);
   return null;
 }
 
