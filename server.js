@@ -91,20 +91,19 @@ async function initAdmin() {
   } catch(e) {}
 }
 
-// ─── ✅ تحديد جلسة السوق (New York Time) ────────
+// ─── تحديد جلسة السوق (New York Time) ──────────
 function getMarketSession() {
   const ny       = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const day      = ny.getDay();
   const totalMin = ny.getHours() * 60 + ny.getMinutes();
-
   if (day === 0 || day === 6) return 'closed';
-  if (totalMin >= 240  && totalMin < 570)  return 'pre';    // 4:00 AM → 9:30 AM
-  if (totalMin >= 570  && totalMin < 960)  return 'market'; // 9:30 AM → 4:00 PM
-  if (totalMin >= 960  && totalMin < 1200) return 'post';   // 4:00 PM → 8:00 PM
+  if (totalMin >= 240  && totalMin < 570)  return 'pre';
+  if (totalMin >= 570  && totalMin < 960)  return 'market';
+  if (totalMin >= 960  && totalMin < 1200) return 'post';
   return 'closed';
 }
 
-// ─── Polygon.io — تحليل صلاحية المضاربة ──────
+// ─── Polygon.io ────────────────────────────────
 const POLYGON_KEY = process.env.POLYGON_KEY || 'RBT7Arouh5Y7kfqYWJazzDSKrJqyXZ7w';
 
 async function getStockAnalysis(symbol) {
@@ -124,7 +123,6 @@ async function getStockAnalysis(symbol) {
           const json = JSON.parse(data);
           const r    = json?.results?.[0];
           if (!r) return resolve(null);
-
           const volume     = r.v || 0;
           const high       = r.h || 0;
           const low        = r.l || 0;
@@ -132,17 +130,14 @@ async function getStockAnalysis(symbol) {
           const open       = r.o || 0;
           const volatility = close > 0 ? ((high - low) / close * 100).toFixed(2) : 0;
           const change     = open  > 0 ? ((close - open) / open * 100).toFixed(2) : 0;
-
           const volOk   = volume >= 1000000;
           const atrOk   = parseFloat(volatility) >= 2;
           const priceOk = close >= 1;
           const suitable = volOk && atrOk && priceOk;
-
           let liquidity = 'ضعيفة';
-          if (volume >= 10000000)    liquidity = 'ممتازة';
+          if (volume >= 10000000)     liquidity = 'ممتازة';
           else if (volume >= 5000000) liquidity = 'جيدة جداً';
           else if (volume >= 1000000) liquidity = 'جيدة';
-
           resolve({
             suitable, volume, volatility: parseFloat(volatility),
             change: parseFloat(change), high, low, close, open,
@@ -156,7 +151,7 @@ async function getStockAnalysis(symbol) {
   });
 }
 
-// ─── Binance: كريبتو ─────────────────────────────
+// ─── Binance ───────────────────────────────────
 async function getBinanceSpotPrice(symbol) {
   return new Promise((resolve) => {
     https.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.toUpperCase()}`, res => {
@@ -235,7 +230,6 @@ ${headlines}
         messages:   [{ role: 'user', content: prompt }]
       })
     });
-
     const data  = await response.json();
     const text  = data?.content?.[0]?.text || '{"score":50,"label":"محايد"}';
     const clean = text.replace(/```json|```/g, '').trim();
@@ -261,20 +255,19 @@ async function updateSentiment(signal) {
   }
 }
 
-// ─── ✅ Yahoo Finance — مع دعم Pre/Post Market ──
+// ─── Yahoo Finance — مع دعم Pre/Post + Fallback ─
 async function getYahooPrice(symbol) {
   let yahooSym = symbol;
   if (/USDT$/i.test(symbol)) yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
 
-  return new Promise((resolve) => {
-    // نستخدم v7/finance/quote بدل chart عشان يرجع بيانات extended hours
+  // ── محاولة 1: query1 + v7 (extended hours) ──
+  const price1 = await new Promise((resolve) => {
     const options = {
       hostname: 'query1.finance.yahoo.com',
       path: `/v7/finance/quote?symbols=${encodeURIComponent(yahooSym)}&region=US`,
       method: 'GET',
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
     };
-
     const req = https.request(options, res => {
       let data = '';
       res.on('data', d => data += d);
@@ -283,34 +276,55 @@ async function getYahooPrice(symbol) {
           const json  = JSON.parse(data);
           const quote = json?.quoteResponse?.result?.[0];
           if (!quote) return resolve(null);
-
           const session = getMarketSession();
-
-          // ✅ اختار السعر الصح حسب وقت السوق
-          if (session === 'pre' && quote.preMarketPrice) {
-            console.log(`🌅 Pre-Market: ${symbol} = $${quote.preMarketPrice}`);
-            return resolve(parseFloat(quote.preMarketPrice));
-          }
-
-          if (session === 'post' && quote.postMarketPrice) {
-            console.log(`🌙 Post-Market: ${symbol} = $${quote.postMarketPrice}`);
-            return resolve(parseFloat(quote.postMarketPrice));
-          }
-
-          // السوق العادي أو مافيش بيانات extended
-          const price = quote.regularMarketPrice;
-          if (price) {
-            console.log(`📈 Market: ${symbol} = $${price}`);
-            return resolve(parseFloat(price));
-          }
-
-          resolve(null);
+          if (session === 'pre'  && quote.preMarketPrice)  return resolve(parseFloat(quote.preMarketPrice));
+          if (session === 'post' && quote.postMarketPrice) return resolve(parseFloat(quote.postMarketPrice));
+          resolve(quote.regularMarketPrice ? parseFloat(quote.regularMarketPrice) : null);
         } catch(e) { resolve(null); }
       });
     });
     req.on('error', () => resolve(null));
     req.end();
   });
+
+  if (price1) {
+    console.log(`📈 Yahoo v7: ${symbol} = $${price1}`);
+    return price1;
+  }
+
+  // ── محاولة 2: query2 + v8/chart (للأسهم OTC) ──
+  const price2 = await new Promise((resolve) => {
+    const options = {
+      hostname: 'query2.finance.yahoo.com',
+      path: `/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1m&range=1d`,
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const meta = json?.chart?.result?.[0]?.meta;
+          if (!meta) return resolve(null);
+          const session = getMarketSession();
+          if (session === 'pre'  && meta.preMarketPrice)  return resolve(parseFloat(meta.preMarketPrice));
+          if (session === 'post' && meta.postMarketPrice) return resolve(parseFloat(meta.postMarketPrice));
+          resolve(meta.regularMarketPrice ? parseFloat(meta.regularMarketPrice) : null);
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+
+  if (price2) {
+    console.log(`📈 Yahoo v8: ${symbol} = $${price2}`);
+    return price2;
+  }
+
+  return null;
 }
 
 // ─── Smart Price: Binance أولاً ثم Yahoo ────────
