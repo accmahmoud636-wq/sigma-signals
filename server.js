@@ -519,6 +519,7 @@ app.post('/webhook', async (req, res) => {
     const signal = await Signal.create({
       symbol: data.symbol.toUpperCase(), action: data.action.toUpperCase(),
       price: entry, sl, tp,
+      currentPrice: entry,
       strategy:     data.strategy || 'TradingView',
       priceSession: session,
       status:       'open',
