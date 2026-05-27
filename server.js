@@ -38,6 +38,7 @@ async function sendTelegram(msg) {
     req.end();
   });
 }
+
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB متصل'))
   .catch(e => console.error('❌ MongoDB:', e.message));
@@ -90,13 +91,24 @@ async function initAdmin() {
   } catch(e) {}
 }
 
+// ─── ✅ تحديد جلسة السوق (New York Time) ────────
+function getMarketSession() {
+  const ny       = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day      = ny.getDay();
+  const totalMin = ny.getHours() * 60 + ny.getMinutes();
+
+  if (day === 0 || day === 6) return 'closed';
+  if (totalMin >= 240  && totalMin < 570)  return 'pre';    // 4:00 AM → 9:30 AM
+  if (totalMin >= 570  && totalMin < 960)  return 'market'; // 9:30 AM → 4:00 PM
+  if (totalMin >= 960  && totalMin < 1200) return 'post';   // 4:00 PM → 8:00 PM
+  return 'closed';
+}
 
 // ─── Polygon.io — تحليل صلاحية المضاربة ──────
 const POLYGON_KEY = process.env.POLYGON_KEY || 'RBT7Arouh5Y7kfqYWJazzDSKrJqyXZ7w';
 
 async function getStockAnalysis(symbol) {
   return new Promise((resolve) => {
-    // جيب بيانات آخر يوم تداول
     const path = `/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_KEY}`;
     const options = {
       hostname: 'api.polygon.io',
@@ -121,30 +133,20 @@ async function getStockAnalysis(symbol) {
           const volatility = close > 0 ? ((high - low) / close * 100).toFixed(2) : 0;
           const change     = open  > 0 ? ((close - open) / open * 100).toFixed(2) : 0;
 
-          // معايير المضاربة اليومية
-          const volOk  = volume >= 1000000;
-          const atrOk  = parseFloat(volatility) >= 2;
+          const volOk   = volume >= 1000000;
+          const atrOk   = parseFloat(volatility) >= 2;
           const priceOk = close >= 1;
           const suitable = volOk && atrOk && priceOk;
 
-          // تقييم السيولة
           let liquidity = 'ضعيفة';
-          if (volume >= 10000000) liquidity = 'ممتازة';
+          if (volume >= 10000000)    liquidity = 'ممتازة';
           else if (volume >= 5000000) liquidity = 'جيدة جداً';
           else if (volume >= 1000000) liquidity = 'جيدة';
 
           resolve({
-            suitable,
-            volume:     volume,
-            volatility: parseFloat(volatility),
-            change:     parseFloat(change),
-            high, low, close, open,
-            liquidity,
-            reasons: {
-              volume:    volOk,
-              atr:       atrOk,
-              price:     priceOk
-            }
+            suitable, volume, volatility: parseFloat(volatility),
+            change: parseFloat(change), high, low, close, open,
+            liquidity, reasons: { volume: volOk, atr: atrOk, price: priceOk }
           });
         } catch(e) { resolve(null); }
       });
@@ -170,12 +172,10 @@ async function getBinanceSpotPrice(symbol) {
   });
 }
 
-
-// ─── NewsAPI — جيب آخر الأخبار ────────────────
+// ─── NewsAPI ────────────────────────────────────
 const NEWS_API_KEY = process.env.NEWS_API_KEY || '854ddf963cba41048bf747785ac26ebd';
 
 async function getNewsForSymbol(symbol) {
-  // حوّل الرمز لاسم قابل للبحث
   const query = symbol.replace(/USDT$/i,'').replace(/USD$/i,'');
   return new Promise((resolve) => {
     const path = `/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${NEWS_API_KEY}`;
@@ -207,19 +207,19 @@ async function getNewsForSymbol(symbol) {
   });
 }
 
-// ─── Claude AI — Sentiment Analysis ───────────
+// ─── Claude AI — Sentiment ─────────────────────
 async function analyzeSentiment(symbol, articles) {
   if (!articles.length) return { score: 50, label: 'محايد' };
   try {
     const headlines = articles.map((a,i) => `${i+1}. ${a.title}`).join('\n');
     const prompt = `أنت محلل مالي. حلل مشاعر هذه الأخبار المتعلقة بـ ${symbol} وأعطني:
-1. نسبة مئوية من 0 إلى 100 (100 = إيجابي جداً، 0 = سلبي جداً، 50 = محايد)
+1. نسبة مئوية من 0 إلى 100
 2. تصنيف: إيجابي أو سلبي أو محايد
 
 الأخبار:
 ${headlines}
 
-أجب بـ JSON فقط بهذا الشكل بدون أي نص إضافي:
+أجب بـ JSON فقط:
 {"score": 75, "label": "إيجابي"}`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -236,8 +236,8 @@ ${headlines}
       })
     });
 
-    const data = await response.json();
-    const text = data?.content?.[0]?.text || '{"score":50,"label":"محايد"}';
+    const data  = await response.json();
+    const text  = data?.content?.[0]?.text || '{"score":50,"label":"محايد"}';
     const clean = text.replace(/```json|```/g, '').trim();
     return JSON.parse(clean);
   } catch(e) {
@@ -245,7 +245,6 @@ ${headlines}
   }
 }
 
-// ─── تحليل Sentiment للإشارة ──────────────────
 async function updateSentiment(signal) {
   try {
     const articles = await getNewsForSymbol(signal.symbol);
@@ -262,25 +261,50 @@ async function updateSentiment(signal) {
   }
 }
 
-// ─── Yahoo Finance: أسهم أمريكية ─────────────────
+// ─── ✅ Yahoo Finance — مع دعم Pre/Post Market ──
 async function getYahooPrice(symbol) {
   let yahooSym = symbol;
   if (/USDT$/i.test(symbol)) yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
+
   return new Promise((resolve) => {
+    // نستخدم v7/finance/quote بدل chart عشان يرجع بيانات extended hours
     const options = {
       hostname: 'query1.finance.yahoo.com',
-      path: `/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1m&range=1d`,
+      path: `/v7/finance/quote?symbols=${encodeURIComponent(yahooSym)}&region=US`,
       method: 'GET',
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
     };
+
     const req = https.request(options, res => {
       let data = '';
       res.on('data', d => data += d);
       res.on('end', () => {
         try {
           const json  = JSON.parse(data);
-          const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
-          resolve(price ? parseFloat(price) : null);
+          const quote = json?.quoteResponse?.result?.[0];
+          if (!quote) return resolve(null);
+
+          const session = getMarketSession();
+
+          // ✅ اختار السعر الصح حسب وقت السوق
+          if (session === 'pre' && quote.preMarketPrice) {
+            console.log(`🌅 Pre-Market: ${symbol} = $${quote.preMarketPrice}`);
+            return resolve(parseFloat(quote.preMarketPrice));
+          }
+
+          if (session === 'post' && quote.postMarketPrice) {
+            console.log(`🌙 Post-Market: ${symbol} = $${quote.postMarketPrice}`);
+            return resolve(parseFloat(quote.postMarketPrice));
+          }
+
+          // السوق العادي أو مافيش بيانات extended
+          const price = quote.regularMarketPrice;
+          if (price) {
+            console.log(`📈 Market: ${symbol} = $${price}`);
+            return resolve(parseFloat(price));
+          }
+
+          resolve(null);
         } catch(e) { resolve(null); }
       });
     });
@@ -289,7 +313,7 @@ async function getYahooPrice(symbol) {
   });
 }
 
-// ─── Smart Price: Binance أولاً ثم Yahoo ──────────
+// ─── Smart Price: Binance أولاً ثم Yahoo ────────
 async function getStockPrice(symbol) {
   const binancePrice = await getBinanceSpotPrice(symbol);
   if (binancePrice) {
@@ -297,10 +321,7 @@ async function getStockPrice(symbol) {
     return binancePrice;
   }
   const yahooPrice = await getYahooPrice(symbol);
-  if (yahooPrice) {
-    console.log(`📈 Yahoo: ${symbol} = $${yahooPrice}`);
-    return yahooPrice;
-  }
+  if (yahooPrice) return yahooPrice;
   return null;
 }
 
@@ -309,6 +330,9 @@ async function updateCurrentPrices() {
   try {
     const openSignals = await Signal.find({ status: 'open' });
     if (!openSignals.length) return;
+
+    const session = getMarketSession();
+    console.log(`🕐 جلسة السوق: ${session}`);
 
     for (const signal of openSignals) {
       const price = await getStockPrice(signal.symbol);
@@ -336,7 +360,7 @@ async function updateCurrentPrices() {
 
       await Signal.findByIdAndUpdate(signal._id, update);
     }
-    console.log(`🔄 تحديث ${openSignals.length} إشارة`);
+    console.log(`🔄 تحديث ${openSignals.length} إشارة — جلسة: ${session}`);
   } catch(e) { console.error('❌ updateCurrentPrices:', e.message); }
 }
 
@@ -423,12 +447,11 @@ app.post('/api/signals/delete-many', auth, adminOnly, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Prices API (للفرونت-إند) ─────────────────
-// الفرونت يكلم سيرفرنا بدل ما يكلم Yahoo مباشرة
+// ─── Prices API ────────────────────────────────
 app.get('/api/prices', auth, async (req, res) => {
   const { symbols } = req.query;
   if (!symbols) return res.json({});
-  const syms = symbols.split(',').filter(Boolean);
+  const syms   = symbols.split(',').filter(Boolean);
   const result = {};
   for (const sym of syms) {
     const price = await getStockPrice(sym);
@@ -463,19 +486,17 @@ app.post('/webhook', async (req, res) => {
     });
 
     console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | SL:$${sl} | TP:$${tp}`);
-    // تحليل Sentiment تلقائياً
     updateSentiment(signal).catch(console.error);
 
-    // ── إشعار تيليجرام ──
-    const isBuy  = signal.action === 'BUY';
-    const slPct  = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
-    const tpPct  = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
-    const tgMsg  = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
-                   '💰 دخول: <b>$' + entry + '</b>\n' +
-                   '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
-                   '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
-                   '⚡ استراتيجية: ' + signal.strategy + '\n\n' +
-                   '🕐 ' + new Date().toLocaleString('ar');
+    const isBuy = signal.action === 'BUY';
+    const slPct = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
+    const tpPct = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
+    const tgMsg = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
+                  '💰 دخول: <b>$' + entry + '</b>\n' +
+                  '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
+                  '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
+                  '⚡ استراتيجية: ' + signal.strategy + '\n\n' +
+                  '🕐 ' + new Date().toLocaleString('ar');
     sendTelegram(tgMsg).catch(console.error);
 
     res.json({ ok: true, signal });
@@ -547,13 +568,11 @@ app.get('/api/stats', auth, async (req, res) => {
   res.json({ total, open, target, stopped, winRate });
 });
 
-// ─── Stock Analysis API ──────────────────────────
+// ─── Stock Analysis API ─────────────────────────
 app.get('/api/analysis/:id', auth, async (req, res) => {
   try {
     const sig = await Signal.findById(req.params.id).select('analysis analysisAt symbol');
     if (!sig) return res.status(404).json({ error: 'مش موجود' });
-
-    // لو التحليل قديم أكتر من 6 ساعات أو مش موجود — حدّثه
     const needsUpdate = !sig.analysisAt || (Date.now() - new Date(sig.analysisAt)) > 6 * 3600000;
     if (needsUpdate) {
       const result = await getStockAnalysis(sig.symbol);
@@ -566,7 +585,7 @@ app.get('/api/analysis/:id', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── Sentiment API ───────────────────────────────
+// ─── Sentiment API ──────────────────────────────
 app.get('/api/sentiment/:id', auth, async (req, res) => {
   try {
     const sig = await Signal.findById(req.params.id).select('sentiment sentimentLabel sentimentNews sentimentAt symbol');
@@ -575,7 +594,6 @@ app.get('/api/sentiment/:id', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// تحديث Sentiment يدوي
 app.post('/api/sentiment/:id/refresh', auth, async (req, res) => {
   try {
     const sig = await Signal.findById(req.params.id);
