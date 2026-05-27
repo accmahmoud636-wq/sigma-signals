@@ -51,6 +51,7 @@ const SignalSchema = new mongoose.Schema({
   sl:             Number,
   tp:             Number,
   currentPrice:   Number,
+  priceSession:   { type: String, default: null }, // pre / market / post
   strategy:       { type: String, default: 'TradingView' },
   status:         { type: String, default: 'open', enum: ['open','target','stopped'] },
   closePrice:     Number,
@@ -106,10 +107,8 @@ function getMarketSession() {
 // ─── Polygon.io ────────────────────────────────
 const POLYGON_KEY = process.env.POLYGON_KEY || 'RBT7Arouh5Y7kfqYWJazzDSKrJqyXZ7w';
 
-// ✅ Polygon: السعر الحالي الفوري (يشمل pre/post market)
 async function getPolygonPrice(symbol) {
   return new Promise((resolve) => {
-    // Snapshot endpoint — بيرجع آخر سعر متاح
     const options = {
       hostname: 'api.polygon.io',
       path: `/v2/snapshot/locale/us/markets/stocks/tickers/${symbol.toUpperCase()}?apiKey=${POLYGON_KEY}`,
@@ -121,18 +120,10 @@ async function getPolygonPrice(symbol) {
       res.on('data', d => data += d);
       res.on('end', () => {
         try {
-          const json    = JSON.parse(data);
-          const ticker  = json?.ticker;
+          const json   = JSON.parse(data);
+          const ticker = json?.ticker;
           if (!ticker) return resolve(null);
-
-          // آخر صفقة فعلية
-          const lastTrade = ticker?.lastTrade?.p;
-          // سعر اليوم
-          const dayClose  = ticker?.day?.c;
-          // سعر الإغلاق السابق
-          const prevClose = ticker?.prevDay?.c;
-
-          const price = lastTrade || dayClose || prevClose || null;
+          const price = ticker?.lastTrade?.p || ticker?.day?.c || ticker?.prevDay?.c || null;
           if (price) console.log(`🔷 Polygon: ${symbol} = $${price}`);
           resolve(price ? parseFloat(price) : null);
         } catch(e) { resolve(null); }
@@ -145,10 +136,9 @@ async function getPolygonPrice(symbol) {
 
 async function getStockAnalysis(symbol) {
   return new Promise((resolve) => {
-    const path = `/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_KEY}`;
     const options = {
       hostname: 'api.polygon.io',
-      path,
+      path: `/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_KEY}`,
       method: 'GET',
       headers: { 'User-Agent': 'Mozilla/5.0' }
     };
@@ -170,15 +160,15 @@ async function getStockAnalysis(symbol) {
           const volOk   = volume >= 1000000;
           const atrOk   = parseFloat(volatility) >= 2;
           const priceOk = close >= 1;
-          const suitable = volOk && atrOk && priceOk;
           let liquidity = 'ضعيفة';
           if (volume >= 10000000)     liquidity = 'ممتازة';
           else if (volume >= 5000000) liquidity = 'جيدة جداً';
           else if (volume >= 1000000) liquidity = 'جيدة';
           resolve({
-            suitable, volume, volatility: parseFloat(volatility),
-            change: parseFloat(change), high, low, close, open,
-            liquidity, reasons: { volume: volOk, atr: atrOk, price: priceOk }
+            suitable: volOk && atrOk && priceOk, volume,
+            volatility: parseFloat(volatility), change: parseFloat(change),
+            high, low, close, open, liquidity,
+            reasons: { volume: volOk, atr: atrOk, price: priceOk }
           });
         } catch(e) { resolve(null); }
       });
@@ -357,21 +347,14 @@ async function getYahooPrice(symbol) {
   return null;
 }
 
-// ─── ✅ Smart Price: Binance → Yahoo → Polygon ──
-// الترتيب: كريبتو أولاً، ثم Yahoo، ثم Polygon كـ fallback نهائي
+// ─── Smart Price: Binance → Yahoo → Polygon ────
 async function getStockPrice(symbol) {
-  // 1. Binance (للكريبتو)
   const binancePrice = await getBinanceSpotPrice(symbol);
-  if (binancePrice) {
-    console.log(`💹 Binance: ${symbol} = $${binancePrice}`);
-    return binancePrice;
-  }
+  if (binancePrice) { console.log(`💹 Binance: ${symbol} = $${binancePrice}`); return binancePrice; }
 
-  // 2. Yahoo Finance (أسهم عادية + extended hours)
   const yahooPrice = await getYahooPrice(symbol);
   if (yahooPrice) return yahooPrice;
 
-  // 3. Polygon.io (fallback للأسهم OTC وكل حاجة تانية)
   const polygonPrice = await getPolygonPrice(symbol);
   if (polygonPrice) return polygonPrice;
 
@@ -392,7 +375,7 @@ async function updateCurrentPrices() {
       const price = await getStockPrice(signal.symbol);
       if (!price) { console.log(`⚠️ لا سعر لـ ${signal.symbol}`); continue; }
 
-      const update = { currentPrice: price };
+      const update = { currentPrice: price, priceSession: session };
 
       if (signal.action === 'BUY') {
         if (signal.tp && price >= signal.tp) {
@@ -514,7 +497,7 @@ app.get('/api/prices', auth, async (req, res) => {
   res.json(result);
 });
 
-// ─── TradingView Webhook ───────────────────────
+// ─── ✅ TradingView Webhook ─────────────────────
 app.post('/webhook', async (req, res) => {
   try {
     const data = req.body;
@@ -528,28 +511,45 @@ app.post('/webhook', async (req, res) => {
       return res.json({ ok: true });
     }
 
-    const entry = parseFloat(data.price);
-    const sl    = parseFloat(data.sl) || parseFloat((entry * 0.98).toFixed(4));
-    const tp    = parseFloat(data.tp) || parseFloat((entry * 1.05).toFixed(4));
+    const entry   = parseFloat(data.price);
+    const sl      = parseFloat(data.sl) || parseFloat((entry * 0.98).toFixed(4));
+    const tp      = parseFloat(data.tp) || parseFloat((entry * 1.05).toFixed(4));
+    const session = getMarketSession();
 
     const signal = await Signal.create({
       symbol: data.symbol.toUpperCase(), action: data.action.toUpperCase(),
       price: entry, sl, tp,
-      strategy: data.strategy || 'TradingView',
-      status: 'open', receivedAt: new Date()
+      strategy:     data.strategy || 'TradingView',
+      priceSession: session,
+      status:       'open',
+      receivedAt:   new Date()
     });
 
-    console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | SL:$${sl} | TP:$${tp}`);
+    console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | جلسة: ${session}`);
+
+    // ✅ جيب السعر الحالي فوراً حسب الجلسة الحالية
+    getStockPrice(signal.symbol).then(async (livePrice) => {
+      if (livePrice) {
+        await Signal.findByIdAndUpdate(signal._id, {
+          currentPrice: livePrice,
+          priceSession: session
+        });
+        console.log(`⚡ السعر الفوري لـ ${signal.symbol}: $${livePrice} (${session})`);
+      }
+    }).catch(console.error);
+
     updateSentiment(signal).catch(console.error);
 
     const isBuy = signal.action === 'BUY';
     const slPct = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
     const tpPct = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
+    const sessionLabel = session === 'pre' ? '🌅 قبل السوق' : session === 'post' ? '🌙 بعد السوق' : '📈 خلال السوق';
     const tgMsg = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
                   '💰 دخول: <b>$' + entry + '</b>\n' +
                   '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
                   '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
-                  '⚡ استراتيجية: ' + signal.strategy + '\n\n' +
+                  '⚡ استراتيجية: ' + signal.strategy + '\n' +
+                  sessionLabel + '\n\n' +
                   '🕐 ' + new Date().toLocaleString('ar');
     sendTelegram(tgMsg).catch(console.error);
 
