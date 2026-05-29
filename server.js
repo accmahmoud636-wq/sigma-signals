@@ -503,12 +503,15 @@ app.post('/webhook', async (req, res) => {
     const data = req.body;
     if (!data.action || !data.symbol) return res.status(400).json({ error: 'بيانات ناقصة' });
 
-    if (['STOPPED','CLOSED'].includes(data.action.toUpperCase())) {
+    if (['STOPPED','CLOSED','CLOSE'].includes(data.action.toUpperCase())) {
+      const result    = (data.result || '').toUpperCase();
+      const newStatus = result === 'TP' ? 'target' : 'stopped';
       await Signal.findOneAndUpdate(
         { symbol: data.symbol.toUpperCase(), status: 'open' },
-        { status: 'stopped', closedAt: new Date(), closePrice: data.price }
+        { status: newStatus, closedAt: new Date(), closePrice: data.price }
       );
-      return res.json({ ok: true });
+      console.log(`🔒 ${data.action} ${data.symbol} | Result: ${result} → ${newStatus}`);
+      return res.json({ ok: true, status: newStatus });
     }
 
     const entry   = parseFloat(data.price);
