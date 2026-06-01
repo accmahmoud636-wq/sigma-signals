@@ -867,5 +867,24 @@ app.get('/admin',    (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'settings.html')));
 app.get('/reports',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'reports.html')));
 
+// ─── Ping Endpoint ─────────────────────────────
+app.get('/ping', (req, res) => res.json({ ok: true, time: new Date() }));
+
+// ─── Self-Ping كل 4 دقائق ──────────────────────
+function selfPing() {
+  https.get('https://sigma-signals-by-mahmoud-ahmed.onrender.com/ping', (res) => {
+    console.log(`🏓 Self-ping: ${res.statusCode}`);
+  }).on('error', (e) => {
+    console.log(`⚠️ Self-ping failed: ${e.message}`);
+  });
+}
+
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`✅ MILLIONAIRE شغال على بورت ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`✅ MILLIONAIRE شغال على بورت ${PORT}`);
+  // ابدأ Self-ping بعد دقيقة من الشغل
+  setTimeout(() => {
+    selfPing();
+    setInterval(selfPing, 4 * 60 * 1000); // كل 4 دقائق
+  }, 60000);
+});
