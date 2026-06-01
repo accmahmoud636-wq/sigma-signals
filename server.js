@@ -196,7 +196,7 @@ async function getBinanceSpotPrice(symbol) {
   });
 }
 
-// ─── ✅ Bybit Trading ──────────────────────────
+// ─── Bybit Config ──────────────────────────────
 const BYBIT_API_KEY    = process.env.BYBIT_API_KEY    || '';
 const BYBIT_API_SECRET = process.env.BYBIT_API_SECRET || '';
 const BYBIT_BASE_URL   = process.env.BYBIT_TESTNET === 'true'
@@ -204,69 +204,18 @@ const BYBIT_BASE_URL   = process.env.BYBIT_TESTNET === 'true'
   : 'api.bybit.com';
 
 function generateBybitSignature(timestamp, params) {
-  const recvWindow = '5000';
+  const recvWindow  = '5000';
   const queryString = timestamp + BYBIT_API_KEY + recvWindow + JSON.stringify(params);
   return crypto.createHmac('sha256', BYBIT_API_SECRET).update(queryString).digest('hex');
 }
 
-async function placeBybitOrder(action, symbol, amount) {
-  if (!BYBIT_API_KEY || !BYBIT_API_SECRET) {
-    console.log('⚠️ Bybit API غير مضبوط');
-    return null;
-  }
-
-  // تأكد إن الرمز ينتهي بـ USDT
-  const bybitSymbol = symbol.toUpperCase().endsWith('USDT')
-    ? symbol.toUpperCase()
-    : symbol.toUpperCase() + 'USDT';
-
-  const params = {
-    category:  'spot',
-    symbol:    bybitSymbol,
-    side:      action === 'BUY' ? 'Buy' : 'Sell',
-    orderType: 'Market',
-    qty:       amount.toString()
-  };
-
-  const timestamp = Date.now().toString();
-  const signature = generateBybitSignature(timestamp, params);
-
-  return new Promise((resolve) => {
-    const body = JSON.stringify(params);
-    const options = {
-      hostname: BYBIT_BASE_URL,
-      path:     '/v5/order/create',
-      method:   'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'X-BAPI-API-KEY':    BYBIT_API_KEY,
-        'X-BAPI-TIMESTAMP':  timestamp,
-        'X-BAPI-SIGN':       signature,
-        'X-BAPI-RECV-WINDOW':'5000'
-      }
-    };
-
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.retCode === 0) {
-            console.log(`✅ Bybit Order: ${action} ${bybitSymbol} qty:${amount}`);
-          } else {
-            console.error(`❌ Bybit Error: ${json.retMsg}`);
-          }
-          resolve(json);
-        } catch(e) { resolve(null); }
-      });
-    });
-    req.on('error', (e) => { console.error('❌ Bybit Request Error:', e.message); resolve(null); });
-    req.write(body);
-    req.end();
-  });
+function generateBybitGetSignature(timestamp, queryString) {
+  const recvWindow = '5000';
+  const str        = timestamp + BYBIT_API_KEY + recvWindow + queryString;
+  return crypto.createHmac('sha256', BYBIT_API_SECRET).update(str).digest('hex');
 }
 
+// ─── جيب سعر Bybit ─────────────────────────────
 async function getBybitPrice(symbol) {
   const bybitSymbol = symbol.toUpperCase().endsWith('USDT')
     ? symbol.toUpperCase()
@@ -287,16 +236,142 @@ async function getBybitPrice(symbol) {
   });
 }
 
+// ─── ✅ جيب رصيد USDT المتاح ───────────────────
+async function getBybitBalance() {
+  if (!BYBIT_API_KEY || !BYBIT_API_SECRET) return null;
+
+  const timestamp  = Date.now().toString();
+  const qs         = 'accountType=UNIFIED';
+  const signature  = generateBybitGetSignature(timestamp, qs);
+
+  return new Promise((resolve) => {
+    const options = {
+      hostname: BYBIT_BASE_URL,
+      path:     '/v5/account/wallet-balance?' + qs,
+      method:   'GET',
+      headers: {
+        'X-BAPI-API-KEY':     BYBIT_API_KEY,
+        'X-BAPI-TIMESTAMP':   timestamp,
+        'X-BAPI-SIGN':        signature,
+        'X-BAPI-RECV-WINDOW': '5000'
+      }
+    };
+
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json  = JSON.parse(data);
+          const coins = json?.result?.list?.[0]?.coin || [];
+          const usdt  = coins.find(c => c.coin === 'USDT');
+          const avail = parseFloat(usdt?.availableToWithdraw || usdt?.walletBalance || 0);
+          console.log(`💰 رصيد USDT المتاح: $${avail}`);
+          resolve(avail);
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+// ─── ✅ تنفيذ أوردر Bybit ──────────────────────
+async function placeBybitOrder(action, symbol) {
+  if (!BYBIT_API_KEY || !BYBIT_API_SECRET) {
+    console.log('⚠️ Bybit API غير مضبوط');
+    return null;
+  }
+
+  const bybitSymbol = symbol.toUpperCase().endsWith('USDT')
+    ? symbol.toUpperCase()
+    : symbol.toUpperCase() + 'USDT';
+
+  // جيب السعر الحالي
+  const currentPrice = await getBybitPrice(symbol);
+  if (!currentPrice) {
+    console.error('❌ مش قادر يجيب السعر من Bybit');
+    return null;
+  }
+
+  // ─── حساب الكمية ───────────────────────────
+  let qty;
+  const useAllBalance = process.env.USE_ALL_BALANCE === 'true';
+
+  if (useAllBalance) {
+    // اشتري بكل الرصيد المتاح
+    const balance = await getBybitBalance();
+    if (!balance || balance < 1) {
+      console.error('❌ الرصيد غير كافٍ أو لا يمكن جلبه');
+      return null;
+    }
+    const useAmount = balance - 1; // نترك 1 دولار للفيس
+    qty = (useAmount / currentPrice).toFixed(6);
+    console.log(`💰 شراء بكل الرصيد: $${useAmount} → ${qty} ${bybitSymbol} @ $${currentPrice}`);
+  } else {
+    // استخدم TRADE_AMOUNT بالدولار
+    const tradeAmount = parseFloat(process.env.TRADE_AMOUNT) || 10;
+    qty = (tradeAmount / currentPrice).toFixed(6);
+    console.log(`💵 شراء بـ $${tradeAmount} → ${qty} ${bybitSymbol} @ $${currentPrice}`);
+  }
+
+  const params = {
+    category:  'spot',
+    symbol:    bybitSymbol,
+    side:      action === 'BUY' ? 'Buy' : 'Sell',
+    orderType: 'Market',
+    qty:       qty
+  };
+
+  const timestamp = Date.now().toString();
+  const signature = generateBybitSignature(timestamp, params);
+
+  return new Promise((resolve) => {
+    const body    = JSON.stringify(params);
+    const options = {
+      hostname: BYBIT_BASE_URL,
+      path:     '/v5/order/create',
+      method:   'POST',
+      headers: {
+        'Content-Type':       'application/json',
+        'X-BAPI-API-KEY':     BYBIT_API_KEY,
+        'X-BAPI-TIMESTAMP':   timestamp,
+        'X-BAPI-SIGN':        signature,
+        'X-BAPI-RECV-WINDOW': '5000'
+      }
+    };
+
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.retCode === 0) {
+            console.log(`✅ Bybit Order نجح: ${action} ${bybitSymbol} qty:${qty}`);
+          } else {
+            console.error(`❌ Bybit Error: ${json.retMsg}`);
+          }
+          resolve(json);
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', (e) => { console.error('❌ Bybit Request Error:', e.message); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
 // ─── NewsAPI ────────────────────────────────────
 const NEWS_API_KEY = process.env.NEWS_API_KEY || '854ddf963cba41048bf747785ac26ebd';
 
 async function getNewsForSymbol(symbol) {
   const query = symbol.replace(/USDT$/i,'').replace(/USD$/i,'');
   return new Promise((resolve) => {
-    const path = `/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${NEWS_API_KEY}`;
+    const p = `/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${NEWS_API_KEY}`;
     const options = {
       hostname: 'newsapi.org',
-      path,
+      path: p,
       method: 'GET',
       headers: { 'User-Agent': 'Mozilla/5.0' }
     };
@@ -440,7 +515,6 @@ async function getYahooPrice(symbol) {
 
 // ─── Smart Price ───────────────────────────────
 async function getStockPrice(symbol) {
-  // لو الرمز crypto جرب Bybit أولاً لو مفعّل
   const exchange = process.env.EXCHANGE || 'binance';
   if (exchange === 'bybit' && BYBIT_API_KEY) {
     const bybitPrice = await getBybitPrice(symbol);
@@ -633,11 +707,10 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | جلسة: ${session} | منصة: ${exchange}`);
 
-    // ─── تنفيذ أوردر حقيقي ─────────────────────
-    const tradingEnabled = process.env.BYBIT_TRADING === 'true' || process.env.BINANCE_TRADING === 'true';
-    if (tradingEnabled && BYBIT_API_KEY && exchange === 'bybit') {
-      const tradeAmount = parseFloat(process.env.TRADE_AMOUNT) || 10;
-      placeBybitOrder(signal.action, signal.symbol, tradeAmount).then(async (result) => {
+    // ─── تنفيذ أوردر Bybit ─────────────────────
+    const bybitEnabled = process.env.BYBIT_TRADING === 'true';
+    if (bybitEnabled && BYBIT_API_KEY && exchange === 'bybit') {
+      placeBybitOrder(signal.action, signal.symbol).then(async (result) => {
         if (result) {
           await Signal.findByIdAndUpdate(signal._id, { tradeResult: result });
           console.log(`🤖 Bybit تداول آلي: ${signal.action} ${signal.symbol}`);
@@ -649,24 +722,26 @@ app.post('/webhook', async (req, res) => {
     getStockPrice(signal.symbol).then(async (livePrice) => {
       if (livePrice) {
         await Signal.findByIdAndUpdate(signal._id, { currentPrice: livePrice, priceSession: session });
-        console.log(`⚡ السعر الفوري لـ ${signal.symbol}: $${livePrice} (${session})`);
+        console.log(`⚡ السعر الفوري لـ ${signal.symbol}: $${livePrice}`);
       }
     }).catch(console.error);
 
     updateSentiment(signal).catch(console.error);
 
     // ─── Telegram ──────────────────────────────
-    const isBuy    = signal.action === 'BUY';
-    const slPct    = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
-    const tpPct    = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
-    const sessionLabel = session === 'pre' ? '🌅 قبل السوق' : session === 'post' ? '🌙 بعد السوق' : '📈 خلال السوق';
+    const isBuy        = signal.action === 'BUY';
+    const slPct        = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
+    const tpPct        = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
+    const sessionLabel  = session === 'pre' ? '🌅 قبل السوق' : session === 'post' ? '🌙 بعد السوق' : '📈 خلال السوق';
     const exchangeLabel = exchange === 'bybit' ? '🟡 Bybit' : '🟠 Binance';
+    const balanceMode   = process.env.USE_ALL_BALANCE === 'true' ? '💰 كل الرصيد' : `💵 $${process.env.TRADE_AMOUNT || 10}`;
     const tgMsg = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
                   '💰 دخول: <b>$' + entry + '</b>\n' +
                   '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
                   '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
                   '⚡ استراتيجية: ' + signal.strategy + '\n' +
-                  exchangeLabel + ' | ' + sessionLabel + '\n\n' +
+                  exchangeLabel + ' | ' + balanceMode + '\n' +
+                  sessionLabel + '\n\n' +
                   '🕐 ' + new Date().toLocaleString('ar');
     sendTelegram(tgMsg).catch(console.error);
 
@@ -774,13 +849,16 @@ app.post('/api/sentiment/:id/refresh', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── ✅ Bybit Status API ───────────────────────
+// ─── Bybit Status API ──────────────────────────
 app.get('/api/bybit/status', auth, adminOnly, async (req, res) => {
-  const configured = !!(BYBIT_API_KEY && BYBIT_API_SECRET);
-  const exchange   = process.env.EXCHANGE || 'binance';
-  const trading    = process.env.BYBIT_TRADING === 'true';
-  const testnet    = process.env.BYBIT_TESTNET === 'true';
-  res.json({ configured, exchange, trading, testnet, baseUrl: BYBIT_BASE_URL });
+  const configured    = !!(BYBIT_API_KEY && BYBIT_API_SECRET);
+  const exchange      = process.env.EXCHANGE || 'binance';
+  const trading       = process.env.BYBIT_TRADING === 'true';
+  const testnet       = process.env.BYBIT_TESTNET === 'true';
+  const useAllBalance = process.env.USE_ALL_BALANCE === 'true';
+  let balance = null;
+  if (configured) balance = await getBybitBalance().catch(() => null);
+  res.json({ configured, exchange, trading, testnet, useAllBalance, balance, baseUrl: BYBIT_BASE_URL });
 });
 
 // ─── Pages ─────────────────────────────────────
