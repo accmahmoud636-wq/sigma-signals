@@ -51,7 +51,7 @@ const SignalSchema = new mongoose.Schema({
   sl:             Number,
   tp:             Number,
   currentPrice:   Number,
-  priceSession:   { type: String, default: null }, // pre / market / post
+  priceSession:   { type: String, default: null },
   strategy:       { type: String, default: 'TradingView' },
   status:         { type: String, default: 'open', enum: ['open','target','stopped'] },
   closePrice:     Number,
@@ -62,7 +62,9 @@ const SignalSchema = new mongoose.Schema({
   sentimentNews:  { type: Array,   default: [] },
   sentimentAt:    { type: Date,    default: null },
   analysis:       { type: Object,  default: null },
-  analysisAt:     { type: Date,    default: null }
+  analysisAt:     { type: Date,    default: null },
+  exchange:       { type: String,  default: null },
+  tradeResult:    { type: Object,  default: null }
 }, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({
@@ -194,6 +196,97 @@ async function getBinanceSpotPrice(symbol) {
   });
 }
 
+// ─── ✅ Bybit Trading ──────────────────────────
+const BYBIT_API_KEY    = process.env.BYBIT_API_KEY    || '';
+const BYBIT_API_SECRET = process.env.BYBIT_API_SECRET || '';
+const BYBIT_BASE_URL   = process.env.BYBIT_TESTNET === 'true'
+  ? 'api-testnet.bybit.com'
+  : 'api.bybit.com';
+
+function generateBybitSignature(timestamp, params) {
+  const recvWindow = '5000';
+  const queryString = timestamp + BYBIT_API_KEY + recvWindow + JSON.stringify(params);
+  return crypto.createHmac('sha256', BYBIT_API_SECRET).update(queryString).digest('hex');
+}
+
+async function placeBybitOrder(action, symbol, amount) {
+  if (!BYBIT_API_KEY || !BYBIT_API_SECRET) {
+    console.log('⚠️ Bybit API غير مضبوط');
+    return null;
+  }
+
+  // تأكد إن الرمز ينتهي بـ USDT
+  const bybitSymbol = symbol.toUpperCase().endsWith('USDT')
+    ? symbol.toUpperCase()
+    : symbol.toUpperCase() + 'USDT';
+
+  const params = {
+    category:  'spot',
+    symbol:    bybitSymbol,
+    side:      action === 'BUY' ? 'Buy' : 'Sell',
+    orderType: 'Market',
+    qty:       amount.toString()
+  };
+
+  const timestamp = Date.now().toString();
+  const signature = generateBybitSignature(timestamp, params);
+
+  return new Promise((resolve) => {
+    const body = JSON.stringify(params);
+    const options = {
+      hostname: BYBIT_BASE_URL,
+      path:     '/v5/order/create',
+      method:   'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'X-BAPI-API-KEY':    BYBIT_API_KEY,
+        'X-BAPI-TIMESTAMP':  timestamp,
+        'X-BAPI-SIGN':       signature,
+        'X-BAPI-RECV-WINDOW':'5000'
+      }
+    };
+
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.retCode === 0) {
+            console.log(`✅ Bybit Order: ${action} ${bybitSymbol} qty:${amount}`);
+          } else {
+            console.error(`❌ Bybit Error: ${json.retMsg}`);
+          }
+          resolve(json);
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', (e) => { console.error('❌ Bybit Request Error:', e.message); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function getBybitPrice(symbol) {
+  const bybitSymbol = symbol.toUpperCase().endsWith('USDT')
+    ? symbol.toUpperCase()
+    : symbol.toUpperCase() + 'USDT';
+
+  return new Promise((resolve) => {
+    https.get(`https://${BYBIT_BASE_URL}/v5/market/tickers?category=spot&symbol=${bybitSymbol}`, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json  = JSON.parse(data);
+          const price = json?.result?.list?.[0]?.lastPrice;
+          resolve(price ? parseFloat(price) : null);
+        } catch(e) { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
 // ─── NewsAPI ────────────────────────────────────
 const NEWS_API_KEY = process.env.NEWS_API_KEY || '854ddf963cba41048bf747785ac26ebd';
 
@@ -282,12 +375,11 @@ async function updateSentiment(signal) {
   }
 }
 
-// ─── Yahoo Finance — Pre/Post/Market ───────────
+// ─── Yahoo Finance ─────────────────────────────
 async function getYahooPrice(symbol) {
   let yahooSym = symbol;
   if (/USDT$/i.test(symbol)) yahooSym = symbol.replace(/USDT$/i, '') + '-USD';
 
-  // محاولة 1: query1 v7
   const price1 = await new Promise((resolve) => {
     const options = {
       hostname: 'query1.finance.yahoo.com',
@@ -316,7 +408,6 @@ async function getYahooPrice(symbol) {
 
   if (price1) { console.log(`📈 Yahoo v7: ${symbol} = $${price1}`); return price1; }
 
-  // محاولة 2: query2 v8
   const price2 = await new Promise((resolve) => {
     const options = {
       hostname: 'query2.finance.yahoo.com',
@@ -347,8 +438,15 @@ async function getYahooPrice(symbol) {
   return null;
 }
 
-// ─── Smart Price: Binance → Yahoo → Polygon ────
+// ─── Smart Price ───────────────────────────────
 async function getStockPrice(symbol) {
+  // لو الرمز crypto جرب Bybit أولاً لو مفعّل
+  const exchange = process.env.EXCHANGE || 'binance';
+  if (exchange === 'bybit' && BYBIT_API_KEY) {
+    const bybitPrice = await getBybitPrice(symbol);
+    if (bybitPrice) { console.log(`🟡 Bybit: ${symbol} = $${bybitPrice}`); return bybitPrice; }
+  }
+
   const binancePrice = await getBinanceSpotPrice(symbol);
   if (binancePrice) { console.log(`💹 Binance: ${symbol} = $${binancePrice}`); return binancePrice; }
 
@@ -514,46 +612,61 @@ app.post('/webhook', async (req, res) => {
       return res.json({ ok: true, status: newStatus });
     }
 
-    const entry   = parseFloat(data.price);
-    const sl      = parseFloat(data.sl) || parseFloat((entry * 0.98).toFixed(4));
-    const tp      = parseFloat(data.tp) || parseFloat((entry * 1.05).toFixed(4));
-    const session = getMarketSession();
+    const entry    = parseFloat(data.price);
+    const sl       = parseFloat(data.sl) || parseFloat((entry * 0.98).toFixed(4));
+    const tp       = parseFloat(data.tp) || parseFloat((entry * 1.05).toFixed(4));
+    const session  = getMarketSession();
+    const exchange = process.env.EXCHANGE || 'binance';
 
     const signal = await Signal.create({
-      symbol: data.symbol.toUpperCase(), action: data.action.toUpperCase(),
-      price: entry, sl, tp,
+      symbol:       data.symbol.toUpperCase(),
+      action:       data.action.toUpperCase(),
+      price:        entry,
+      sl, tp,
       currentPrice: entry,
       strategy:     data.strategy || 'TradingView',
       priceSession: session,
       status:       'open',
-      receivedAt:   new Date()
+      receivedAt:   new Date(),
+      exchange
     });
 
-    console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | جلسة: ${session}`);
+    console.log(`📡 ${signal.action} ${signal.symbol} @ $${entry} | جلسة: ${session} | منصة: ${exchange}`);
 
-    // ✅ جيب السعر الحالي فوراً حسب الجلسة الحالية
+    // ─── تنفيذ أوردر حقيقي ─────────────────────
+    const tradingEnabled = process.env.BYBIT_TRADING === 'true' || process.env.BINANCE_TRADING === 'true';
+    if (tradingEnabled && BYBIT_API_KEY && exchange === 'bybit') {
+      const tradeAmount = parseFloat(process.env.TRADE_AMOUNT) || 10;
+      placeBybitOrder(signal.action, signal.symbol, tradeAmount).then(async (result) => {
+        if (result) {
+          await Signal.findByIdAndUpdate(signal._id, { tradeResult: result });
+          console.log(`🤖 Bybit تداول آلي: ${signal.action} ${signal.symbol}`);
+        }
+      }).catch(console.error);
+    }
+
+    // ─── السعر الفوري ──────────────────────────
     getStockPrice(signal.symbol).then(async (livePrice) => {
       if (livePrice) {
-        await Signal.findByIdAndUpdate(signal._id, {
-          currentPrice: livePrice,
-          priceSession: session
-        });
+        await Signal.findByIdAndUpdate(signal._id, { currentPrice: livePrice, priceSession: session });
         console.log(`⚡ السعر الفوري لـ ${signal.symbol}: $${livePrice} (${session})`);
       }
     }).catch(console.error);
 
     updateSentiment(signal).catch(console.error);
 
-    const isBuy = signal.action === 'BUY';
-    const slPct = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
-    const tpPct = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
+    // ─── Telegram ──────────────────────────────
+    const isBuy    = signal.action === 'BUY';
+    const slPct    = entry > 0 && sl > 0 ? ((Math.abs(entry - sl) / entry) * 100).toFixed(2) : '0';
+    const tpPct    = entry > 0 && tp > 0 ? ((Math.abs(tp - entry) / entry) * 100).toFixed(2) : '0';
     const sessionLabel = session === 'pre' ? '🌅 قبل السوق' : session === 'post' ? '🌙 بعد السوق' : '📈 خلال السوق';
+    const exchangeLabel = exchange === 'bybit' ? '🟡 Bybit' : '🟠 Binance';
     const tgMsg = (isBuy ? '🟢 شراء' : '🔴 بيع') + ' <b>' + signal.symbol + '</b>\n\n' +
                   '💰 دخول: <b>$' + entry + '</b>\n' +
                   '🎯 هدف: <b>$' + tp + '</b> (+' + tpPct + '%)\n' +
                   '🛑 وقف: <b>$' + sl + '</b> (-' + slPct + '%)\n' +
                   '⚡ استراتيجية: ' + signal.strategy + '\n' +
-                  sessionLabel + '\n\n' +
+                  exchangeLabel + ' | ' + sessionLabel + '\n\n' +
                   '🕐 ' + new Date().toLocaleString('ar');
     sendTelegram(tgMsg).catch(console.error);
 
@@ -659,6 +772,15 @@ app.post('/api/sentiment/:id/refresh', auth, async (req, res) => {
     updateSentiment(sig).catch(console.error);
     res.json({ ok: true, message: 'جارٍ التحليل...' });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── ✅ Bybit Status API ───────────────────────
+app.get('/api/bybit/status', auth, adminOnly, async (req, res) => {
+  const configured = !!(BYBIT_API_KEY && BYBIT_API_SECRET);
+  const exchange   = process.env.EXCHANGE || 'binance';
+  const trading    = process.env.BYBIT_TRADING === 'true';
+  const testnet    = process.env.BYBIT_TESTNET === 'true';
+  res.json({ configured, exchange, trading, testnet, baseUrl: BYBIT_BASE_URL });
 });
 
 // ─── Pages ─────────────────────────────────────
