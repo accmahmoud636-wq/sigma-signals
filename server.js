@@ -4,6 +4,7 @@ const path     = require('path');
 const crypto   = require('crypto');
 const mongoose = require('mongoose');
 const https    = require('https');
+const { startEmailImporter } = require('./emailImporter');
 
 const app    = express();
 const server = http.createServer(app);
@@ -64,7 +65,12 @@ const SignalSchema = new mongoose.Schema({
   analysis:       { type: Object,  default: null },
   analysisAt:     { type: Date,    default: null },
   exchange:       { type: String,  default: null },
-  tradeResult:    { type: Object,  default: null }
+  tradeResult:    { type: Object,  default: null },
+  // ─── إشارات مستوردة من إيميل TradingView ───
+  source:         { type: String,  default: 'webhook' },   // webhook | email
+  sourceId:       { type: String,  index: { unique: true, sparse: true } },
+  tp2:            Number,
+  rsi:            Number
 }, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({
@@ -577,6 +583,17 @@ mongoose.connection.once('open', () => {
   initAdmin();
   updateCurrentPrices();
   setInterval(updateCurrentPrices, 60000);
+
+  // ─── قراءة إيميلات TradingView لحظياً (عرض فقط — بدون تنفيذ صفقات) ───
+  startEmailImporter(Signal, {
+    onNew: (s) => sendTelegram(
+      '📧 إشارة من الإيميل <b>' + s.symbol + '</b>\n\n' +
+      '💰 دخول: <b>$' + s.price + '</b>\n' +
+      (s.tp  ? '🎯 هدف 1: <b>$' + s.tp  + '</b>\n' : '') +
+      (s.tp2 ? '🎯 هدف 2: <b>$' + s.tp2 + '</b>\n' : '') +
+      '⚡ ' + s.strategy
+    )
+  });
 });
 
 // ─── Auth ──────────────────────────────────────
