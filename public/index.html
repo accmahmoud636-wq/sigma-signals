@@ -38,6 +38,9 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
 .header-actions{display:flex;align-items:center;gap:6px}
 .btn-icon{background:transparent;border:1px solid var(--border2);color:var(--muted2);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .btn-icon:hover{border-color:var(--gold);color:var(--gold)}
+.btn-bot{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#d4af37,#f0d36b);color:#111;font-family:var(--ar);font-weight:700;font-size:13px;padding:7px 16px;border-radius:8px;text-decoration:none;box-shadow:0 0 12px rgba(212,175,55,.35);white-space:nowrap;transition:transform .15s}
+.btn-bot:hover{transform:translateY(-1px)}
+@media(max-width:600px){.btn-bot{padding:5px 10px;font-size:11px}}
 .btn-logout{background:transparent;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--ar);font-size:11px}
 .view-toggle{display:flex;gap:4px;background:var(--bg3);padding:3px;border-radius:7px;border:1px solid var(--border)}
 .vbtn{padding:3px 10px;border-radius:5px;border:none;background:transparent;color:var(--muted2);font-size:11px;cursor:pointer;transition:all .15s}
@@ -147,6 +150,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16p
   </div>
   <div class="mkt mkt-closed" id="mkt"></div>
   <div class="header-actions">
+    <a href="/bot" class="btn-bot" id="btn-bot" style="display:none">🤖 التداول الآلي</a>
     <div class="view-toggle">
       <button class="vbtn active" id="vbtn-cards" onclick="setView('cards',this)">⊞</button>
       <button class="vbtn" id="vbtn-table" onclick="setView('table',this)">☰</button>
@@ -688,6 +692,7 @@ if(Notification.permission==='granted') document.getElementById('notif-btn').sty
 
 // ── Webhook bar (Admin) ──
 if(localStorage.getItem('mm_role')==='admin'){
+  document.getElementById('btn-bot').style.display='inline-flex';
   const bar=document.createElement('div');
   bar.style.cssText='background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0';
   bar.innerHTML='<span style="color:var(--muted2)">Webhook:</span><span style="font-family:var(--mono);color:var(--blue);cursor:pointer;background:var(--bg3);border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="navigator.clipboard?.writeText(this.textContent);showToast(\'✓ تم النسخ\')">'+(location.origin+'/webhook')+'</span>'
