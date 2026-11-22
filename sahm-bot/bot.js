@@ -78,6 +78,10 @@ async function openBrowser() {
     headless,
     viewport: { width: 1400, height: 900 },
     locale: 'ar-SA',
+    timezoneId: 'Asia/Riyadh',
+    // بعض المواقع بترفض المتصفح لما يبان إنه "Headless"
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    args: ['--disable-blink-features=AutomationControlled'],
   });
   page = ctx.pages()[0] || (await ctx.newPage());
   await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' });
@@ -237,15 +241,19 @@ const setLogin = (loginState, loginMsg) =>
 
 async function openLoginModal() {
   await ensureBrowser();
-  await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' });
-  await sleep(2500);
+  await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+  await sleep(3000);
   if (await isLoggedIn()) return 'already';
   await dismissPopups();
   const phoneIn = page.getByPlaceholder('رقم الهاتف').locator('visible=true').first();
   if (!(await phoneIn.isVisible().catch(() => false))) {
     // زرار التداول بيفتح نافذة الدخول لما تكون مش مسجل
     const btn = page.getByText(/التسجيل\s*\/\s*تسجيل الدخول/).locator('visible=true').first();
-    if (await btn.count()) await btn.click(); else await page.locator('button.trade-button').locator('visible=true').first().click();
+    const tb = page.locator('button.trade-button').locator('visible=true').first();
+    if (await btn.count()) await btn.click();
+    else if (await tb.count()) await tb.click();
+    else throw new Error('صفحة سهم ما فتحتش زي المتوقع');
     await phoneIn.waitFor({ state: 'visible', timeout: 10000 });
   }
   return phoneIn;
@@ -296,6 +304,12 @@ async function checkCommands() {
     else if (cmd.type === 'otp') await submitOtp(cmd.code);
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
+    // تشخيص: إيه اللي ظاهر في الصفحة
+    try {
+      const txt = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 300);
+      log(`🔍 الصفحة: ${page.url()} | العنوان: ${await page.title()} | النص: ${txt || '(فاضية)'}`, 'warn');
+      await page.screenshot({ path: path.join(SHOTS, `${Date.now()}-login-fail.png`) });
+    } catch (_) {}
     setLogin('error', 'فشل: ' + e.message.split('\n')[0].slice(0, 120));
   }
 }
