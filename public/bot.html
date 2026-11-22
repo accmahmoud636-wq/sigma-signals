@@ -113,7 +113,27 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
         </select>
       </div>
       <div class="conn bad" id="brokerConn">— غير متصل</div>
-      <div class="hint">تسجيل الدخول في سهم بيتم من نافذة البوت على جهازك (مرة واحدة). المنصة ما بتحفظش باسورد سهم.</div>
+
+      <div id="loginBox" style="margin-top:12px">
+        <label class="l">رقم الجوال المسجّل في سهم</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <span class="inp" style="width:70px;text-align:center">+966</span>
+          <input class="inp" id="sPhone" type="tel" placeholder="5xxxxxxxx" maxlength="10">
+        </div>
+        <div class="two field">
+          <select class="sel" id="sMethod"><option value="sms">رسالة نصية SMS</option><option value="whatsapp">واتساب</option></select>
+          <button class="btn btn-gold" onclick="sahmLogin()">🔑 دخول سهم</button>
+        </div>
+        <div id="otpBox" style="display:none">
+          <label class="l">رمز التحقق اللي وصلك</label>
+          <div class="two">
+            <input class="inp" id="sOtp" type="text" inputmode="numeric" maxlength="8" placeholder="123456" style="letter-spacing:4px;text-align:center">
+            <button class="btn btn-green" onclick="sahmOtp()">✔ تأكيد الرمز</button>
+          </div>
+        </div>
+        <div class="hint" id="loginMsg"></div>
+      </div>
+      <div class="hint">البوت لازم يكون شغال على الجهاز/السيرفر. رقم الجوال بيتحفظ في المنصة، ورمز التحقق ما بيتحفظش.</div>
 
       <div class="sub">تليجرام</div>
       <div class="field">
@@ -262,6 +282,8 @@ function fillForm(){
   $('autoBracket').checked = S.autoBracket !== false;
   $('live').checked = !S.dryRun;
   $('tgChatId').value = S.tgChatId || '';
+  if (S.sahmPhone && !$('sPhone').value) $('sPhone').value = S.sahmPhone;
+  if (S.sahmMethod) $('sMethod').value = S.sahmMethod;
   $('tgToken').value = S.tgToken || '';
   ['sizePct','tpPct','slPct'].forEach(k=>lbl(k,'%')); sizeUI();
 }
@@ -272,6 +294,11 @@ function renderStatus(){
   const bc = $('brokerConn');
   bc.className = 'conn ' + (logged ? 'ok' : online ? 'warn' : 'bad');
   bc.textContent = logged ? '✅ سهم متصل' : online ? '⚠️ البوت شغال — محتاج تسجيل دخول سهم' : '⛔ البوت مش شغال على الجهاز';
+  const st2 = S.loginState || 'idle';
+  $('otpBox').style.display = st2 === 'awaiting_otp' || st2 === 'verifying' ? 'block' : 'none';
+  const LM = {sending:'⏳ ', awaiting_otp:'📩 ', verifying:'⏳ ', success:'✅ ', error:'❌ '};
+  $('loginMsg').textContent = S.loginMsg ? (LM[st2]||'') + S.loginMsg : '';
+  $('loginMsg').style.color = st2==='error' ? 'var(--red)' : st2==='success' ? 'var(--green)' : 'var(--yellow)';
   const tc = $('tgConn');
   tc.className = 'conn ' + ((S.tgTokenSet && S.tgChatId) ? 'ok' : 'bad');
   tc.textContent = (S.tgTokenSet && S.tgChatId) ? '✅ تليجرام محفوظ' : '— بيانات تليجرام ناقصة';
@@ -346,6 +373,19 @@ async function loadLogs(){
   const L=await r.json(); if(!L.length) return;
   $('logs').innerHTML = L.map(l=>`<div class="log ${l.level}"><span class="t">[${new Date(l.at).toLocaleTimeString('ar')}]</span>${String(l.msg).replace(/</g,'&lt;')}</div>`).join('');
 }
+
+async function sahmLogin(){
+  const r = await fetch('/api/bot/sahm-login',{method:'POST',headers:H,body:JSON.stringify({phone:$('sPhone').value,method:$('sMethod').value})});
+  const j = await r.json(); if(!r.ok) return toast('❌ ' + (j.error||'فشل'));
+  S = j; renderStatus(); toast('📡 البوت بيفتح سهم ويطلب الرمز...'); fastPoll();
+}
+async function sahmOtp(){
+  const r = await fetch('/api/bot/sahm-otp',{method:'POST',headers:H,body:JSON.stringify({code:$('sOtp').value})});
+  const j = await r.json(); if(!r.ok) return toast('❌ ' + (j.error||'فشل'));
+  $('sOtp').value=''; S = j; renderStatus(); fastPoll();
+}
+// تحديث سريع لحالة الدخول لمدة دقيقتين
+let fp; function fastPoll(){ clearInterval(fp); let n=0; fp=setInterval(()=>{ load(false); if(++n>60 || ['success','error','idle'].includes(S.loginState)) clearInterval(fp); }, 2000); }
 
 async function sendTest(){
   const symbol=$('tSym').value.trim().toUpperCase(), price=Number($('tPrice').value);
