@@ -301,7 +301,9 @@ async function startLogin(phone, method) {
   if (sendR && !/"code"\s*:\s*"10000000"/.test(sendR)) {
     const msg = (sendR.match(/"msg"\s*:\s*"([^"]*)"/) || [])[1] || 'سهم رفضت إرسال الرمز';
     log('🔍 ' + sendR, 'warn');
-    return setLogin('error', 'سهم: ' + msg + (/متكرر/.test(msg) ? ' — استنى ساعة وجرب مرة واحدة' : ''));
+    // سهم بترفض إرسال الكود للسيرفر، بس نافذة الدخول بتفضل مستنية كود —
+    // فالكود اللي بتطلبه من موقع سهم في المتصفح بيشتغل هنا عادي
+    return setLogin('awaiting_otp', 'افتح موقع سهم في المتصفح واطلب الرمز هناك، وبعدين اكتبه هنا واضغط تأكيد');
   }
   try {
     let raw = '';
