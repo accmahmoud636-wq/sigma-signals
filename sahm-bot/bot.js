@@ -283,14 +283,28 @@ async function startLogin(phone, method) {
   if (m) await m.click();
   const send = await inFrames((f) => f.getByText('إرسال الرمز', { exact: true }), 5000);
   if (!send) throw new Error('زرار "إرسال الرمز" مش ظاهر');
+  // نسجّل ردود سيرفر سهم بعد الضغط عشان نعرف لو رفض الطلب
+  const resp = [];
+  const onResp = async (r) => {
+    const t = r.request().resourceType();
+    if (t !== 'xhr' && t !== 'fetch') return;
+    if (/google|analytics|sentry|clarity|facebook/i.test(r.url())) return;
+    let body = ''; try { body = (await r.text()).slice(0, 200); } catch (_) {}
+    resp.push(`${r.status()} ${r.url().replace(/^https?:\/\//, '').slice(0, 70)} → ${body}`);
+  };
+  page.on('response', onResp);
   await send.click();
-  await sleep(4000);
-  // تشخيص: إيه اللي ظاهر في نافذة الدخول بعد "إرسال الرمز"
+  await sleep(6000);
+  page.off('response', onResp);
   try {
-    const fr = page.frames().find((f) => f !== page.mainFrame() && f.url() && f.url() !== 'about:blank');
-    const raw = fr ? await fr.locator('body').innerText().catch(() => '') : '';
-    const val = await phoneIn.inputValue().catch(() => '?');
-    log(`🔍 بعد إرسال الرمز | الرقم في الخانة: ${val} | الإطار: ${fr ? fr.url().slice(0, 80) : 'مفيش'} | النص: ${raw.replace(/\s+/g, ' ').slice(0, 400)}`, 'warn');
+    let raw = '';
+    for (const f of page.frames()) {
+      if (await f.getByPlaceholder('رقم الهاتف').count().catch(() => 0)) {
+        raw = await f.locator('body').innerText().catch(() => ''); log(`🔍 إطار الدخول: ${f.url().slice(0, 80)}`, 'warn'); break;
+      }
+    }
+    log(`🔍 نص النافذة: ${raw.replace(/\s+/g, ' ').slice(0, 400) || '(فاضي)'}`, 'warn');
+    log(`🔍 ردود سهم (${resp.length}): ${resp.join(' || ').slice(0, 1200) || 'مفيش طلبات اتبعتت'}`, 'warn');
     await page.screenshot({ path: path.join(SHOTS, `${Date.now()}-after-send.png`) });
   } catch (_) {}
   await setLogin('awaiting_otp', `اتبعت رمز التحقق على ${method === 'whatsapp' ? 'واتساب' : 'رسالة SMS'} — اكتبه في المنصة`);
