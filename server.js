@@ -25,15 +25,20 @@ if (!MONGO_URI) {
 }
 
 // ─── Telegram Config ───────────────────────────
-const TG_TOKEN   = process.env.TG_TOKEN   || '8714883723:AAEgnEJhS7r7xe9Zk0Yc3Qp-gMxEGs-kbRw';
-const TG_CHAT_ID = process.env.TG_CHAT_ID || '1225882653';
+// بيانات تليجرام: من صفحة البوت في المنصة (لو اتحطت) وإلا من متغيرات Render
+let TG = { token: process.env.TG_TOKEN || '', chat: process.env.TG_CHAT_ID || '' };
+function setTelegramFromSettings(s) {
+  if (s && s.tgToken)  TG.token = s.tgToken;
+  if (s && s.tgChatId) TG.chat  = s.tgChatId;
+}
 
 async function sendTelegram(msg) {
+  if (!TG.token || !TG.chat) return null;
   return new Promise((resolve) => {
     const text    = encodeURIComponent(msg);
     const options = {
       hostname: 'api.telegram.org',
-      path: `/bot${TG_TOKEN}/sendMessage?chat_id=${TG_CHAT_ID}&text=${text}&parse_mode=HTML`,
+      path: `/bot${TG.token}/sendMessage?chat_id=${TG.chat}&text=${text}&parse_mode=HTML`,
       method: 'GET'
     };
     const req = https.request(options, res => {
@@ -111,9 +116,22 @@ const BotSettingsSchema = new mongoose.Schema({
   maxPerDay:  { type: Number,  default: 5 },
   session:    { type: String,  default: '' },      // نص اختيار الجلسة في سهم (فاضي = الافتراضي)
   heartbeat:  { type: Date,    default: null },    // آخر مرة البوت أكد إنه شغال
-  botMode:    { type: String,  default: null }
+  botMode:    { type: String,  default: null },
+  broker:     { type: String,  default: 'sahm' },  // الوسيط
+  sizeMode:   { type: String,  default: 'fixed', enum: ['fixed','percent'] },
+  sizePct:    { type: Number,  default: 10 },      // % من المحفظة لو sizeMode=percent
+  dailyProfitTarget: { type: Number, default: 0 }, // $ — 0 = بدون حد
+  dailyLossLimit:    { type: Number, default: 0 }, // $ — 0 = بدون حد
+  autoBracket:{ type: Boolean, default: true },    // إغلاق تلقائي: جني الربح/وقف الخسارة مع الشراء
+  tgToken:    { type: String,  default: '' },
+  tgChatId:   { type: String,  default: '' },
+  brokerLoggedIn: { type: Boolean, default: false },
+  account:    { type: Object,  default: null }     // {netAssets, buyingPower, currency, at} من البوت
 }, { timestamps: true, collection: 'botsettings' });
 const BotSettings = mongoose.model('BotSettings', BotSettingsSchema);
+const BotLog = mongoose.model('BotLog', new mongoose.Schema({
+  level: { type: String, default: 'info' }, msg: String, at: { type: Date, default: Date.now }
+}, { collection: 'botlogs' }));
 async function getBotSettings() {
   return BotSettings.findOneAndUpdate({ key: 'sahm' }, { $setOnInsert: { key: 'sahm' } }, { upsert: true, new: true });
 }
@@ -611,6 +629,7 @@ async function updateCurrentPrices() {
 
 mongoose.connection.once('open', () => {
   initAdmin();
+  getBotSettings().then(setTelegramFromSettings).catch(() => {});
   updateCurrentPrices();
   setInterval(updateCurrentPrices, 60000);
 
@@ -916,39 +935,88 @@ app.get('/reports',  (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/bot',      (req, res) => res.sendFile(path.join(__dirname, 'public', 'bot.html')));
 
 // ─── بوت سهم: الإعدادات والصفقات ─────────────
+const maskSettings = (s) => {
+  const o = s.toObject ? s.toObject() : { ...s };
+  o.tgTokenSet = !!o.tgToken;
+  o.tgToken = o.tgToken ? '••••' + o.tgToken.slice(-4) : '';
+  return o;
+};
+
 app.get('/api/bot/settings', auth, adminOnly, async (req, res) => {
-  try { res.json(await getBotSettings()); } catch(e) { res.status(500).json({ error: e.message }); }
+  try { res.json(maskSettings(await getBotSettings())); } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
   try {
     const b = req.body || {};
     const num = (v, min, max) => { const n = Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : undefined; };
+    const bool = (v) => typeof v === 'boolean' ? v : undefined;
+    const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : undefined;
     const upd = {
-      paused:    typeof b.paused === 'boolean' ? b.paused : undefined,
-      dryRun:    typeof b.dryRun === 'boolean' ? b.dryRun : undefined,
-      amount:    num(b.amount, 1, 100000),
+      paused: bool(b.paused), dryRun: bool(b.dryRun), autoBracket: bool(b.autoBracket),
+      broker:    ['sahm'].includes(b.broker) ? b.broker : undefined,
+      sizeMode:  ['fixed','percent'].includes(b.sizeMode) ? b.sizeMode : undefined,
+      sizePct:   num(b.sizePct, 0.1, 100),
+      amount:    num(b.amount, 1, 1000000),
       offsetPct: num(b.offsetPct, 0, 5),
       tpPct:     num(b.tpPct, 0.1, 100),
       slPct:     num(b.slPct, 0.1, 100),
       minPrice:  num(b.minPrice, 0, 100000),
       maxPrice:  num(b.maxPrice, 0, 100000),
       maxPerDay: num(b.maxPerDay, 0, 100),
-      session:   typeof b.session === 'string' ? b.session.trim().slice(0, 60) : undefined
+      dailyProfitTarget: num(b.dailyProfitTarget, 0, 10000000),
+      dailyLossLimit:    num(b.dailyLossLimit, 0, 10000000),
+      session:   str(b.session, 60),
+      tgChatId:  str(b.tgChatId, 40)
     };
+    // التوكن: بيتحفظ بس لو اتكتب توكن جديد (مش النسخة المخفية)
+    if (typeof b.tgToken === 'string' && b.tgToken.trim() && !b.tgToken.startsWith('••••')) upd.tgToken = b.tgToken.trim();
     Object.keys(upd).forEach(k => upd[k] === undefined && delete upd[k]);
     const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: upd }, { upsert: true, new: true });
-    if ('paused' in upd || 'dryRun' in upd)
-      sendTelegram(`🤖 بوت سهم: ${s.paused ? '⏸ متوقف' : '▶️ شغال'} | ${s.dryRun ? '🧪 تجربة' : '💵 تنفيذ حقيقي'}`).catch(() => {});
-    res.json(s);
+    setTelegramFromSettings(s);
+    if ('paused' in upd || 'dryRun' in upd) {
+      const m = `🤖 بوت سهم: ${s.paused ? '⏸ متوقف' : '▶️ شغال'} | ${s.dryRun ? '🧪 تجربة' : '💵 تنفيذ حقيقي'}`;
+      sendTelegram(m).catch(() => {});
+      BotLog.create({ msg: 'من المنصة: ' + m }).catch(() => {});
+    }
+    res.json(maskSettings(s));
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bot/test-telegram', auth, adminOnly, async (req, res) => {
+  const r = await sendTelegram('✅ تجربة: تليجرام متصل بمنصة MILLIONAIRE');
+  res.json({ ok: !!(r && r.ok), error: r && !r.ok ? r.description : (r ? null : 'بيانات تليجرام ناقصة') });
+});
+
+// إحصائيات اليوم: الصفقات المنفذة + ربح/خسارة تقديرية من الأسعار اللي المنصة بتتابعها
+app.get('/api/bot/stats', auth, adminOnly, async (req, res) => {
+  try {
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const sent = await Signal.find({ 'tradeResult.broker': 'sahm', 'tradeResult.status': 'sent' })
+      .select('status closePrice currentPrice tradeResult').lean();
+    let today = 0, pnlToday = 0, reserved = 0;
+    for (const s of sent) {
+      const t = s.tradeResult, qty = t.qty || 0, entry = t.limit || 0;
+      const isToday = t.at && new Date(t.at) >= dayStart;
+      if (isToday) today++;
+      if (s.status === 'open') reserved += qty * entry;
+      const exit = s.status === 'open' ? s.currentPrice : s.closePrice;
+      if (isToday && exit) pnlToday += qty * (exit - entry);
+    }
+    res.json({ totalTrades: sent.length, todayTrades: today, pnlToday: +pnlToday.toFixed(2), reserved: +reserved.toFixed(2) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bot/logs', auth, adminOnly, async (req, res) => {
+  try { res.json(await BotLog.find().sort({ at: -1 }).limit(100).lean()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/bot/trades', auth, adminOnly, async (req, res) => {
   try {
     const list = await Signal.find({ 'tradeResult.broker': 'sahm' })
       .sort({ 'tradeResult.at': -1 }).limit(50)
-      .select('symbol price tp sl status strategy receivedAt tradeResult').lean();
+      .select('symbol price tp sl status strategy receivedAt tradeResult closePrice currentPrice').lean();
     res.json(list);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
