@@ -194,6 +194,13 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
         <button class="btn btn-red" id="btnStop" onclick="setPaused(true)">⏸ إيقاف</button>
       </div>
       <button class="btn btn-red" disabled title="قريباً">إغلاق جميع الصفقات (قريباً)</button>
+      <div class="sub" style="margin-top:14px">🧪 إشارة تجريبية</div>
+      <div class="two field">
+        <input class="inp" id="tSym" type="text" placeholder="الرمز مثلاً SOUN" style="text-transform:uppercase">
+        <input class="inp" id="tPrice" type="number" step="0.01" placeholder="السعر $">
+      </div>
+      <button class="btn btn-ghost" onclick="sendTest()">إرسال إشارة BUY للبوت</button>
+      <div class="hint">بتبعت إشارة شراء للبوت كأنها جاية من تريدينج فيو. في وضع التجربة بيملا الأمر ويصوّره من غير إرسال.</div>
       <div class="hint" id="acctHint"></div>
     </div>
   </div>
@@ -340,6 +347,13 @@ async function loadLogs(){
   $('logs').innerHTML = L.map(l=>`<div class="log ${l.level}"><span class="t">[${new Date(l.at).toLocaleTimeString('ar')}]</span>${String(l.msg).replace(/</g,'&lt;')}</div>`).join('');
 }
 
+async function sendTest(){
+  const symbol=$('tSym').value.trim().toUpperCase(), price=Number($('tPrice').value);
+  if(!symbol||!price) return toast('⚠️ اكتب الرمز والسعر');
+  if(!S.dryRun && !confirm('البوت على التنفيذ الحقيقي — الإشارة دي هتشتري فعلاً. متأكد؟')) return;
+  const r=await fetch('/api/admin/signals',{method:'POST',headers:H,body:JSON.stringify({symbol,action:'BUY',price,strategy:'Test'})});
+  toast(r.ok?'📡 الإشارة اتبعتت — تابع سجل التطبيق':'❌ فشل الإرسال');
+}
 function openTpl(){ $('whUrl').textContent = location.origin + '/webhook'; $('tpl').style.display='flex'; }
 function closeTpl(){ $('tpl').style.display='none'; }
 function copyTpl(){ navigator.clipboard?.writeText($('tplJson').textContent); toast('✓ تم النسخ'); }
