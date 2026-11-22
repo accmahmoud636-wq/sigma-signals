@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MILLIONAIRE · بوت سهم</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060810;--bg2:#0a0d14;--bg3:#0d1117;--border:rgba(212,175,55,.12);--border2:rgba(212,175,55,.2);--gold:#d4af37;--gold2:#f5d070;--gold3:rgba(212,175,55,.08);--green:#00d97e;--red:#ff4d4d;--blue:#4da6ff;--yellow:#ffc940;--text:#d0dce8;--muted2:#607080;--mono:'IBM Plex Mono',monospace;--ar:'Tajawal',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--ar);min-height:100vh}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:8px;text-decoration:none}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.logo-text{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--gold);letter-spacing:2px}
+.nav{display:flex;gap:4px;margin-right:auto}
+.nav-btn{padding:5px 14px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:var(--ar);font-size:12px;text-decoration:none}
+.nav-btn:hover,.nav-btn.active{background:var(--gold3);border-color:var(--gold);color:var(--gold)}
+.wrap{max-width:760px;margin:26px auto;padding:0 16px}
+.section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.section-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500}
+.section-body{padding:16px 20px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(212,175,55,.05);gap:12px}
+.row:last-child{border-bottom:none}
+.label{font-size:13px;font-weight:500}
+.desc{font-size:11px;color:var(--muted2);margin-top:2px}
+.inp{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:13px;width:120px;text-align:center;outline:none}
+.inp:focus{border-color:var(--gold)}
+.inp.wide{width:200px;font-family:var(--ar)}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;inset:0;background:var(--bg3);border:1px solid var(--border2);border-radius:24px;transition:.3s}
+.slider:before{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;background:var(--muted2);border-radius:50%;transition:.3s}
+.toggle input:checked+.slider{background:rgba(0,217,126,.2);border-color:var(--green)}
+.toggle input:checked+.slider:before{transform:translateX(20px);background:var(--green)}
+.status{display:flex;gap:10px;flex-wrap:wrap}
+.pill{padding:6px 12px;border-radius:20px;font-size:12px;border:1px solid var(--border2)}
+.ok{color:var(--green);border-color:rgba(0,217,126,.4)}.bad{color:var(--red);border-color:rgba(255,77,77,.4)}.warn{color:var(--yellow);border-color:rgba(255,201,64,.4)}
+.btn-save{background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;color:#000;padding:9px 22px;border-radius:7px;font-family:var(--ar);font-size:13px;font-weight:700;cursor:pointer}
+.btn-stop{background:rgba(255,77,77,.12);border:1px solid rgba(255,77,77,.4);color:var(--red);padding:9px 18px;border-radius:7px;font-family:var(--ar);font-size:13px;font-weight:700;cursor:pointer}
+.btn-go{background:rgba(0,217,126,.12);border:1px solid rgba(0,217,126,.4);color:var(--green);padding:9px 18px;border-radius:7px;font-family:var(--ar);font-size:13px;font-weight:700;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 6px;border-bottom:1px solid rgba(212,175,55,.06);text-align:right}
+th{color:var(--muted2);font-weight:500}
+td.m{font-family:var(--mono)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:.3s;z-index:9}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/"><div class="logo-icon">💰</div><div class="logo-text">MILLIONAIRE</div></a>
+  <div class="nav">
+    <a class="nav-btn" href="/">📊 الداشبورد</a>
+    <a class="nav-btn active" href="/bot">🤖 بوت سهم</a>
+    <a class="nav-btn" href="/settings.html">⚙️ الإعدادات</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="section">
+    <div class="section-head">📡 حالة البوت</div>
+    <div class="section-body">
+      <div class="status">
+        <span class="pill" id="st-conn">—</span>
+        <span class="pill" id="st-run">—</span>
+        <span class="pill" id="st-mode">—</span>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px">
+        <button class="btn-stop" id="btn-pause" onclick="togglePause()">⏸ إيقاف طارئ</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">⚙️ إعدادات التنفيذ</div>
+    <div class="section-body">
+      <div class="row"><div><div class="label">تنفيذ حقيقي</div><div class="desc">مقفول = تجربة: يملا الأمر ويصوره من غير إرسال</div></div>
+        <label class="toggle"><input type="checkbox" id="live"><span class="slider"></span></label></div>
+      <div class="row"><div><div class="label">مبلغ كل صفقة ($)</div></div><input class="inp" id="amount" type="number" min="1"></div>
+      <div class="row"><div><div class="label">سعر الأمر فوق سعر الإشارة (%)</div><div class="desc">عشان الأمر المحدد يتنفذ بسرعة</div></div><input class="inp" id="offsetPct" type="number" step="0.1" min="0"></div>
+      <div class="row"><div><div class="label">جني الربح (%)</div><div class="desc">لو الإشارة ما فيهاش هدف</div></div><input class="inp" id="tpPct" type="number" step="0.5" min="0.1"></div>
+      <div class="row"><div><div class="label">وقف الخسارة (%)</div><div class="desc">لو الإشارة ما فيهاش وقف</div></div><input class="inp" id="slPct" type="number" step="0.5" min="0.1"></div>
+      <div class="row"><div><div class="label">أقل سعر للسهم ($)</div></div><input class="inp" id="minPrice" type="number" step="0.5" min="0"></div>
+      <div class="row"><div><div class="label">أعلى سعر للسهم ($)</div></div><input class="inp" id="maxPrice" type="number" step="0.5" min="0"></div>
+      <div class="row"><div><div class="label">أقصى صفقات في اليوم</div></div><input class="inp" id="maxPerDay" type="number" min="0"></div>
+      <div class="row"><div><div class="label">جلسة التداول في سهم</div><div class="desc">اكتب نص الاختيار زي ما بيظهر في سهم (فاضي = الافتراضي)</div></div><input class="inp wide" id="session" type="text"></div>
+      <div style="margin-top:14px"><button class="btn-save" onclick="save()">💾 حفظ</button></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">🧾 آخر عمليات البوت</div>
+    <div class="section-body" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>الوقت</th><th>السهم</th><th>الحالة</th><th>الكمية</th><th>محدد</th><th>🎯</th><th>🛑</th><th>ملاحظة</th></tr></thead>
+        <tbody id="trades"><tr><td colspan="8" style="color:var(--muted2)">لا توجد عمليات بعد</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const token = localStorage.getItem('mm_token');
+if (!token) location.href = '/login.html';
+const H = { 'x-auth-token': token, 'Content-Type': 'application/json' };
+const F = ['amount','offsetPct','tpPct','slPct','minPrice','maxPrice','maxPerDay'];
+let S = {};
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+function renderForm(){
+  F.forEach(k=>document.getElementById(k).value = S[k]);
+  document.getElementById('session').value = S.session || '';
+  document.getElementById('live').checked = !S.dryRun;
+}
+function render(){
+  const age = S.heartbeat ? (Date.now() - new Date(S.heartbeat)) / 1000 : Infinity;
+  const c = document.getElementById('st-conn');
+  c.textContent = age < 150 ? '🟢 البوت متصل' : '🔴 البوت مش متصل' + (S.heartbeat ? ' (آخر ظهور ' + new Date(S.heartbeat).toLocaleTimeString('ar') + ')' : '');
+  c.className = 'pill ' + (age < 150 ? 'ok' : 'bad');
+  const r = document.getElementById('st-run');
+  r.textContent = S.paused ? '⏸ متوقف' : '▶️ شغال'; r.className = 'pill ' + (S.paused ? 'bad' : 'ok');
+  const m = document.getElementById('st-mode');
+  m.textContent = S.dryRun ? '🧪 وضع تجربة' : '💵 تنفيذ حقيقي'; m.className = 'pill ' + (S.dryRun ? 'warn' : 'ok');
+  const b = document.getElementById('btn-pause');
+  b.textContent = S.paused ? '▶️ تشغيل' : '⏸ إيقاف طارئ'; b.className = S.paused ? 'btn-go' : 'btn-stop';
+}
+
+async function load(withForm){
+  const r = await fetch('/api/bot/settings',{headers:H});
+  if (r.status===401) return location.href='/login.html';
+  if (r.status===403) { document.querySelector('.wrap').innerHTML='<p style="padding:30px">الصفحة دي للأدمن بس</p>'; return; }
+  S = await r.json(); render(); if (withForm) renderForm();
+}
+
+async function post(body){
+  const r = await fetch('/api/bot/settings',{method:'POST',headers:H,body:JSON.stringify(body)});
+  if(!r.ok){toast('❌ خطأ في الحفظ');return;}
+  S = await r.json(); render(); renderForm(); toast('✅ اتحفظ — البوت هيطبقه على الإشارة الجاية');
+}
+
+function save(){
+  const live = document.getElementById('live').checked;
+  if (live && S.dryRun && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')) return;
+  const body = { dryRun: !live, session: document.getElementById('session').value };
+  F.forEach(k => body[k] = Number(document.getElementById(k).value));
+  if (body.minPrice > body.maxPrice) return toast('⚠️ أقل سعر أكبر من أعلى سعر');
+  post(body);
+}
+
+function togglePause(){ post({ paused: !S.paused }); }
+
+async function loadTrades(){
+  const r = await fetch('/api/bot/trades',{headers:H}); if(!r.ok) return;
+  const list = await r.json(); if(!list.length) return;
+  const lbl = {'sent':'<span style="color:var(--green)">✅ اتنفذ</span>','dry-run':'<span style="color:var(--yellow)">🧪 تجربة</span>','error':'<span style="color:var(--red)">❌ فشل</span>'};
+  document.getElementById('trades').innerHTML = list.map(s=>{const t=s.tradeResult||{};return `<tr>
+    <td class="m">${t.at?new Date(t.at).toLocaleString('ar'):'—'}</td><td class="m"><b>${s.symbol}</b></td>
+    <td>${lbl[t.status]||t.status||'—'}</td><td class="m">${t.qty??'—'}</td><td class="m">${t.limit??'—'}</td>
+    <td class="m">${t.tp??'—'}</td><td class="m">${t.sl??'—'}</td><td style="font-size:11px;color:var(--muted2)">${(t.error||'').slice(0,60)}</td></tr>`}).join('');
+}
+
+load(true); loadTrades();
+setInterval(()=>{ load(false); loadTrades(); }, 15000);
+</script>
+</body>
+</html>
