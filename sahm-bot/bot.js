@@ -239,6 +239,19 @@ async function placeBuy(sig) {
 const setLogin = (loginState, loginMsg) =>
   Settings.updateOne({ key: 'sahm' }, { $set: { loginState, loginMsg }, $unset: { command: '' } }).catch(() => {});
 
+// نافذة الدخول في سهم بتفتح جوه iframe — فبندوّر في كل الإطارات
+async function inFrames(make, timeout = 15000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    for (const f of page.frames()) {
+      const l = make(f).first();
+      if (await l.isVisible().catch(() => false)) return l;
+    }
+    await sleep(500);
+  }
+  return null;
+}
+
 async function openLoginModal() {
   await ensureBrowser();
   await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -246,15 +259,17 @@ async function openLoginModal() {
   await sleep(3000);
   if (await isLoggedIn()) return 'already';
   await dismissPopups();
-  const phoneIn = page.getByPlaceholder('رقم الهاتف').locator('visible=true').first();
-  if (!(await phoneIn.isVisible().catch(() => false))) {
+  const findPhone = (t) => inFrames((f) => f.getByPlaceholder('رقم الهاتف'), t);
+  let phoneIn = await findPhone(3000);
+  if (!phoneIn) {
     // زرار التداول بيفتح نافذة الدخول لما تكون مش مسجل
     const btn = page.getByText(/التسجيل\s*\/\s*تسجيل الدخول/).locator('visible=true').first();
     const tb = page.locator('button.trade-button').locator('visible=true').first();
     if (await btn.count()) await btn.click();
     else if (await tb.count()) await tb.click();
     else throw new Error('صفحة سهم ما فتحتش زي المتوقع');
-    await phoneIn.waitFor({ state: 'visible', timeout: 10000 });
+    phoneIn = await findPhone(20000);
+    if (!phoneIn) throw new Error('خانة رقم الجوال ما ظهرتش');
   }
   return phoneIn;
 }
@@ -264,19 +279,24 @@ async function startLogin(phone, method) {
   const phoneIn = await openLoginModal();
   if (phoneIn === 'already') { loggedIn = true; return setLogin('success', 'مسجل دخول بالفعل'); }
   await phoneIn.fill(phone);
-  const m = page.getByText(method === 'whatsapp' ? 'واتساب' : 'الرسائل النصية', { exact: true }).locator('visible=true').first();
-  if (await m.count()) await m.click();
-  await page.getByText('إرسال الرمز', { exact: true }).locator('visible=true').first().click();
+  const m = await inFrames((f) => f.getByText(method === 'whatsapp' ? 'واتساب' : 'الرسائل النصية', { exact: true }), 3000);
+  if (m) await m.click();
+  const send = await inFrames((f) => f.getByText('إرسال الرمز', { exact: true }), 5000);
+  if (!send) throw new Error('زرار "إرسال الرمز" مش ظاهر');
+  await send.click();
   await sleep(1500);
   await setLogin('awaiting_otp', `اتبعت رمز التحقق على ${method === 'whatsapp' ? 'واتساب' : 'رسالة SMS'} — اكتبه في المنصة`);
   tg('📩 سهم بعتت رمز التحقق — اكتبه في صفحة التداول الآلي في المنصة');
 }
 
 async function submitOtp(code) {
-  const otpIn = page.getByPlaceholder('رمز التحقق').locator('visible=true').first();
-  if (!(await otpIn.isVisible().catch(() => false))) return setLogin('error', 'نافذة الدخول اتقفلت — اضغط "دخول سهم" تاني');
+  const otpIn = await inFrames((f) => f.getByPlaceholder('رمز التحقق'), 5000);
+  if (!otpIn) return setLogin('error', 'نافذة الدخول اتقفلت — اضغط "دخول سهم" تاني');
   await otpIn.fill(code);
-  await page.getByText(/التسجيل\s*\/\s*تسجيل الدخول/).locator('visible=true').last().click();
+  const sub = await inFrames((f) => f.getByRole('button', { name: /التسجيل\s*\/\s*تسجيل الدخول|تسجيل الدخول|تأكيد/ }), 5000)
+    || await inFrames((f) => f.getByText(/التسجيل\s*\/\s*تسجيل الدخول/).last(), 3000);
+  if (!sub) throw new Error('زرار تأكيد الدخول مش ظاهر');
+  await sub.click();
   for (let i = 0; i < 10; i++) {
     await sleep(1500);
     if (await isLoggedIn()) {
