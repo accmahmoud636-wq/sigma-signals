@@ -13,7 +13,16 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── MongoDB ───────────────────────────────────
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://millionaire:Mm1234512345@cluster0.w50zpog.mongodb.net/millionaire?retryWrites=true&w=majority&appName=Cluster0';
+const MONGO_URI = (process.env.MONGO_URI || '').trim();
+if (!MONGO_URI) {
+  console.error('⚠️ MONGO_URI مش موجود في متغيرات Render — ضيفه من Environment');
+} else {
+  // بيطبع اسم المستخدم والسيرفر بس (من غير الباسورد) عشان نتأكد إن الرابط الصح هو اللي اتقرا
+  const m = MONGO_URI.match(/^mongodb(\+srv)?:\/\/([^:]+):([^@]*)@([^/?]+)/);
+  console.log(m
+    ? `🔑 MONGO_URI من Render — مستخدم: ${m[2]} | سيرفر: ${m[4]} | طول الباسورد: ${m[3].length}`
+    : '⚠️ MONGO_URI موجود بس شكله غلط — لازم يبدأ بـ mongodb+srv://');
+}
 
 // ─── Telegram Config ───────────────────────────
 const TG_TOKEN   = process.env.TG_TOKEN   || '8714883723:AAEgnEJhS7r7xe9Zk0Yc3Qp-gMxEGs-kbRw';
