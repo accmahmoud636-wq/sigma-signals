@@ -1,0 +1,15 @@
+{
+  "name": "sahm-bot",
+  "version": "1.0.0",
+  "description": "تنفيذ إشارات MILLIONAIRE على منصة سهم (السوق الأمريكي) عبر المتصفح",
+  "main": "bot.js",
+  "scripts": {
+    "setup": "npx playwright install chromium",
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.3.0",
+    "playwright": "^1.48.0"
+  }
+}
