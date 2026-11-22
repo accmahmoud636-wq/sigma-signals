@@ -126,7 +126,13 @@ const BotSettingsSchema = new mongoose.Schema({
   tgToken:    { type: String,  default: '' },
   tgChatId:   { type: String,  default: '' },
   brokerLoggedIn: { type: Boolean, default: false },
-  account:    { type: Object,  default: null }     // {netAssets, buyingPower, currency, at} من البوت
+  account:    { type: Object,  default: null },    // {netAssets, buyingPower, currency, at} من البوت
+  // ─── تسجيل دخول سهم من المنصة ───
+  sahmPhone:  { type: String,  default: '' },      // رقم الجوال (بدون +966)
+  sahmMethod: { type: String,  default: 'sms' },   // sms | whatsapp
+  command:    { type: Object,  default: null },    // أمر للبوت: {id, type:'login'|'otp', code?}
+  loginState: { type: String,  default: 'idle' },  // idle|sending|awaiting_otp|verifying|success|error
+  loginMsg:   { type: String,  default: '' }
 }, { timestamps: true, collection: 'botsettings' });
 const BotSettings = mongoose.model('BotSettings', BotSettingsSchema);
 const BotLog = mongoose.model('BotLog', new mongoose.Schema({
@@ -939,6 +945,7 @@ const maskSettings = (s) => {
   const o = s.toObject ? s.toObject() : { ...s };
   o.tgTokenSet = !!o.tgToken;
   o.tgToken = o.tgToken ? '••••' + o.tgToken.slice(-4) : '';
+  if (o.command) o.command = { type: o.command.type };
   return o;
 };
 
@@ -1010,6 +1017,33 @@ app.get('/api/bot/stats', auth, adminOnly, async (req, res) => {
 app.get('/api/bot/logs', auth, adminOnly, async (req, res) => {
   try { res.json(await BotLog.find().sort({ at: -1 }).limit(100).lean()); }
   catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── تسجيل دخول سهم من المنصة (البوت بينفذ على الجهاز) ─────────────
+app.post('/api/bot/sahm-login', auth, adminOnly, async (req, res) => {
+  try {
+    const phone = String(req.body.phone || '').replace(/\D/g, '').replace(/^966/, '').replace(/^0/, '');
+    const method = req.body.method === 'whatsapp' ? 'whatsapp' : 'sms';
+    if (!/^5\d{8}$/.test(phone)) return res.status(400).json({ error: 'رقم الجوال لازم يكون 9 أرقام ويبدأ بـ 5' });
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
+      sahmPhone: phone, sahmMethod: method,
+      command: { id: Date.now().toString(36), type: 'login', at: new Date() },
+      loginState: 'sending', loginMsg: 'جاري إرسال الطلب للبوت...'
+    } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bot/sahm-otp', auth, adminOnly, async (req, res) => {
+  try {
+    const code = String(req.body.code || '').replace(/\D/g, '');
+    if (code.length < 4 || code.length > 8) return res.status(400).json({ error: 'رمز التحقق غير صحيح' });
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
+      command: { id: Date.now().toString(36), type: 'otp', code, at: new Date() },
+      loginState: 'verifying', loginMsg: 'جاري التحقق من الرمز...'
+    } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/bot/trades', auth, adminOnly, async (req, res) => {
