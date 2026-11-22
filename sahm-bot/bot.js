@@ -296,6 +296,13 @@ async function startLogin(phone, method) {
   await send.click();
   await sleep(6000);
   page.off('response', onResp);
+  // ردّ سهم على طلب الكود: لو رفضت نعرض السبب في المنصة بدل "اتبعت"
+  const sendR = resp.find((x) => x.includes('auth-code/send'));
+  if (sendR && !/"code"\s*:\s*"10000000"/.test(sendR)) {
+    const msg = (sendR.match(/"msg"\s*:\s*"([^"]*)"/) || [])[1] || 'سهم رفضت إرسال الرمز';
+    log('🔍 ' + sendR, 'warn');
+    return setLogin('error', 'سهم: ' + msg + (/متكرر/.test(msg) ? ' — استنى ساعة وجرب مرة واحدة' : ''));
+  }
   try {
     let raw = '';
     for (const f of page.frames()) {
@@ -335,8 +342,38 @@ async function submitOtp(code) {
   setLogin('error', 'الرمز غلط أو انتهى — جرب "دخول سهم" تاني');
 }
 
+// ---------- نقل جلسة سهم من الكمبيوتر ----------
+// سهم بترفض طلب الكود من السيرفر (reCAPTCHA) — فبندخل من الكمبيوتر
+// وسكربت export-session.js بيرفع الجلسة، والبوت هنا بيستخدمها
+let lastSession = null;
+async function applySession() {
+  const doc = await mongoose.connection.collection('sahmsessions').findOne({ key: 'sahm' });
+  if (!doc || !doc.state || String(doc.at) === lastSession) return;
+  lastSession = String(doc.at);
+  await ensureBrowser();
+  const st = doc.state;
+  if (st.cookies && st.cookies.length) await ctx.addCookies(st.cookies);
+  for (const o of st.origins || []) {
+    if (!o.localStorage || !o.localStorage.length) continue;
+    await page.goto(o.origin, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+    await page.evaluate((items) => { for (const { name, value } of items) localStorage.setItem(name, value); }, o.localStorage).catch(() => {});
+  }
+  await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+  await sleep(3000);
+  if (await isLoggedIn()) {
+    loggedIn = true;
+    tg('✅ جلسة سهم اتنقلت من الكمبيوتر — البوت مسجل دخول على السيرفر');
+    await setLogin('success', 'تم تسجيل الدخول (جلسة منقولة من الكمبيوتر)');
+  } else {
+    log('⚠️ الجلسة المنقولة ما نفعتش — سجّل دخول تاني على الكمبيوتر وشغّل export-session', 'warn');
+    await setLogin('error', 'الجلسة المنقولة ما نفعتش — شغّل نقل الجلسة تاني');
+  }
+}
+
 let lastCmd = null;
 async function checkCommands() {
+  try { await applySession(); } catch (e) { log('نقل الجلسة: ' + e.message, 'error'); }
   const s = await Settings.findOne({ key: 'sahm' }, { projection: { command: 1, sahmPhone: 1, sahmMethod: 1 } });
   const cmd = s && s.command;
   if (!cmd || cmd.id === lastCmd) return;
@@ -413,6 +450,14 @@ async function handle(sig, Signals) {
   } catch (e) {
 
     await page.screenshot({ path: path.join(SHOTS, `${Date.now()}-${sig.symbol}-error.png`) }).catch(() => {});
+    // تشخيص: إيه اللي ظاهر في صفحة سهم ساعة الخطأ
+    try {
+      const frames = page.frames().map((f) => f.url().replace(/^https?:\/\//, '').slice(0, 50)).filter((u) => u && !/google|linkedin|recaptcha|about:blank|facebook|clarity/.test(u));
+      const modal = await page.locator('.n-modal, .n-dialog, .n-drawer').locator('visible=true').allInnerTexts().catch(() => []);
+      const body = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+      log(`🔍 خطأ ${sig.symbol} | الرابط: ${page.url().slice(0, 80)} | الإطارات: ${frames.join(' , ')} | نافذة مفتوحة: ${modal.join(' ').replace(/\s+/g, ' ').slice(0, 250) || 'لا'} | الصفحة: ${body.slice(0, 350)}`, 'warn');
+      log(`🔍 زراير التداول: ${await page.locator('button.trade-button').count()} | مسجل: ${await isLoggedIn()}`, 'warn');
+    } catch (_) {}
     await page.keyboard.press('Escape').catch(() => {});
     await Signals.updateOne({ _id: sig._id }, { $set: { tradeResult: { broker: 'sahm', status: 'error', error: e.message, at: new Date() } } });
     tg(`❌ <b>فشل التنفيذ</b> ${tag}\n${e.message}`, 'error');
