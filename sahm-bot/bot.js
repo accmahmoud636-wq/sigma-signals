@@ -284,7 +284,15 @@ async function startLogin(phone, method) {
   const send = await inFrames((f) => f.getByText('إرسال الرمز', { exact: true }), 5000);
   if (!send) throw new Error('زرار "إرسال الرمز" مش ظاهر');
   await send.click();
-  await sleep(1500);
+  await sleep(4000);
+  // تشخيص: إيه اللي ظاهر في نافذة الدخول بعد "إرسال الرمز"
+  try {
+    const fr = page.frames().find((f) => f !== page.mainFrame() && f.url() && f.url() !== 'about:blank');
+    const raw = fr ? await fr.locator('body').innerText().catch(() => '') : '';
+    const val = await phoneIn.inputValue().catch(() => '?');
+    log(`🔍 بعد إرسال الرمز | الرقم في الخانة: ${val} | الإطار: ${fr ? fr.url().slice(0, 80) : 'مفيش'} | النص: ${raw.replace(/\s+/g, ' ').slice(0, 400)}`, 'warn');
+    await page.screenshot({ path: path.join(SHOTS, `${Date.now()}-after-send.png`) });
+  } catch (_) {}
   await setLogin('awaiting_otp', `اتبعت رمز التحقق على ${method === 'whatsapp' ? 'واتساب' : 'رسالة SMS'} — اكتبه في المنصة`);
   tg('📩 سهم بعتت رمز التحقق — اكتبه في صفحة التداول الآلي في المنصة');
 }
