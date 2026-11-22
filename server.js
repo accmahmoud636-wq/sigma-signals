@@ -96,6 +96,27 @@ const UserSchema = new mongoose.Schema({
 });
 
 const Signal = mongoose.model('Signal', SignalSchema);
+
+// ─── إعدادات بوت سهم (بيقرأها البوت اللي على الكمبيوتر لحظياً) ───
+const BotSettingsSchema = new mongoose.Schema({
+  key:        { type: String, unique: true, default: 'sahm' },
+  paused:     { type: Boolean, default: false },   // إيقاف طارئ
+  dryRun:     { type: Boolean, default: true },    // تجربة من غير إرسال
+  amount:     { type: Number,  default: 100 },     // مبلغ الصفقة $
+  offsetPct:  { type: Number,  default: 0.5 },     // سعر المحدد فوق الإشارة %
+  tpPct:      { type: Number,  default: 5 },
+  slPct:      { type: Number,  default: 3 },
+  minPrice:   { type: Number,  default: 3 },
+  maxPrice:   { type: Number,  default: 5 },
+  maxPerDay:  { type: Number,  default: 5 },
+  session:    { type: String,  default: '' },      // نص اختيار الجلسة في سهم (فاضي = الافتراضي)
+  heartbeat:  { type: Date,    default: null },    // آخر مرة البوت أكد إنه شغال
+  botMode:    { type: String,  default: null }
+}, { timestamps: true, collection: 'botsettings' });
+const BotSettings = mongoose.model('BotSettings', BotSettingsSchema);
+async function getBotSettings() {
+  return BotSettings.findOneAndUpdate({ key: 'sahm' }, { $setOnInsert: { key: 'sahm' } }, { upsert: true, new: true });
+}
 const User   = mongoose.model('User',   UserSchema);
 
 // ─── Admin Init ────────────────────────────────
@@ -892,6 +913,45 @@ app.get('/',         (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/admin',    (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'settings.html')));
 app.get('/reports',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'reports.html')));
+app.get('/bot',      (req, res) => res.sendFile(path.join(__dirname, 'public', 'bot.html')));
+
+// ─── بوت سهم: الإعدادات والصفقات ─────────────
+app.get('/api/bot/settings', auth, adminOnly, async (req, res) => {
+  try { res.json(await getBotSettings()); } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const num = (v, min, max) => { const n = Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : undefined; };
+    const upd = {
+      paused:    typeof b.paused === 'boolean' ? b.paused : undefined,
+      dryRun:    typeof b.dryRun === 'boolean' ? b.dryRun : undefined,
+      amount:    num(b.amount, 1, 100000),
+      offsetPct: num(b.offsetPct, 0, 5),
+      tpPct:     num(b.tpPct, 0.1, 100),
+      slPct:     num(b.slPct, 0.1, 100),
+      minPrice:  num(b.minPrice, 0, 100000),
+      maxPrice:  num(b.maxPrice, 0, 100000),
+      maxPerDay: num(b.maxPerDay, 0, 100),
+      session:   typeof b.session === 'string' ? b.session.trim().slice(0, 60) : undefined
+    };
+    Object.keys(upd).forEach(k => upd[k] === undefined && delete upd[k]);
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: upd }, { upsert: true, new: true });
+    if ('paused' in upd || 'dryRun' in upd)
+      sendTelegram(`🤖 بوت سهم: ${s.paused ? '⏸ متوقف' : '▶️ شغال'} | ${s.dryRun ? '🧪 تجربة' : '💵 تنفيذ حقيقي'}`).catch(() => {});
+    res.json(s);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bot/trades', auth, adminOnly, async (req, res) => {
+  try {
+    const list = await Signal.find({ 'tradeResult.broker': 'sahm' })
+      .sort({ 'tradeResult.at': -1 }).limit(50)
+      .select('symbol price tp sl status strategy receivedAt tradeResult').lean();
+    res.json(list);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 
 // ─── Ping Endpoint ─────────────────────────────
 app.get('/ping', (req, res) => res.json({ ok: true, time: new Date() }));
