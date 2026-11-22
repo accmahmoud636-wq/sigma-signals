@@ -332,6 +332,7 @@ async function submitOtp(code) {
       await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }).catch(() => {});
       loggedIn = true;
       tg('✅ تم تسجيل الدخول في سهم من المنصة');
+      await saveSession().catch((e) => log('حفظ الجلسة: ' + e.message, 'warn'));
       return setLogin('success', 'تم تسجيل الدخول في سهم');
     }
     if (await page.locator('input[type=password]').locator('visible=true').count())
@@ -346,6 +347,14 @@ async function submitOtp(code) {
 // سهم بترفض طلب الكود من السيرفر (reCAPTCHA) — فبندخل من الكمبيوتر
 // وسكربت export-session.js بيرفع الجلسة، والبوت هنا بيستخدمها
 let lastSession = null;
+// حفظ الجلسة في قاعدة البيانات: لو البوت اتعمله ريستارت يرجع مسجل من غير كود
+async function saveSession() {
+  if (!ctx) return;
+  let state; try { state = await ctx.storageState({ indexedDB: true }); } catch (_) { state = await ctx.storageState(); }
+  const at = new Date();
+  await mongoose.connection.collection('sahmsessions').updateOne({ key: 'sahm' }, { $set: { key: 'sahm', state, at, from: 'server' } }, { upsert: true });
+  lastSession = String(at);
+}
 async function applySession() {
   const doc = await mongoose.connection.collection('sahmsessions').findOne({ key: 'sahm' });
   if (!doc || !doc.state || String(doc.at) === lastSession) return;
@@ -519,6 +528,7 @@ async function handle(sig, Signals) {
       await page.reload({ waitUntil: "domcontentloaded" });
       const ok = await ensureLoggedIn();
       if (ok && !loggedIn) { sessionStart = Date.now(); tg('✅ رجع تسجيل الدخول في سهم'); }
+      if (ok) await saveSession().catch(() => {});
       if (!ok && loggedIn) {
         const hrs = ((Date.now() - sessionStart) / 3600000).toFixed(1);
         tg(`🔐 جلسة سهم انتهت بعد ${hrs} ساعة — هيوصلك رمز تحقق، اكتبه في صفحة التداول الآلي في المنصة`, 'warn');
