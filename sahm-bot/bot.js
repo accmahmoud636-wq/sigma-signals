@@ -84,6 +84,19 @@ async function openBrowser() {
     args: ['--disable-blink-features=AutomationControlled'],
   });
   page = ctx.pages()[0] || (await ctx.newPage());
+  page.on('crash', () => log('💥 صفحة سهم وقعت (crash)', 'warn'));
+  ctx.on('close', () => log('المتصفح اتقفل', 'warn'));
+  // نسجّل بيانات الحساب اللي سهم بتجيبها (المحفظة، الأسهم، الرصيد) — عشان نعرضها في المنصة
+  page.on('response', async (r) => {
+    try {
+      const u = r.url();
+      if (!/sahmcapital\.com/.test(u) || /quoteapi|recaptcha|\/hq\//.test(u)) return;
+      const t = r.request().resourceType(); if (t !== 'xhr' && t !== 'fetch') return;
+      const body = await r.text(); if (!body || body[0] !== '{' || body.length > 200000) return;
+      const p = u.replace(/^https?:\/\//, '').split('?')[0];
+      await mongoose.connection.collection('sahmapi').updateOne({ path: p }, { $set: { path: p, body, at: new Date() } }, { upsert: true });
+    } catch (_) {}
+  });
   await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' });
 }
 
@@ -98,6 +111,8 @@ async function ensureBrowser() {
   log('🔄 نافذة المتصفح كانت مقفولة — بفتحها تاني', 'warn');
   try { if (ctx) await ctx.close(); } catch (_) {}
   await openBrowser();
+  lastSession = null; // نرجّع الجلسة المحفوظة على المتصفح الجديد
+  await applySession().catch((e) => log('نقل الجلسة: ' + e.message, 'warn'));
 }
 
 async function ensureLoggedIn() {
@@ -355,12 +370,15 @@ async function saveSession() {
   let state; try { state = await ctx.storageState({ indexedDB: true }); } catch (_) { state = await ctx.storageState(); }
   const at = new Date();
   await mongoose.connection.collection('sahmsessions').updateOne({ key: 'sahm' }, { $set: { key: 'sahm', state, at, from: 'server' } }, { upsert: true });
-  lastSession = String(at);
+  lastSession = String(at.getTime());
 }
 async function applySession() {
   const doc = await mongoose.connection.collection('sahmsessions').findOne({ key: 'sahm' });
-  if (!doc || !doc.state || String(doc.at) === lastSession) return;
-  lastSession = String(doc.at);
+  if (!doc || !doc.state) return;
+  const stamp = String(new Date(doc.at).getTime());
+  if (stamp === lastSession) return;
+  if (doc.from === 'server' && loggedIn && lastSession) { lastSession = stamp; return; } // دي نسختنا إحنا
+  lastSession = stamp;
   await ensureBrowser();
   const st = doc.state;
   if (st.cookies && st.cookies.length) await ctx.addCookies(st.cookies);
@@ -374,7 +392,7 @@ async function applySession() {
   await sleep(3000);
   if (await isLoggedIn()) {
     loggedIn = true;
-    tg('✅ جلسة سهم اتنقلت من الكمبيوتر — البوت مسجل دخول على السيرفر');
+    tg(doc.from === 'server' ? '✅ رجعت جلسة سهم المحفوظة — البوت مسجل دخول' : '✅ جلسة سهم اتنقلت من الكمبيوتر — البوت مسجل دخول على السيرفر');
     await setLogin('success', 'تم تسجيل الدخول (جلسة منقولة من الكمبيوتر)');
   } else {
     log('⚠️ الجلسة المنقولة ما نفعتش — سجّل دخول تاني على الكمبيوتر وشغّل export-session', 'warn');
