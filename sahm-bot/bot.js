@@ -147,9 +147,24 @@ async function ensureUSMarket() {
   return ensureFund();
 }
 // اختيار المحفظة المحددة في المنصة (مثلاً 800906239 الهامش) من قائمة المحافظ في صفحة سهم
+const isDemo = async () => (await page.getByText('التداول التجريبي').locator('visible=true').count().catch(() => 0)) > 0;
 async function ensureFund() {
   const want = String(C.fundAccount || '').trim();
-  if (!want || lastFund === want) return true;
+  // ممنوع نفضل على "التداول التجريبي" — لو مفيش رقم محفظة محدد بنختار أول محفظة حقيقية
+  if (!want) {
+    if (!(await isDemo())) return true;
+    const cur = lastFund ? page.getByText(lastFund).locator('visible=true').first() : null;
+    if (cur && await cur.count()) {
+      await cur.click().catch(() => {}); await sleep(1000);
+      const real = page.locator(':is(li,div,span,a,button):visible', { hasText: /\d{8,10}/ }).filter({ hasNotText: 'التجريبي' }).last();
+      if (await real.count()) await real.click().catch(() => {});
+      await sleep(4000);
+    }
+    const ok = !(await isDemo());
+    log(ok ? `💼 خرجت من التداول التجريبي — المحفظة ${lastFund}` : '⚠️ الصفحة على التداول التجريبي ومش قادر أطلع منه', ok ? 'info' : 'warn');
+    return ok;
+  }
+  if (lastFund === want && !(await isDemo())) return true;
   const before = lastFund;
   const cur = before ? page.getByText(before).locator('visible=true').first() : null;
   if (cur && await cur.count()) {
@@ -342,6 +357,7 @@ async function sellNow(symbol, qty, price) {
   await fieldByLabel(panel, 'الكمية').fill(String(qty));
   const txt = await panel.innerText().catch(() => '');
   if (!/بيع/.test(txt)) throw new Error('التذكرة مش على بيع');
+  if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
   await panel.getByText('إرسال الأمر').first().click();
   await sleep(600);
   const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
@@ -455,7 +471,7 @@ async function placeBuy(sig) {
 
   // ⚡ المسار السريع: لو التذكرة مفتوحة والسوق صح → على طول للتنفيذ (من غير تحميل صفحات)
   const want = C.market === 'SA' ? 'SA' : 'US';
-  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && (await ticketPanel());
+  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && !(await isDemo()) && (await ticketPanel());
   if (!ready) {
     if (!(await ensureLoggedIn())) throw new Error('مش مسجل دخول في سهم — ادخل يدوي في نافذة البوت');
     await dismissPopups();
@@ -511,6 +527,7 @@ async function placeBuy(sig) {
   }
 
   // 8) إرسال + تأكيد
+  if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
   await panel.getByText('إرسال الأمر').first().click();
   log(`${mkt ? '⚡ أمر سوق' : '🎯 أمر محدد'} — اتضغط "إرسال الأمر" بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث من وصول الإشارة للبوت`);
   await sleep(600);
