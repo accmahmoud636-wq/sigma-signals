@@ -943,20 +943,25 @@ function enqueue(fn, ms = 3 * 60 * 1000, name = '') {
 let loggedIn = false, working = false;
 async function handle(sig, Signals) {
   const tag = `${sig.symbol} @ $${sig.price}`;
+  // أي تخطي بيتسجّل على الإشارة نفسها عشان يبان في المنصة (سجل التداول)
+  const skip = async (msg, level) => {
+    await Signals.updateOne({ _id: sig._id }, { $set: { tradeResult: { broker: 'sahm', status: 'skipped', error: msg.replace(/<[^>]+>/g, ''), at: new Date() } } }).catch(() => {});
+    return log(msg, level);
+  };
   await refreshSettings();
   if (sig.action !== 'BUY') return;
-  if (C.paused || fs.existsSync(path.join(__dirname, 'PAUSE'))) return log(`⏸ البوت متوقف — تخطي ${tag}`);
+  if (C.paused || fs.existsSync(path.join(__dirname, 'PAUSE'))) return skip(`⏸ البوت متوقف — تخطي ${tag}`);
   // 'sahm-vps' = بوت السيرفر بس (البوت القديم على الكمبيوتر بيتجاهل الإشارات)
-  if (!['sahm', 'sahm-vps'].includes(C.broker)) return log(`الوسيط المختار (${C.broker}) مش مدعوم في البوت ده — تخطي ${tag}`, 'warn');
+  if (!['sahm', 'sahm-vps'].includes(C.broker)) return skip(`الوسيط المختار (${C.broker}) مش مدعوم في البوت ده — تخطي ${tag}`, 'warn');
   if (sig.price < C.minPrice || sig.price > C.maxPrice)
-    return log(`↷ تخطي ${tag}: السعر خارج ${C.minPrice}-${C.maxPrice}$`);
+    return skip(`↷ تخطي ${tag}: السعر خارج ${C.minPrice}-${C.maxPrice}$`);
   const pnl = await todayPnl(Signals);
   if (C.dailyProfitTarget > 0 && pnl >= C.dailyProfitTarget) return tg(`🎯 هدف الربح اليومي اتحقق (${pnl.toFixed(2)}$) — تخطي ${tag}`);
   if (C.dailyLossLimit > 0 && pnl <= -C.dailyLossLimit) return tg(`⛔ حد الخسارة اليومي (${pnl.toFixed(2)}$) — تخطي ${tag}`, 'warn');
 
   const st = loadState();
-  if (st.trades >= C.maxPerDay) return tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`);
-  if (st.symbols.includes(sig.symbol)) return log(`↷ تخطي ${tag}: اتشرى النهارده`);
+  if (st.trades >= C.maxPerDay) { tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`); return skip(`⛔ حد الصفقات اليومي (${C.maxPerDay})`); }
+  if (st.symbols.includes(sig.symbol)) return skip(`↷ تخطي ${tag}: اتشرى النهارده`);
 
   try {
     const r = await placeBuy(sig);
@@ -1068,7 +1073,8 @@ async function handle(sig, Signals) {
   const startedAt = new Date();
   setInterval(async () => {
     try {
-      const since = new Date(Math.max(startedAt.getTime(), Date.now() - 3 * 60 * 1000));
+      // آخر 3 دقايق — حتى اللي وصلت والبوت لسه بيشتغل (بعد ريستارت) بتتنفذ
+      const since = new Date(Date.now() - 3 * 60 * 1000);
       const list = await Signals.find({ action: 'BUY', source: { $ne: 'email' }, tradeResult: { $exists: false }, _id: { $gt: mongoose.Types.ObjectId.createFromTime(Math.floor(since.getTime() / 1000)) } }).toArray();
       list.forEach(onSignal);
     } catch (_) {}
