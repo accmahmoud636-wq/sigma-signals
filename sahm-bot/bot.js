@@ -346,12 +346,7 @@ async function sellNow(symbol, qty, price) {
   const panel = await prepareTicket();
   await setSide(panel, 'بيع');
   await pickIn(panel, 1, mkt ? /السوق/ : /المحدد/);
-  const search = panel.locator('input:visible').first();
-  await search.click(); await search.fill(''); await search.pressSequentially(symbol, { delay: 10 });
-  const result = page.locator(`xpath=//*[normalize-space(text())="${symbol}"][not(ancestor::tr)][not(ancestor::table)]`).locator('visible=true').first();
-  await result.waitFor({ state: 'visible', timeout: 8000 });
-  await result.click();
-  await sleep(500);
+  await selectSymbol(panel, symbol);
   await setSide(panel, 'بيع');
   if (!mkt) await fieldByLabel(panel, 'السعر').fill(String(round(price * 0.99)));
   await fieldByLabel(panel, 'الكمية').fill(String(qty));
@@ -467,6 +462,37 @@ async function prepareTicket() {
   return panel;
 }
 
+// اختيار السهم في التذكرة: نكتب الرمز، ونختار النتيجة من قايمة البحث (بأكتر من طريقة)
+async function selectSymbol(panel, symbol) {
+  const search = panel.locator('input:visible').first();
+  await search.click(); await search.fill(''); await search.pressSequentially(symbol, { delay: 15 });
+  const sym = symbol.toUpperCase();
+  const tryPick = () => page.evaluate((sym) => {
+    // كل العناصر الظاهرة اللي نصها بيبدأ بالرمز بالظبط (أو الرمز لوحده) — من قايمة البحث المنبثقة
+    const vis = (e) => e.offsetParent !== null || e.getClientRects().length;
+    const re = new RegExp('^\\s*' + sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$|\\.|\\b)');
+    const all = [...document.querySelectorAll('body *')].filter((e) => vis(e) && e.children.length <= 3 && re.test((e.innerText || '').trim()));
+    // نفضّل اللي جوه نافذة منبثقة/قايمة بحث (مش جدول المحفظة)
+    const score = (e) => (e.closest('.v-binder-follower-content,.n-popover,.n-base-select-menu,[class*=search],[class*=dropdown],[class*=popup],[class*=result]') ? 0 : 1) + (e.closest('table') ? 2 : 0);
+    all.sort((a, b) => score(a) - score(b));
+    const hit = all[0];
+    if (hit) { (hit.closest('li,[role=option],.n-base-select-option,[class*=item]') || hit).click(); }
+    return { ok: !!hit, texts: all.slice(0, 6).map((e) => (e.innerText || '').trim().slice(0, 30)) };
+  }, sym).catch(() => ({ ok: false, texts: [] }));
+  let res = { ok: false, texts: [] };
+  for (let i = 0; i < 10 && !res.ok; i++) { await sleep(400); res = await tryPick(); }
+  if (!res.ok) {
+    // آخر محاولة: أول نتيجة بالكيبورد
+    await search.press('ArrowDown').catch(() => {}); await search.press('Enter').catch(() => {});
+  }
+  await sleep(700);
+  const txt = (await panel.innerText().catch(() => '')).toUpperCase();
+  if (!txt.includes(sym)) {
+    await pushShot('ما لقيتش ' + sym + ' في البحث');
+    throw new Error(`السهم ${sym} ما اتختارش في التذكرة (نتايج البحث: ${res.texts.join(' ¦ ') || 'مفيش'})`);
+  }
+}
+
 // ---------- تنفيذ أمر شراء ----------
 async function placeBuy(sig) {
   const symbol = sig.symbol.toUpperCase();
@@ -494,13 +520,7 @@ async function placeBuy(sig) {
   // 1-5) التذكرة جاهزة ومفتوحة (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
   const t0 = Date.now();
   const panel = await prepareTicket();
-  const search = panel.locator('input:visible').first();
-  await search.click(); await search.fill(''); await search.pressSequentially(symbol, { delay: 10 });
-  // نتيجة البحث: عنصر نصه الرمز بالظبط، ومش جوه جدول الأوامر/الأسهم
-  const result = page.locator(`xpath=//*[normalize-space(text())="${symbol}"][not(ancestor::tr)][not(ancestor::table)]`).locator('visible=true').first();
-  await result.waitFor({ state: 'visible', timeout: 8000 });
-  await result.click();
-  await sleep(700);
+  await selectSymbol(panel, symbol);
   await setSide(panel, 'شراء');
   let mkt = useMarketOrder();
   if (mkt && !(await pickIn(panel, 1, /السوق/))) { log('⚠️ نوع "السوق" مش متاح — هستخدم أمر محدد', 'warn'); mkt = false; }
