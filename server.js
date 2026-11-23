@@ -774,7 +774,10 @@ app.post('/webhook', express.text({ type: () => true, limit: '64kb' }), async (r
       const px = parseFloat((raw.match(/حقق الهدف الأول:\s*([\d.]+)/) || [])[1]);
       if (sym) data = { action: 'CLOSE', symbol: sym, price: px, result: 'TP' };
     }
-    if (!data.action || !data.symbol) { wlog('❌ بيانات ناقصة — الرسالة لازم تكون JSON فيها action و symbol'); return res.status(400).json({ error: 'بيانات ناقصة' }); }
+    // تنبيه "حقق الهدف الثاني" = معلومة بس (البوت بيكون باع عند الأول)
+    if (!data.action && /حقق الهدف الثاني/.test(raw)) { wlog('ℹ️ هدف تاني — للعلم بس'); return res.json({ ok: true, ignored: 'tp2' }); }
+    // أي رسالة مش مفهومة: بنرد 200 (مش 400) عشان TradingView ما يعتبرش الـ webhook بايظ ويوقّفه
+    if (!data.action || !data.symbol) { wlog('⚠️ رسالة مش مفهومة — اتسجلت بس'); return res.json({ ok: true, ignored: 'unrecognized' }); }
     data.action = String(data.action); data.symbol = String(data.symbol).replace(/^[A-Z]+:/i, '');
     wlog('✅ ' + data.action.toUpperCase() + ' ' + data.symbol.toUpperCase() + ' @ ' + data.price);
 
