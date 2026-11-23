@@ -222,6 +222,28 @@ async function listSelectOptions(index) {
   return opts.map((s) => s.trim()).filter(Boolean);
 }
 
+// فتح تذكرة التداول ولقي خانة البحث عن السهم (بأكتر من شكل) — ولو فشل: صورة + أسماء الخانات في السجل
+async function openTicketSearch() {
+  const ph = /(رمز أو اسم الشركة|رمز|اسم الشركة|ابحث|بحث|Symbol|Search)/;
+  const find = async () => { for (const f of page.frames()) { const l = f.getByPlaceholder(ph).locator('visible=true').first(); if (await l.count()) return l; } return null; };
+  let el = await find(); if (el) return el;
+  const triggers = [page.locator('button.trade-button'), page.locator('[class*=trade-button],[class*=tradeButton],[class*=trade-btn]'), page.getByRole('button', { name: /تداول|Trade/ })];
+  for (const t of triggers) {
+    const b = t.locator('visible=true').first();
+    if (!(await b.count())) continue;
+    await b.click().catch(() => {});
+    for (let i = 0; i < 8 && !el; i++) { await sleep(1000); el = await find(); }
+    if (el) return el;
+  }
+  const inputs = [];
+  for (const f of page.frames()) { const ins = f.locator('input:visible'); const n = Math.min(await ins.count(), 15);
+    for (let i = 0; i < n; i++) inputs.push((await ins.nth(i).getAttribute('placeholder').catch(() => '')) || '(بدون)'); }
+  const btns = (await page.locator('button:visible').allInnerTexts().catch(() => [])).map((x) => x.trim()).filter(Boolean).slice(0, 25);
+  log(`🔍 تذكرة التداول: الخانات الظاهرة: ${inputs.join(' ¦ ')} | الأزرار: ${btns.join(' ¦ ')}`, 'warn');
+  await pushShot('تذكرة التداول ما فتحتش');
+  throw new Error('خانة البحث عن السهم ما ظهرتش في تذكرة التداول');
+}
+
 // ---------- تنفيذ أمر شراء ----------
 async function placeBuy(sig) {
   const symbol = sig.symbol.toUpperCase();
@@ -243,12 +265,10 @@ async function placeBuy(sig) {
   await dismissPopups();
   if (!(await ensureUSMarket())) throw new Error('صفحة سهم مش على السوق المختار (' + (C.market || 'US') + ')');
 
-  // 1) فتح نموذج التداول (لو مش مفتوح)
-  const search = page.getByPlaceholder('رمز أو اسم الشركة').locator('visible=true').first();
-  if (!(await search.isVisible().catch(() => false))) {
-    await page.locator('button.trade-button').locator('visible=true').first().click();
-    await search.waitFor({ state: 'visible', timeout: 10000 });
-  }
+  // 1) فتح نموذج التداول (لو مش مفتوح) — زرار التداول هو الدايرة الخضرا فوق
+  if (!page.url().startsWith(URL_PORTFOLIO)) { await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }).catch(() => {}); }
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  const search = await openTicketSearch();
 
   // 2) الرمز من تبويب الأمريكي
   await search.click();
