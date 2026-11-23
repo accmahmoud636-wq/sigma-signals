@@ -113,7 +113,19 @@ async function ensureUSMarket() {
   const opt = page.locator(':is(li,div,span,a,button):visible', { hasText: new RegExp('^\\s*(' + names + ')\\s*$') }).last();
   if (await opt.count()) await opt.click().catch(() => {});
   await sleep(2500);
-  const ok = (await vis(want).count()) > 0 && !(await vis(other).count());
+  let ok = (await vis(want).count()) > 0 && !(await vis(other).count());
+  if (!ok) {
+    // محاولة تانية: أي عنصر ظاهر فيه كلمة السوق المطلوب (أمريك / سعود / US / SA)
+    const key = want === 'US' ? /(أمريك|US\b|USA|American)/ : /(سعود|SA\b|Saudi)/;
+    const cands = page.locator(':is(li,div,span,a,button,p):visible', { hasText: key });
+    const n = await cands.count();
+    const texts = [];
+    for (let i = 0; i < Math.min(n, 15); i++) texts.push((await cands.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 40));
+    const head = (await page.locator('header, .header, [class*=header]').first().innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+    const sw = await vis(other).evaluate((e) => (e.closest('div,button') || e).outerHTML).catch(() => '');
+    log(`🔍 السوق: الهيدر: ${head} | زرار ${other}: ${sw.replace(/\s+/g, ' ').slice(0, 500)} | عناصر فيها ${want}: ${texts.filter(Boolean).join(' ¦ ').slice(0, 600)}`, 'warn');
+    await page.keyboard.press('Escape').catch(() => {});
+  }
   log(ok ? `${want === 'US' ? '🇺🇸' : '🇸🇦'} اتحوّلت لسوق ${want} في سهم` : `⚠️ ما قدرتش أتحوّل لسوق ${want}`, ok ? 'info' : 'warn');
   return ok;
 }
