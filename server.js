@@ -1065,6 +1065,48 @@ app.post('/api/bot/sell', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// سجل الأوامر + تحليلات الفترة (من/إلى) — من sahmorders اللي البوت بيحفظها
+app.get('/api/bot/orders', auth, adminOnly, async (req, res) => {
+  try {
+    const q = { market: req.query.market === 'SA' ? 'SA' : 'US' };
+    const from = req.query.from ? new Date(req.query.from + 'T00:00:00+03:00') : null;
+    const to = req.query.to ? new Date(req.query.to + 'T23:59:59+03:00') : null;
+    if (from || to) { q.time = {}; if (from) q.time.$gte = from; if (to) q.time.$lte = to; }
+    const list = await mongoose.connection.collection('sahmorders').find(q).sort({ time: -1 }).limit(2000).toArray();
+    const done = list.filter((o) => o.filled > 0);
+    const sells = done.filter((o) => o.side === 'SELL' && typeof o.pl === 'number');
+    const sum = (a, f) => a.reduce((t, o) => t + (Number(f(o)) || 0), 0);
+    const pl = sum(sells, (o) => o.pl), basis = sum(sells, (o) => o.basis);
+    const wins = sells.filter((o) => o.pl > 0), losses = sells.filter((o) => o.pl <= 0);
+    const bySym = {};
+    for (const o of done) {
+      const b = bySym[o.symbol] || (bySym[o.symbol] = { symbol: o.symbol, buys: 0, sells: 0, boughtValue: 0, soldValue: 0, pl: 0, fees: 0 });
+      if (o.side === 'BUY') { b.buys++; b.boughtValue += o.filled * o.avg; } else if (o.side === 'SELL') { b.sells++; b.soldValue += o.filled * o.avg; b.pl += o.pl || 0; }
+      b.fees += o.fee || 0;
+    }
+    const best = sells.slice().sort((a, b) => b.pl - a.pl)[0] || null, worst = sells.slice().sort((a, b) => a.pl - b.pl)[0] || null;
+    res.json({
+      orders: list,
+      summary: {
+        orders: list.length, executed: done.length, buys: done.filter((o) => o.side === 'BUY').length, sells: done.filter((o) => o.side === 'SELL').length,
+        boughtValue: sum(done.filter((o) => o.side === 'BUY'), (o) => o.filled * o.avg), soldValue: sum(done.filter((o) => o.side === 'SELL'), (o) => o.filled * o.avg),
+        fees: sum(done, (o) => o.fee), realizedPL: pl, realizedPct: basis ? (pl / basis) * 100 : null,
+        wins: wins.length, losses: losses.length, winRate: sells.length ? (wins.length / sells.length) * 100 : null,
+        avgWin: wins.length ? sum(wins, (o) => o.pl) / wins.length : null, avgLoss: losses.length ? sum(losses, (o) => o.pl) / losses.length : null,
+        best: best && { symbol: best.symbol, pl: best.pl, pct: best.plPct }, worst: worst && { symbol: worst.symbol, pl: worst.pl, pct: worst.plPct },
+        unknownCost: done.filter((o) => o.side === 'SELL' && typeof o.pl !== 'number').length
+      },
+      bySymbol: Object.values(bySym).sort((a, b) => b.pl - a.pl)
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/bot/history', auth, adminOnly, async (req, res) => {
+  try {
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: { command: { id: Date.now().toString(36), type: 'history', at: new Date() } } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // محفظتي: بيانات محافظ سهم (SA / US) اللي البوت بيقراها
 app.get('/api/bot/portfolio', auth, adminOnly, async (req, res) => {
   try {
