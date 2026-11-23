@@ -1048,6 +1048,14 @@ app.post('/api/bot/sahm-otp', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// محفظتي: بيانات محافظ سهم (SA / US) اللي البوت بيقراها
+app.get('/api/bot/portfolio', auth, adminOnly, async (req, res) => {
+  try {
+    const x = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' });
+    res.json(x || {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // لقطة شاشة صفحة سهم من البوت
 app.get('/api/bot/shot', auth, adminOnly, async (req, res) => {
   try {
