@@ -139,6 +139,7 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
           </div>
         </div>
         <div class="hint" id="loginMsg"></div>
+        <button class="btn" onclick="botUpdate()" style="width:100%;margin-top:8px;border:1px solid var(--border2);background:transparent">⬆️ تحديث البوت من GitHub</button>
         <button class="btn" id="logoutBtn" onclick="sahmLogout()" style="width:100%;margin-top:8px;border:1px solid rgba(255,77,77,.4);color:var(--red);background:transparent">🔌 قطع الاتصال بسهم</button>
       </div>
       <div class="hint">البوت لازم يكون شغال على الجهاز/السيرفر. رقم الجوال بيتحفظ في المنصة، ورمز التحقق ما بيتحفظش.</div>
@@ -392,6 +393,12 @@ async function sahmLogin(){
   const r = await fetch('/api/bot/sahm-login',{method:'POST',headers:H,body:JSON.stringify({phone:$('sPhone').value,method:$('sMethod').value})});
   const j = await r.json(); if(!r.ok) return toast('❌ ' + (j.error||'فشل'));
   S = j; renderStatus(); toast('📡 البوت بيفتح سهم ويطلب الرمز...'); fastPoll();
+}
+async function botUpdate(){
+  if(!confirm('البوت هينزّل آخر نسخة من GitHub ويعيد التشغيل (حوالي دقيقة). كمّل؟')) return;
+  const r = await fetch('/api/bot/update',{method:'POST',headers:H});
+  const j = await r.json(); if(!r.ok) return toast('❌ ' + (j.error||'فشل'));
+  S = j; renderStatus(); toast('⬆️ جاري التحديث...'); fastPoll();
 }
 async function sahmLogout(){
   if(!confirm('هيتم تسجيل الخروج من سهم على السيرفر، ومسح الجلسة المحفوظة، وإيقاف البوت. متأكد؟')) return;
