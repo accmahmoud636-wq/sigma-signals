@@ -133,7 +133,10 @@ const BotSettingsSchema = new mongoose.Schema({
   sahmMethod: { type: String,  default: 'sms' },   // sms | whatsapp
   command:    { type: Object,  default: null },    // أمر للبوت: {id, type:'login'|'otp', code?}
   loginState: { type: String,  default: 'idle' },  // idle|sending|awaiting_otp|verifying|success|error
-  loginMsg:   { type: String,  default: '' }
+  loginMsg:   { type: String,  default: '' },
+  orderState: { type: String,  default: '' },  // بيع من المنصة: working / preview / sent / error
+  orderMsg:   { type: String,  default: '' },
+  orderAt:    { type: Date }
 }, { timestamps: true, collection: 'botsettings' });
 const BotSettings = mongoose.model('BotSettings', BotSettingsSchema);
 const BotLog = mongoose.model('BotLog', new mongoose.Schema({
@@ -1043,6 +1046,20 @@ app.post('/api/bot/sahm-otp', auth, adminOnly, async (req, res) => {
     const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
       command: { id: Date.now().toString(36), type: 'otp', code, at: new Date() },
       loginState: 'verifying', loginMsg: 'جاري التحقق من الرمز...'
+    } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// بيع من المنصة: confirm=false معاينة (من غير إرسال) / confirm=true إرسال فعلي
+app.post('/api/bot/sell', auth, adminOnly, async (req, res) => {
+  try {
+    const symbol = String(req.body.symbol || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 12);
+    const qty = Math.floor(Number(req.body.qty)), price = Number(req.body.price), confirm = req.body.confirm === true;
+    if (!symbol || !(qty > 0) || !(price > 0)) return res.status(400).json({ error: 'الرمز والكمية والسعر مطلوبين' });
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
+      command: { id: Date.now().toString(36), type: 'sell', symbol, qty, price, confirm, at: new Date() },
+      orderState: 'sending', orderMsg: (confirm ? 'جاري إرسال أمر البيع للبوت...' : 'جاري تجهيز المعاينة...'), orderAt: new Date()
     } }, { upsert: true, new: true });
     res.json(maskSettings(s));
   } catch(e) { res.status(500).json({ error: e.message }); }
