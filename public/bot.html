@@ -106,10 +106,17 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
       <div class="field">
         <label class="l">اختر الوسيط</label>
         <select class="sel" id="broker">
-          <option value="sahm">🇸🇦 منصة سهم — السوق الأمريكي</option>
+          <option value="sahm">🇸🇦 منصة سهم</option>
           <option disabled>tastytrade — قريباً</option>
           <option disabled>Interactive Brokers — قريباً</option>
           <option disabled>TradeZero — قريباً</option>
+        </select>
+      </div>
+      <div class="field" id="marketBox">
+        <label class="l">السوق</label>
+        <select class="sel" id="market" onchange="setMarket()">
+          <option value="US">🇺🇸 السوق الأمريكي</option>
+          <option value="SA">🇸🇦 السوق السعودي</option>
         </select>
       </div>
       <div class="conn bad" id="brokerConn">— غير متصل</div>
@@ -276,6 +283,7 @@ function sizeUI(){ const p=$('sizeMode').value==='percent'; $('sizePctBox').styl
 
 function fillForm(){
   $('broker').value = S.broker || 'sahm';
+  $('market').value = S.market || 'US';
   $('sizeMode').value = S.sizeMode || 'fixed';
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>$(k).value = S[k] ?? '');
   $('session').value = S.session || '';
@@ -326,10 +334,15 @@ async function post(body, msg){
   if(!r.ok){toast('❌ خطأ في الحفظ');return false;}
   S = await r.json(); renderStatus(); fillForm(); toast(msg || '✅ اتحفظ — هيتطبق على الإشارة الجاية'); return true;
 }
+function setMarket(){
+  const m=$('market').value;
+  if(!confirm(m==='SA'?'البوت هيشتغل على السوق السعودي (تداول). الأسعار بالريال ومواعيد السوق 10 الصبح – 3 العصر. متأكد؟':'البوت هيشتغل على السوق الأمريكي. متأكد؟')){ $('market').value=S.market||'US'; return; }
+  post({market:m});
+}
 function save(){
   const live = $('live').checked;
   if (live && S.dryRun && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')) return;
-  const b = { broker:$('broker').value, sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value };
+  const b = { broker:$('broker').value, market:$('market').value, sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value };
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>b[k]=Number($(k).value));
   if (b.minPrice > b.maxPrice) return toast('⚠️ أقل سعر أكبر من أعلى سعر');
   post(b);
