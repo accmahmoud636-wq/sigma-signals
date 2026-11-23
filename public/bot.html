@@ -151,7 +151,7 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
       <div class="field">
         <label class="l">اختر الوسيط</label>
         <select class="sel" id="broker">
-          <option value="sahm">🇸🇦 منصة سهم</option>
+          <option value="sahm-vps">🇸🇦 منصة سهم</option>
           <option disabled>tastytrade — قريباً</option>
           <option disabled>Interactive Brokers — قريباً</option>
           <option disabled>TradeZero — قريباً</option>
@@ -330,7 +330,7 @@ function lbl(id,suf){ $(id+'-v').textContent = Number($(id).value).toFixed(1) + 
 function sizeUI(){ const p=$('sizeMode').value==='percent'; $('sizePctBox').style.display=p?'block':'none'; $('amount').style.display=p?'none':'block'; }
 
 function fillForm(){
-  $('broker').value = S.broker || 'sahm';
+  $('broker').value = 'sahm-vps';
   $('market').value = S.market || 'US';
   $('sizeMode').value = S.sizeMode || 'fixed';
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>$(k).value = S[k] ?? '');
