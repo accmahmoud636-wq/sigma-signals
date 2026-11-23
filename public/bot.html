@@ -93,6 +93,9 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
 .pf-tbl{width:100%;border-collapse:collapse;font-size:13px}.pf-tbl th{color:var(--muted2);font-weight:500;padding:8px;border-bottom:1px solid var(--border);text-align:right}
 .pf-tbl td{padding:8px;border-bottom:1px solid var(--border);font-family:var(--mono)}
 .up{color:var(--green)}.dn{color:var(--red)}
+
+.an-f{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.an-f .pf-tab{padding:5px 12px}
+.an-f input[type=date]{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:8px;font-family:var(--mono)}
 </style>
 </head>
 <body>
@@ -116,8 +119,28 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
     <h3 style="font-size:14px;margin:6px 0">📈 الأسهم المملوكة</h3>
     <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>الكمية</th><th>متوسط الشراء</th><th>السعر الحالي</th><th>القيمة السوقية</th><th>الربح/الخسارة</th><th>%</th><th></th></tr></thead><tbody id="pfHolds"></tbody></table></div>
     <h3 style="font-size:14px;margin:14px 0 6px">🧾 أوامر اليوم</h3>
-    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>سعر الأمر</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>العمولة</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
+    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>سعر الأمر</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
     <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">البيانات الخام (للمراجعة)</summary><pre id="pfRaw" style="white-space:pre-wrap;font-size:11px;color:var(--muted2);max-height:300px;overflow:auto"></pre></details>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">📊 سجل الأوامر والتحليلات</h2>
+      <div class="an-f">
+        <button class="pf-tab on" data-r="today" onclick="anRange('today',this)">اليوم</button>
+        <button class="pf-tab" data-r="week" onclick="anRange('week',this)">7 أيام</button>
+        <button class="pf-tab" data-r="month" onclick="anRange('month',this)">30 يوم</button>
+        <button class="pf-tab" data-r="all" onclick="anRange('all',this)">الكل</button>
+        <span class="hint">من</span><input type="date" id="anFrom" onchange="anRange('custom')"><span class="hint">إلى</span><input type="date" id="anTo" onchange="anRange('custom')">
+        <button class="pf-tab" onclick="anHistory()" title="يسحب سجل الأوامر القديم من سهم">⬇️ سجل سهم</button>
+      </div>
+    </div>
+    <div class="hint" id="anInfo" style="margin-top:6px"></div>
+    <div class="pf-sum" id="anSum"></div>
+    <h3 style="font-size:14px;margin:6px 0">🏷️ حسب السهم</h3>
+    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>شراء</th><th>بيع</th><th>قيمة الشراء</th><th>قيمة البيع</th><th>العمولات</th><th>الربح/الخسارة المحقق</th></tr></thead><tbody id="anSym"></tbody></table></div>
+    <h3 style="font-size:14px;margin:14px 0 6px">🧾 الأوامر</h3>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="pf-tbl"><thead><tr><th>التاريخ</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>التكلفة</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="anOrd"></tbody></table></div>
   </div>
   <div class="grid">
 
@@ -469,7 +492,19 @@ function plOf(h){
   const q=num(pick(h,['currentAmount','quantity','holdAmount','qty'])), c=num(pick(h,['costPrice','avgPrice','averagePrice'])), l=num(pick(h,['lastPrice','currentPrice','marketPrice']));
   return (q!==null&&c!==null&&l!==null)?(l-c)*q:null;
 }
-function pfSet(m){ PFM=m; $('pfUS').classList.toggle('on',m==='US'); $('pfSA').classList.toggle('on',m==='SA'); renderPF(); }
+// ربح/خسارة الأمر: البيع = (سعر التنفيذ − متوسط التكلفة) × الكمية − العمولة
+// الشراء = (السعر الحالي − سعر التنفيذ) × الكمية (غير محقق، لو السهم لسه معاك)
+function ordPL(o,bs,D){
+  const sym=String(pick(o,['stockCode','symbol'])||''), q=num(pick(o,['businessAmount','filledQty'])), px=num(pick(o,['businessPrice'])), fee=num(pick(o,['totalFee']))||0;
+  if(!q||!px) return '—';
+  let v=null, note='';
+  if(bs==='2'){ const c=num(((D.costs||{})[sym.replace(/\./g,'_')])); if(c===null) return '<span class="hint">التكلفة مش معروفة</span>'; v=(px-c)*q-fee; note=' <span class="hint">محقق</span>'; }
+  else if(bs==='1'){ const h=listOf(D.queryHoldsList).find(h=>h.stockCode===sym); const l=h&&num(h.lastPrice); if(l===null||l===undefined) return '—'; v=(l-px)*q-fee; note=' <span class="hint">غير محقق</span>'; }
+  else return '—';
+  const pct = bs==='2' ? (v/((num(((D.costs||{})[sym.replace(/\./g,'_')]))||1)*q))*100 : (v/(px*q))*100;
+  return `<span class="${cls(v)}">${fm(v)}$ (${fm(pct)}%)</span>${note}`;
+}
+function pfSet(m){ PFM=m; $('pfUS').classList.toggle('on',m==='US'); $('pfSA').classList.toggle('on',m==='SA'); renderPF(); loadAN(); }
 async function loadPF(){ const r=await fetch('/api/bot/portfolio',{headers:H}); if(!r.ok) return; PF=await r.json(); renderPF(); }
 function listOf(d){ if(!d) return []; if(Array.isArray(d)) return d; for(const k of ['holdsList','dataList','list','positions','records']) if(Array.isArray(d[k])) return d[k]; return []; }
 function renderPF(){
@@ -494,8 +529,8 @@ function renderPF(){
   $('pfOrders').innerHTML = orders.length ? orders.map(x=>{ const o=x.orderInfo||x;
     const bs=String(pick(o,['entrustBs','bsFlag','side'])||''); const side=bs==='1'?'<span class="up">شراء</span>':bs==='2'?'<span class="dn">بيع</span>':bs;
     const t=num(pick(o,['originalEntrustTime','originalBusinessTime','updateTime'])); const tm=t?new Date(t).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):'—';
-    return `<tr><td>${tm}</td><td><b>${pick(o,['stockCode','securityCode','symbol'])||'—'}</b></td><td>${side}</td><td>${fm(pick(o,['entrustQty','entrustAmount','quantity']),0)}</td><td>${fm(pick(o,['entrustPrice','price']),4)}</td><td>${fm(pick(o,['businessAmount','filledQty']),0)}</td><td>${fm(pick(o,['businessPrice']),4)}</td><td>${fm(pick(o,['totalFee']),2)}</td><td>${pick(x,['statusDesc'])||pick(o,['statusDesc'])||'—'}</td></tr>`; }).join('')
-    : '<tr><td colspan="9" class="hint" style="text-align:center">مفيش أوامر النهارده</td></tr>';
+    return `<tr><td>${tm}</td><td><b>${pick(o,['stockCode','securityCode','symbol'])||'—'}</b></td><td>${side}</td><td>${fm(pick(o,['entrustQty','entrustAmount','quantity']),0)}</td><td>${fm(pick(o,['entrustPrice','price']),4)}</td><td>${fm(pick(o,['businessAmount','filledQty']),0)}</td><td>${fm(pick(o,['businessPrice']),4)}</td><td>${fm(pick(o,['totalFee']),2)}</td><td>${ordPL(o,bs,D)}</td><td>${pick(x,['statusDesc'])||pick(o,['statusDesc'])||'—'}</td></tr>`; }).join('')
+    : '<tr><td colspan="10" class="hint" style="text-align:center">مفيش أوامر النهارده</td></tr>';
   $('pfRaw').textContent = JSON.stringify({holds:holds.slice(0,3), asset:A, today:P}, null, 1).slice(0,4000);
 }
 
@@ -544,8 +579,34 @@ async function sellGo(confirmIt){
   $('slPrev').disabled=false; $('slMsg').textContent='البوت ما ردّش — جرّب تاني'; $('slMsg').style.color='var(--red)';
 }
 
-load(true); loadStats(); loadTrades(); loadLogs(); loadPF();
-setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); }, 15000);
+// ===== سجل الأوامر والتحليلات =====
+let AN_R='today';
+const ymd=(d)=>new Date(d.getTime()+3*3600e3).toISOString().slice(0,10);
+function anRange(r,btn){
+  AN_R=r; document.querySelectorAll('.an-f .pf-tab[data-r]').forEach(b=>b.classList.toggle('on',b.dataset.r===r));
+  const now=new Date(); let f='',t='';
+  if(r==='today'){ f=t=ymd(now); } else if(r==='week'){ f=ymd(new Date(now-6*864e5)); t=ymd(now); } else if(r==='month'){ f=ymd(new Date(now-29*864e5)); t=ymd(now); }
+  else if(r==='custom'){ f=$('anFrom').value; t=$('anTo').value; }
+  if(r!=='custom'){ $('anFrom').value=f; $('anTo').value=t; }
+  loadAN();
+}
+async function loadAN(){
+  const qs=new URLSearchParams({market:PFM, from:$('anFrom').value||'', to:$('anTo').value||''});
+  const r=await fetch('/api/bot/orders?'+qs,{headers:H}); if(!r.ok) return; const j=await r.json(); const S2=j.summary, cur=PFM==='US'?'$':'ر.س';
+  $('anInfo').textContent = `${PFM==='US'?'🇺🇸 الأمريكي':'🇸🇦 السعودي'} — ${S2.orders} أمر (${S2.executed} منفذ)` + (S2.unknownCost?` — ${S2.unknownCost} بيع تكلفته مش معروفة (مش داخل في الربح)`:'');
+  const box=(k,v,c,suf='')=>`<div class="pf-box"><div class="v ${c?cls(v):''}">${v===null||v===undefined?'—':fm(v)}${suf}</div><div class="k">${k}</div></div>`;
+  $('anSum').innerHTML = box('صافي الربح/الخسارة المحقق ('+cur+')',S2.realizedPL,true) + box('النسبة على التكلفة',S2.realizedPct,true,'%')
+    + box('نسبة النجاح',S2.winRate,false,'%') + box('رابحة / خاسرة',null).replace('—',`<span class="up">${S2.wins}</span> / <span class="dn">${S2.losses}</span>`)
+    + box('متوسط الربح',S2.avgWin,true) + box('متوسط الخسارة',S2.avgLoss,true)
+    + box('إجمالي الشراء',S2.boughtValue) + box('إجمالي البيع',S2.soldValue) + box('إجمالي العمولات',S2.fees)
+    + (S2.best?box('أفضل صفقة: '+S2.best.symbol,S2.best.pl,true):'') + (S2.worst?box('أسوأ صفقة: '+S2.worst.symbol,S2.worst.pl,true):'');
+  $('anSym').innerHTML = j.bySymbol.length ? j.bySymbol.map(b=>`<tr><td><b>${b.symbol}</b></td><td>${b.buys}</td><td>${b.sells}</td><td>${fm(b.boughtValue)}</td><td>${fm(b.soldValue)}</td><td>${fm(b.fees)}</td><td class="${cls(b.pl)}">${fm(b.pl)}</td></tr>`).join('') : '<tr><td colspan="7" class="hint" style="text-align:center">مفيش صفقات في الفترة دي</td></tr>';
+  $('anOrd').innerHTML = j.orders.length ? j.orders.map(o=>`<tr><td>${o.time?new Date(o.time).toLocaleString('ar-EG',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td><td><b>${o.symbol}</b></td><td>${o.side==='BUY'?'<span class="up">شراء</span>':o.side==='SELL'?'<span class="dn">بيع</span>':o.side}</td><td>${fm(o.qty,0)}</td><td>${fm(o.filled,0)}</td><td>${o.avg?fm(o.avg,4):'—'}</td><td>${o.cost?fm(o.cost,4):'—'}</td><td>${fm(o.fee)}</td><td>${typeof o.pl==='number'?`<span class="${cls(o.pl)}">${fm(o.pl)} (${fm(o.plPct)}%)</span>`:'—'}</td><td>${o.statusDesc||'—'}</td></tr>`).join('') : '<tr><td colspan="10" class="hint" style="text-align:center">مفيش أوامر في الفترة دي</td></tr>';
+}
+async function anHistory(){ await fetch('/api/bot/history',{method:'POST',headers:H}); toast('⬇️ البوت بيفتح سجل الأوامر في سهم...'); setTimeout(loadAN,25000); }
+
+load(true); loadStats(); loadTrades(); loadLogs(); loadPF(); anRange('today');
+setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); loadAN(); }, 30000);
 </script>
 </body>
 </html>
