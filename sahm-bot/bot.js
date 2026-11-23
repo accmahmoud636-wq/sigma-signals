@@ -85,6 +85,7 @@ async function openBrowser() {
   });
   // أي ضغطة/تحميل ليه حد أقصى — من غيره ممكن البوت يستنى للأبد ويقف
   ctx.setDefaultTimeout(20000); ctx.setDefaultNavigationTimeout(45000);
+  await preloadSession().catch((e) => console.log('preload:', e.message));
   page = ctx.pages()[0] || (await ctx.newPage());
   page.on('crash', () => log('💥 صفحة سهم وقعت (crash)', 'warn'));
   // تسجيل طلب "إرسال الأمر" الحقيقي (العنوان + البيانات) — عشان نبني التنفيذ المباشر الأسرع
@@ -212,6 +213,21 @@ async function pushShot(note) {
     await mongoose.connection.collection('botshots').updateOne({ key: 'sahm' },
       { $set: { key: 'sahm', img: buf.toString('base64'), url: page.url(), note: note || '', market: `${lastExchange || '?'}/${lastFund || '?'}`, at: new Date() } }, { upsert: true });
   } catch (_) {}
+}
+
+// تحميل الجلسة المحفوظة قبل أول فتح للصفحة → البوت يفتح سهم مسجّل دخول على طول (من غير ما يستنى)
+async function preloadSession() {
+  if (mongoose.connection.readyState !== 1) return;
+  const doc = await mongoose.connection.collection('sahmsessions').findOne({ key: 'sahm' });
+  if (!doc || !doc.state) return;
+  const st = doc.state;
+  if (st.cookies && st.cookies.length) await ctx.addCookies(st.cookies);
+  const ls = (st.origins || []).filter((o) => /sahmcapital\.com/.test(o.origin) && o.localStorage && o.localStorage.length).map((o) => ({ origin: o.origin, items: o.localStorage }));
+  if (ls.length) await ctx.addInitScript((data) => {
+    const d = data.find((x) => x.origin === location.origin);
+    if (d && !sessionStorage.getItem('__mm_ls')) { for (const { name, value } of d.items) localStorage.setItem(name, value); sessionStorage.setItem('__mm_ls', '1'); }
+  }, ls);
+  lastSession = String(new Date(doc.at).getTime());
 }
 
 // فحص بدون تنقل: هل فيه زرار "تسجيل الخروج" (يعني مسجل دخول)
@@ -746,6 +762,17 @@ async function pickSaudiCode() {
 }
 
 async function startLogin(phone, method) {
+  // ⚡ لو متصل أصلاً → "متصل" فوراً
+  if (loggedIn && (await isLoggedIn())) { await Settings.updateOne({ key: 'sahm' }, { $set: { brokerLoggedIn: true } }); return setLogin('success', '✅ متصل بسهم'); }
+  // ⚡ نجرّب الجلسة المحفوظة الأول (ثواني) قبل ما نطلب كود
+  lastSession = null;
+  const t = Date.now();
+  await applySession().catch(() => {});
+  for (let i = 0; i < 16 && lastAssetAt < t; i++) await sleep(500);
+  if (lastAssetAt >= t || (await page.getByText('تسجيل الخروج').count().catch(() => 0))) {
+    loggedIn = true; await Settings.updateOne({ key: 'sahm' }, { $set: { brokerLoggedIn: true } });
+    return setLogin('success', '✅ متصل بسهم (من غير كود)');
+  }
   if (!phone) return setLogin('error', 'رقم الجوال مش محفوظ — اكتبه في المنصة');
   const phoneIn = await openLoginModal();
   if (phoneIn === 'already') { loggedIn = true; return setLogin('success', 'مسجل دخول بالفعل'); }
@@ -1073,7 +1100,10 @@ async function handle(sig, Signals) {
   let cmdQueued = false;
   setInterval(() => { if (cmdQueued) return; cmdQueued = true; enqueue(() => checkCommands().finally(() => { cmdQueued = false; }), 4 * 60 * 1000, 'أوامر المنصة').then(() => { cmdQueued = false; }); }, 2000);
 
-  if (!(await ensureLoggedIn())) {
+  // ثواني بس: لو الجلسة المحفوظة اشتغلت، سهم بترد ببيانات الحساب على طول
+  for (let i = 0; i < 20 && !lastAssetAt; i++) await sleep(500);
+  if (lastAssetAt) { loggedIn = true; await Settings.updateOne({ key: 'sahm' }, { $set: { loginState: 'success', loginMsg: 'متصل (الجلسة المحفوظة)', brokerLoggedIn: true } }); }
+  if (!loggedIn && !(await ensureLoggedIn())) {
     console.log('🔐 سجّل الدخول: من المنصة (صفحة التداول الآلي → دخول سهم) أو من نافذة المتصفح');
     tg('🔐 بوت سهم محتاج تسجيل دخول — ادخل من صفحة التداول الآلي في المنصة');
     await Settings.updateOne({ key: 'sahm' }, { $set: { loginState: 'idle', loginMsg: 'البوت محتاج تسجيل دخول' } });
