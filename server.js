@@ -1048,6 +1048,17 @@ app.post('/api/bot/sahm-otp', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// تحديث البوت على السيرفر من GitHub
+app.post('/api/bot/update', auth, adminOnly, async (req, res) => {
+  try {
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
+      command: { id: Date.now().toString(36), type: 'update', at: new Date() },
+      loginState: 'sending', loginMsg: 'جاري إرسال أمر التحديث للبوت...'
+    } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // قطع الاتصال بسهم: البوت بيسجل خروج ويمسح الجلسة المحفوظة ويوقف التنفيذ
 app.post('/api/bot/sahm-logout', auth, adminOnly, async (req, res) => {
   try {
