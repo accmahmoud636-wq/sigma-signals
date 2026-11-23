@@ -302,6 +302,66 @@ async function placeBuy(sig) {
   return { status: 'sent', ...info, shot: after2 };
 }
 
+// ---------- بيع من المنصة (زرار "بيع" في محفظتي) ----------
+// confirm=false: يملا التذكرة ويصوّرها من غير إرسال (معاينة) — confirm=true: يبعت الأمر فعلاً
+const setOrder = (orderState, orderMsg) => Settings.updateOne({ key: 'sahm' }, { $set: { orderState, orderMsg, orderAt: new Date() }, $unset: { command: '' } }).catch(() => {});
+async function sellOrder({ symbol, qty, price, confirm }) {
+  symbol = String(symbol || '').toUpperCase(); qty = Math.floor(Number(qty)); price = Number(price);
+  if (!symbol || !(qty > 0) || !(price > 0)) return setOrder('error', 'بيانات البيع ناقصة');
+  await setOrder('working', `${confirm ? 'جاري إرسال' : 'جاري تجهيز معاينة'} بيع ${qty} ${symbol} @ ${price}...`);
+  working = true;
+  try {
+    if (!(await ensureLoggedIn())) throw new Error('مش مسجل دخول في سهم');
+    await dismissPopups();
+    if (!(await ensureUSMarket())) throw new Error('صفحة سهم مش على السوق المختار');
+    if (!page.url().startsWith(URL_PORTFOLIO)) { await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }); await sleep(4000); }
+    // 1) زرار "بيع" في صف السهم في جدول الأسهم المملوكة
+    const row = page.locator('tr:visible', { hasText: symbol }).filter({ has: page.getByText('بيع', { exact: true }) }).first();
+    if (await row.count()) await row.getByText('بيع', { exact: true }).first().click();
+    else {
+      // بديل: تذكرة التداول + البحث عن الرمز + بيع
+      const search = page.getByPlaceholder('رمز أو اسم الشركة').locator('visible=true').first();
+      if (!(await search.isVisible().catch(() => false))) { await page.locator('button.trade-button').locator('visible=true').first().click(); await search.waitFor({ state: 'visible', timeout: 10000 }); }
+      await search.fill(symbol); await sleep(1500);
+      await page.getByText(symbol, { exact: true }).locator('visible=true').first().click(); await sleep(1500);
+      await page.locator('.sell').locator('visible=true').first().click();
+    }
+    await sleep(1500);
+    // 2) نوع الأمر: محدد
+    const priceIn = page.getByPlaceholder('أدخل السعر').locator('visible=true').first();
+    if (!(await priceIn.count())) { const t = page.locator('.n-select').nth(1); if (await t.count()) await pickSelect(1, 'المحدد').catch(() => {}); }
+    await priceIn.waitFor({ state: 'visible', timeout: 8000 });
+    // 3) السعر والكمية
+    await priceIn.fill(String(price));
+    await page.getByPlaceholder('أدخل الكمية').locator('visible=true').first().fill(String(qty));
+    await sleep(800);
+    const ticket = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    const sideOk = /بيع/.test(ticket);
+    await pushShot(`معاينة بيع ${qty} ${symbol} @ ${price}`);
+    if (!confirm) {
+      await page.keyboard.press('Escape').catch(() => {});
+      return setOrder('preview', `📸 المعاينة جاهزة: بيع ${qty} ${symbol} بسعر ${price} — شوف الصورة، ولو كله صح اضغط "تأكيد البيع"`);
+    }
+    if (!sideOk) throw new Error('مش متأكد إن التذكرة على "بيع" — اتلغى');
+    // 4) إرسال + تأكيد
+    await page.getByText('إرسال الأمر', { exact: true }).locator('visible=true').first().click();
+    await sleep(1500);
+    if (await page.locator('input[type=password]').locator('visible=true').count()) throw new Error('سهم طالبة كلمة مرور التداول — افتح قفل التداول');
+    const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
+    if (await ok.count()) { await ok.click(); await sleep(2500); }
+    await pushShot(`بعد إرسال بيع ${qty} ${symbol}`);
+    const after = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    const err = (after.match(/(فشل|مرفوض|رفض|غير كافي|خطأ)[^.،]{0,60}/) || [])[0];
+    tg(`🔴 <b>بيع من المنصة</b>\n${symbol} | كمية ${qty} | محدد ${price}` + (err ? `\n⚠️ ${err}` : ''));
+    return setOrder(err ? 'error' : 'sent', err ? 'سهم ردّت: ' + err : `✅ اتبعت أمر بيع ${qty} ${symbol} بسعر ${price} — راجع "أوامر اليوم"`);
+  } catch (e) {
+    await pushShot('خطأ في البيع');
+    await page.keyboard.press('Escape').catch(() => {});
+    log('بيع: ' + e.message, 'error');
+    return setOrder('error', 'فشل: ' + e.message.split('\n')[0].slice(0, 140));
+  } finally { working = false; }
+}
+
 // ===== تسجيل الدخول من المنصة (رقم الجوال + رمز التحقق) =====
 const setLogin = (loginState, loginMsg) =>
   Settings.updateOne({ key: 'sahm' }, { $set: { loginState, loginMsg }, $unset: { command: '' } }).catch(() => {});
@@ -556,6 +616,7 @@ async function checkCommands() {
     else if (cmd.type === 'otp') await submitOtp(cmd.code);
     else if (cmd.type === 'logout') await logoutSahm();
     else if (cmd.type === 'update') await selfUpdate();
+    else if (cmd.type === 'sell') await sellOrder(cmd);
     else if (cmd.type === 'shot') { await pushShot('طلب من المنصة'); await setLogin(loggedIn ? 'success' : 'idle', 'اتصوّرت صفحة سهم'); }
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
