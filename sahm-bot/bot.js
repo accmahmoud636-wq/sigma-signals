@@ -95,39 +95,53 @@ async function openBrowser() {
       const body = await r.text(); if (!body || body[0] !== '{' || body.length > 200000) return;
       const p = u.replace(/^https?:\/\//, '').split('?')[0];
       const query = u.split('?')[1] || '', req = (r.request().postData() || '').slice(0, 1000);
+      if (/queryAllAsset/.test(p)) { lastExchange = (req.match(/exchangeType=(\w+)/) || [])[1] || lastExchange; lastFund = (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund; }
       await mongoose.connection.collection('sahmapi').updateOne({ path: p }, { $set: { path: p, body, query, req, method: r.request().method(), at: new Date() } }, { upsert: true });
     } catch (_) {}
   });
   await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' });
 }
 
-// السوق المختار من المنصة: US أمريكي / SA سعودي — نحوّل صفحة سهم ليه
+// السوق المختار من المنصة: US أمريكي / SA سعودي
+// بنعرف الصفحة على أنهي سوق من طلبات سهم نفسها (exchangeType=S يعني السعودي)
+let lastExchange = null, lastFund = null;
+const onMarket = (want) => lastExchange && (want === 'SA' ? lastExchange === 'S' : lastExchange !== 'S');
 async function ensureUSMarket() {
-  const want = C.market === 'SA' ? 'SA' : 'US', other = want === 'US' ? 'SA' : 'US';
-  const vis = (code) => page.getByText(new RegExp('^\\s*' + code + '\\s*$')).locator('visible=true').first();
-  if ((await vis(want).count()) && !(await vis(other).count())) return true;
-  if (!(await vis(other).count())) { log('⚠️ ما لقيتش زرار السوق (SA/US) في صفحة سهم', 'warn'); return false; }
-  await vis(other).click().catch(() => {});
-  await sleep(1200);
-  const names = want === 'US' ? 'US|الأمريكي|السوق الأمريكي' : 'SA|السعودي|السوق السعودي';
-  const opt = page.locator(':is(li,div,span,a,button):visible', { hasText: new RegExp('^\\s*(' + names + ')\\s*$') }).last();
-  if (await opt.count()) await opt.click().catch(() => {});
-  await sleep(2500);
-  let ok = (await vis(want).count()) > 0 && !(await vis(other).count());
-  if (!ok) {
-    // محاولة تانية: أي عنصر ظاهر فيه كلمة السوق المطلوب (أمريك / سعود / US / SA)
-    const key = want === 'US' ? /(أمريك|US\b|USA|American)/ : /(سعود|SA\b|Saudi)/;
-    const cands = page.locator(':is(li,div,span,a,button,p):visible', { hasText: key });
-    const n = await cands.count();
-    const texts = [];
-    for (let i = 0; i < Math.min(n, 15); i++) texts.push((await cands.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 40));
-    const head = (await page.locator('header, .header, [class*=header]').first().innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
-    const sw = await vis(other).evaluate((e) => (e.closest('div,button') || e).outerHTML).catch(() => '');
-    log(`🔍 السوق: الهيدر: ${head} | زرار ${other}: ${sw.replace(/\s+/g, ' ').slice(0, 500)} | عناصر فيها ${want}: ${texts.filter(Boolean).join(' ¦ ').slice(0, 600)}`, 'warn');
-    await page.keyboard.press('Escape').catch(() => {});
+  const want = C.market === 'SA' ? 'SA' : 'US';
+  if (onMarket(want)) return true;
+  if (!lastExchange) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(5000); if (onMarket(want)) return true; }
+  const before = `${lastExchange}/${lastFund}`;
+  const visTxt = async (loc, n = 12) => { const out = []; const c = Math.min(await loc.count(), n); for (let i = 0; i < c; i++) out.push((await loc.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 40)); return out.filter(Boolean); };
+  // (1) قائمة الحساب/المحفظة اللي فيها رقم المحفظة الحالية
+  if (lastFund) {
+    const acc = page.getByText(lastFund).locator('visible=true').first();
+    if (await acc.count()) {
+      await acc.click().catch(() => {}); await sleep(1200);
+      const opts = page.locator(':is(li,div,span,a,button):visible', { hasText: /\d{8,10}/ }).filter({ hasNotText: lastFund });
+      const list = await visTxt(opts);
+      log('🔍 حسابات ظاهرة: ' + list.join(' ¦ ').slice(0, 400), 'warn');
+      const pick = want === 'US' ? opts.filter({ hasText: /(الهامش|أمريك|US|\$|دولار)/ }).last() : opts.filter({ hasText: /(سعود|SA|ر\.س|ريال)/ }).last();
+      if (await pick.count()) await pick.click().catch(() => {}); else if (await opts.count()) await opts.last().click().catch(() => {});
+      await sleep(4000);
+      if (onMarket(want)) { log(`${want === 'US' ? '🇺🇸' : '🇸🇦'} اتحوّلت للمحفظة ${lastFund} (${want})`); return true; }
+      await page.keyboard.press('Escape').catch(() => {});
+    }
   }
-  log(ok ? `${want === 'US' ? '🇺🇸' : '🇸🇦'} اتحوّلت لسوق ${want} في سهم` : `⚠️ ما قدرتش أتحوّل لسوق ${want}`, ok ? 'info' : 'warn');
-  return ok;
+  // (2) زرار السوق في الهيدر (SA ⇆ US)
+  const sw = page.getByText(/^\s*(SA|US)\s*$/).locator('visible=true');
+  const swTxt = await visTxt(sw);
+  for (let i = 0; i < Math.min(await sw.count(), 3) && !onMarket(want); i++) {
+    await sw.nth(i).click().catch(() => {}); await sleep(1200);
+    const names = want === 'US' ? /(US|أمريك)/ : /(SA|سعود)/;
+    const o = page.locator(':is(li,div,span,a,button):visible', { hasText: names }).last();
+    if (await o.count()) await o.click().catch(() => {});
+    await sleep(4000);
+  }
+  if (onMarket(want)) { log(`${want === 'US' ? '🇺🇸' : '🇸🇦'} اتحوّلت لسوق ${want} (المحفظة ${lastFund})`); return true; }
+  const head = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+  log(`⚠️ ما قدرتش أتحوّل لسوق ${want} | كان ${before} بقى ${lastExchange}/${lastFund} | أزرار السوق: ${swTxt.join(' ¦ ')} | الصفحة: ${head}`, 'warn');
+  await page.keyboard.press('Escape').catch(() => {});
+  return false;
 }
 
 // فحص بدون تنقل: هل فيه زرار "تسجيل الخروج" (يعني مسجل دخول)
