@@ -757,6 +757,23 @@ app.post('/webhook', express.text({ type: () => true, limit: '64kb' }), async (r
   try {
     let data = {};
     try { data = JSON.parse(raw); } catch (_) { const m = raw.match(/\{[\s\S]*\}/); if (m) { try { data = JSON.parse(m[0]); } catch (_) {} } }
+    // رسالة مؤشر RSI7 Buy النصية (اللي بتروح الإيميل): "🟢 إشارة شراء: SOUN / سعر الدخول المقترح: 2.61 / الهدف الأول (+5%): 2.74"
+    if (!data.action && /إشارة شراء/.test(raw)) {
+      const num = (re) => { const m = raw.match(re); return m ? parseFloat(m[1]) : NaN; };
+      const sym = (raw.match(/إشارة شراء:\s*([A-Z0-9.\-:]+)/i) || [])[1];
+      const price = num(/سعر الدخول المقترح:\s*([\d.]+)/), tp = num(/الهدف الأول[^:]*:\s*([\d.]+)/);
+      if (sym && price > 0) {
+        const bs = await BotSettings.findOne({ key: 'sahm' }).lean().catch(() => null);
+        const slPct = (bs && bs.slPct) || 3;
+        data = { action: 'BUY', symbol: sym, price, tp: tp > 0 ? tp : undefined, sl: +(price * (1 - slPct / 100)).toFixed(4), strategy: 'RSI7 Buy (مؤشر)' };
+      }
+    }
+    // تنبيه "حقق الهدف الأول" من المؤشر = خروج
+    if (!data.action && /حقق الهدف الأول/.test(raw)) {
+      const sym = (raw.match(/✓\s*([A-Z0-9.\-:]+)\s*حقق/i) || [])[1];
+      const px = parseFloat((raw.match(/حقق الهدف الأول:\s*([\d.]+)/) || [])[1]);
+      if (sym) data = { action: 'CLOSE', symbol: sym, price: px, result: 'TP' };
+    }
     if (!data.action || !data.symbol) { wlog('❌ بيانات ناقصة — الرسالة لازم تكون JSON فيها action و symbol'); return res.status(400).json({ error: 'بيانات ناقصة' }); }
     data.action = String(data.action); data.symbol = String(data.symbol).replace(/^[A-Z]+:/i, '');
     wlog('✅ ' + data.action.toUpperCase() + ' ' + data.symbol.toUpperCase() + ' @ ' + data.price);
