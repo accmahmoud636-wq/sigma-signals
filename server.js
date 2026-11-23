@@ -118,6 +118,7 @@ const BotSettingsSchema = new mongoose.Schema({
   heartbeat:  { type: Date,    default: null },    // آخر مرة البوت أكد إنه شغال
   botMode:    { type: String,  default: null },
   broker:     { type: String,  default: 'sahm' },  // الوسيط
+  market:     { type: String,  default: 'US' },    // السوق: US أمريكي / SA سعودي
   sizeMode:   { type: String,  default: 'fixed', enum: ['fixed','percent'] },
   sizePct:    { type: Number,  default: 10 },      // % من المحفظة لو sizeMode=percent
   dailyProfitTarget: { type: Number, default: 0 }, // $ — 0 = بدون حد
@@ -962,6 +963,7 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
     const upd = {
       paused: bool(b.paused), dryRun: bool(b.dryRun), autoBracket: bool(b.autoBracket),
       broker:    ['sahm'].includes(b.broker) ? b.broker : undefined,
+      market:    ['US','SA'].includes(b.market) ? b.market : undefined,
       sizeMode:  ['fixed','percent'].includes(b.sizeMode) ? b.sizeMode : undefined,
       sizePct:   num(b.sizePct, 0.1, 100),
       amount:    num(b.amount, 1, 1000000),
