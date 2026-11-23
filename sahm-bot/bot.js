@@ -767,7 +767,8 @@ async function handle(sig, Signals) {
   await refreshSettings();
   if (sig.action !== 'BUY') return;
   if (C.paused || fs.existsSync(path.join(__dirname, 'PAUSE'))) return log(`⏸ البوت متوقف — تخطي ${tag}`);
-  if (C.broker !== 'sahm') return log(`الوسيط المختار (${C.broker}) مش مدعوم في البوت ده — تخطي ${tag}`, 'warn');
+  // 'sahm-vps' = بوت السيرفر بس (البوت القديم على الكمبيوتر بيتجاهل الإشارات)
+  if (!['sahm', 'sahm-vps'].includes(C.broker)) return log(`الوسيط المختار (${C.broker}) مش مدعوم في البوت ده — تخطي ${tag}`, 'warn');
   if (sig.price < C.minPrice || sig.price > C.maxPrice)
     return log(`↷ تخطي ${tag}: السعر خارج ${C.minPrice}-${C.maxPrice}$`);
   const pnl = await todayPnl(Signals);
