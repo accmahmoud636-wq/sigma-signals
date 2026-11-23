@@ -281,13 +281,13 @@ async function phInput(scope, re) {
   return null;
 }
 function fieldByLabel(panel, label) {
-  return panel.locator(`xpath=.//*[normalize-space(text())="${label}"]/ancestor::*[.//input][1]//input`).first();
+  return panel.locator(`xpath=.//*[normalize-space(text())="${label}"]/ancestor::*[.//input][1]//input`).locator('visible=true').first();
 }
 
 // فتح تذكرة التداول ولقي خانة البحث عن السهم (بأكتر من شكل) — ولو فشل: صورة + أسماء الخانات في السجل
 async function openTicketSearch() {
   const ph = /(رمز أو اسم الشركة|رمز|اسم الشركة|ابحث|بحث|Symbol|Search)/;
-  const find = async () => { if (await ticketPanel()) return (await ticketPanel()).locator('input').first(); for (const f of page.frames()) { const l = await phInput(f, ph); if (l) return l; } return null; };
+  const find = async () => { if (await ticketPanel()) return (await ticketPanel()).locator('input:visible').first(); for (const f of page.frames()) { const l = await phInput(f, ph); if (l) return l; } return null; };
   let el = await find(); if (el) return el;
   const triggers = [page.locator('button.trade-button'), page.locator('[class*=trade-button],[class*=tradeButton],[class*=trade-btn]'), page.getByRole('button', { name: /تداول|Trade/ })];
   for (const t of triggers) {
@@ -346,7 +346,7 @@ async function sellNow(symbol, qty, price) {
   const panel = await prepareTicket();
   await setSide(panel, 'بيع');
   await pickIn(panel, 1, mkt ? /السوق/ : /المحدد/);
-  const search = panel.locator('input').first();
+  const search = panel.locator('input:visible').first();
   await search.click(); await search.fill(''); await search.pressSequentially(symbol, { delay: 10 });
   const result = page.locator(`xpath=//*[normalize-space(text())="${symbol}"][not(ancestor::tr)][not(ancestor::table)]`).locator('visible=true').first();
   await result.waitFor({ state: 'visible', timeout: 8000 });
@@ -358,7 +358,7 @@ async function sellNow(symbol, qty, price) {
   const txt = await panel.innerText().catch(() => '');
   if (!/بيع/.test(txt)) throw new Error('التذكرة مش على بيع');
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
-  await panel.getByText('إرسال الأمر').first().click();
+  await panel.getByText('إرسال الأمر').locator('visible=true').first().click();
   await sleep(600);
   const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
   if (await ok.count()) await ok.click();
@@ -420,15 +420,16 @@ async function monitorPositions() {
 // بنفتحها مرة واحدة ونجهّزها (المحفظة + محدد + شراء)، ولما الإشارة توصل بنكتب الرمز والسعر والكمية بس
 async function ticketPanel() {
   // التذكرة = أصغر div فيه "إرسال الأمر" + خانات إدخال + اختيار المحفظة
-  const p = page.locator('div:visible', { has: page.getByText('إرسال الأمر') }).filter({ has: page.locator('input') }).filter({ has: page.locator('.n-select') }).last();
+  // لازم الخانات نفسها تكون ظاهرة (سهم فيها نسخة مخفية من التذكرة)
+  const p = page.locator('div:visible', { has: page.getByText('إرسال الأمر').locator('visible=true') }).filter({ has: page.locator('input:visible') }).filter({ has: page.locator('.n-select:visible') }).last();
   return (await p.count()) ? p : null;
 }
 async function setSide(panel, side) {
-  const b = panel.getByText(side, { exact: true }).first();
+  const b = panel.getByText(side, { exact: true }).locator('visible=true').first();
   if (await b.count()) await b.click().catch(() => {});
 }
 async function pickIn(panel, idx, re) {
-  const sel = panel.locator('.n-select').nth(idx);
+  const sel = panel.locator('.n-select:visible').nth(idx);
   if (!(await sel.count())) return false;
   const cur = (await sel.innerText().catch(() => '')).trim();
   if (re.test(cur)) return true;
@@ -481,7 +482,7 @@ async function placeBuy(sig) {
   // 1-5) التذكرة جاهزة ومفتوحة (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
   const t0 = Date.now();
   const panel = await prepareTicket();
-  const search = panel.locator('input').first();
+  const search = panel.locator('input:visible').first();
   await search.click(); await search.fill(''); await search.pressSequentially(symbol, { delay: 10 });
   // نتيجة البحث: عنصر نصه الرمز بالظبط، ومش جوه جدول الأوامر/الأسهم
   const result = page.locator(`xpath=//*[normalize-space(text())="${symbol}"][not(ancestor::tr)][not(ancestor::table)]`).locator('visible=true').first();
@@ -496,18 +497,18 @@ async function placeBuy(sig) {
   else if (await priceField.isEditable().catch(() => false)) await priceField.fill(String(limit)).catch(() => {});
   await fieldByLabel(panel, 'الكمية').fill(String(qty));
   log(`⚡ التذكرة اتملت في ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
-  const selCount = await panel.locator('.n-select').count();
+  const selCount = await panel.locator('.n-select:visible').count();
   // 6) الجلسة: نسجل الاختيارات المتاحة (لضبطها بعد أول تجربة)
   const sessionOpts = [];
   if (C.session && selCount > 2) await pickIn(panel, 2, new RegExp(C.session)).catch(() => {});
 
   // 7) الأمر المرفق: جني الربح / وقف الخسارة
-  const before = await panel.locator('input').count();
+  const before = await panel.locator('input:visible').count();
   let bracketOk = false;
   if (C.autoBracket && selCount > 3) bracketOk = await pickIn(panel, 3, /جني الربح/).catch(() => false);
   if (C.autoBracket && !bracketOk) log('⚠️ خانة الأمر المرفق (هدف/وقف) مش موجودة في التذكرة — الشراء من غير هدف/وقف تلقائي', 'warn');
   await sleep(600);
-  const inputs = panel.locator('input');
+  const inputs = panel.locator('input:visible');
   const after = await inputs.count();
   const newPh = [];
   for (let i = before; i < after; i++) newPh.push(await inputs.nth(i).getAttribute('placeholder'));
@@ -528,7 +529,7 @@ async function placeBuy(sig) {
 
   // 8) إرسال + تأكيد
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
-  await panel.getByText('إرسال الأمر').first().click();
+  await panel.getByText('إرسال الأمر').locator('visible=true').first().click();
   log(`${mkt ? '⚡ أمر سوق' : '🎯 أمر محدد'} — اتضغط "إرسال الأمر" بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث من وصول الإشارة للبوت`);
   await sleep(600);
   if (await page.locator('input[type=password]').count()) {
@@ -583,7 +584,7 @@ async function sellOrder({ symbol, qty, price, confirm }) {
     }
     if (!sideOk) throw new Error('مش متأكد إن التذكرة على "بيع" — اتلغى');
     // 4) إرسال + تأكيد
-    await sp.getByText('إرسال الأمر').first().click();
+    await sp.getByText('إرسال الأمر').locator('visible=true').first().click();
     await sleep(1500);
     if (await page.locator('input[type=password]').locator('visible=true').count()) throw new Error('سهم طالبة كلمة مرور التداول — افتح قفل التداول');
     const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
