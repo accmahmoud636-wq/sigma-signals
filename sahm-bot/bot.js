@@ -289,10 +289,35 @@ async function openLoginModal() {
   return phoneIn;
 }
 
+async function loginFrame() {
+  for (const f of page.frames()) if (await f.getByPlaceholder('رقم الهاتف').count().catch(() => 0)) return f;
+  return null;
+}
+async function pickSaudiCode() {
+  const f = await loginFrame(); if (!f) return;
+  const codeRe = /^\s*\+\d{1,4}\s*$/;
+  const cur = f.getByText(codeRe).locator('visible=true').first();
+  const txt = (await cur.innerText().catch(() => '')).trim();
+  if (txt === '+966') return log('مفتاح الدولة +966 ✔');
+  if (!(await cur.count())) return log('⚠️ ما لقيتش مفتاح الدولة في نافذة الدخول', 'warn');
+  await cur.click();
+  await sleep(800);
+  const search = f.locator('input').locator('visible=true').filter({ hasNot: f.getByPlaceholder('رقم الهاتف') });
+  const opt = f.getByText(/\+966/).locator('visible=true');
+  if (!(await opt.count()) && (await search.count())) { await search.first().fill('966').catch(() => {}); await sleep(600); }
+  const o = f.getByText(/\+966/).locator('visible=true').first();
+  if (await o.count()) { await o.click(); await sleep(500); }
+  const now = (await f.getByText(codeRe).locator('visible=true').first().innerText().catch(() => '?')).trim();
+  log(`مفتاح الدولة: كان ${txt} → بقى ${now}`, now === '+966' ? 'info' : 'warn');
+  if (now !== '+966') throw new Error('ما قدرتش أختار مفتاح السعودية +966');
+}
+
 async function startLogin(phone, method) {
   if (!phone) return setLogin('error', 'رقم الجوال مش محفوظ — اكتبه في المنصة');
   const phoneIn = await openLoginModal();
   if (phoneIn === 'already') { loggedIn = true; return setLogin('success', 'مسجل دخول بالفعل'); }
+  // مفتاح الدولة: سهم بتختاره حسب مكان السيرفر (فنلندا +358) — لازم نخليه السعودية +966
+  await pickSaudiCode();
   await phoneIn.fill(phone);
   const m = await inFrames((f) => f.getByText(method === 'whatsapp' ? 'واتساب' : 'الرسائل النصية', { exact: true }), 3000);
   if (m) await m.click();
