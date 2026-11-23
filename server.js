@@ -748,10 +748,18 @@ app.get('/api/prices', auth, async (req, res) => {
 });
 
 // ─── ✅ TradingView Webhook ─────────────────────
-app.post('/webhook', async (req, res) => {
+// Webhook: بيقبل JSON حتى لو TradingView بعته كنص (text/plain) أو فيه كلام زيادة حوالين الـ JSON
+// وكل طلب بيتسجّل في webhooklogs عشان نعرف TradingView وصل ولا لأ
+app.post('/webhook', express.text({ type: () => true, limit: '64kb' }), async (req, res) => {
+  const raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+  const wlog = (result) => mongoose.connection.collection('webhooklogs').insertOne({
+    at: new Date(), ip: req.headers['x-forwarded-for'] || req.ip, ctype: req.headers['content-type'] || '', raw: raw.slice(0, 2000), result }).catch(() => {});
   try {
-    const data = req.body;
-    if (!data.action || !data.symbol) return res.status(400).json({ error: 'بيانات ناقصة' });
+    let data = {};
+    try { data = JSON.parse(raw); } catch (_) { const m = raw.match(/\{[\s\S]*\}/); if (m) { try { data = JSON.parse(m[0]); } catch (_) {} } }
+    if (!data.action || !data.symbol) { wlog('❌ بيانات ناقصة — الرسالة لازم تكون JSON فيها action و symbol'); return res.status(400).json({ error: 'بيانات ناقصة' }); }
+    data.action = String(data.action); data.symbol = String(data.symbol).replace(/^[A-Z]+:/i, '');
+    wlog('✅ ' + data.action.toUpperCase() + ' ' + data.symbol.toUpperCase() + ' @ ' + data.price);
 
     if (['STOPPED','CLOSED','CLOSE'].includes(data.action.toUpperCase())) {
       const result    = (data.result || '').toUpperCase();
@@ -1109,6 +1117,12 @@ app.post('/api/bot/history', auth, adminOnly, async (req, res) => {
     const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: { command: { id: Date.now().toString(36), type: 'history', at: new Date() } } }, { upsert: true, new: true });
     res.json(maskSettings(s));
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// آخر طلبات وصلت على الـ Webhook (للتشخيص)
+app.get('/api/bot/webhooklog', auth, adminOnly, async (req, res) => {
+  try { res.json(await mongoose.connection.collection('webhooklogs').find({}).sort({ at: -1 }).limit(20).toArray()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // محفظتي: بيانات محافظ سهم (SA / US) اللي البوت بيقراها
