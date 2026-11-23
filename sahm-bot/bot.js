@@ -140,8 +140,19 @@ async function ensureUSMarket() {
   if (onMarket(want)) { log(`${want === 'US' ? '🇺🇸' : '🇸🇦'} اتحوّلت لسوق ${want} (المحفظة ${lastFund})`); return true; }
   const head = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
   log(`⚠️ ما قدرتش أتحوّل لسوق ${want} | كان ${before} بقى ${lastExchange}/${lastFund} | أزرار السوق: ${swTxt.join(' ¦ ')} | الصفحة: ${head}`, 'warn');
+  await pushShot('فشل التحويل لـ ' + want);
   await page.keyboard.press('Escape').catch(() => {});
   return false;
+}
+
+// لقطة شاشة من صفحة سهم على السيرفر — بتظهر في المنصة (عشان نشوف البوت شايف إيه)
+async function pushShot(note) {
+  try {
+    if (!page || page.isClosed()) return;
+    const buf = await page.screenshot({ type: 'jpeg', quality: 55 });
+    await mongoose.connection.collection('botshots').updateOne({ key: 'sahm' },
+      { $set: { key: 'sahm', img: buf.toString('base64'), url: page.url(), note: note || '', market: `${lastExchange || '?'}/${lastFund || '?'}`, at: new Date() } }, { upsert: true });
+  } catch (_) {}
 }
 
 // فحص بدون تنقل: هل فيه زرار "تسجيل الخروج" (يعني مسجل دخول)
@@ -549,6 +560,7 @@ async function checkCommands() {
     else if (cmd.type === 'otp') await submitOtp(cmd.code);
     else if (cmd.type === 'logout') await logoutSahm();
     else if (cmd.type === 'update') await selfUpdate();
+    else if (cmd.type === 'shot') { await pushShot('طلب من المنصة'); await setLogin(loggedIn ? 'success' : 'idle', 'اتصوّرت صفحة سهم'); }
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
     // تشخيص: إيه اللي ظاهر في الصفحة
@@ -688,6 +700,7 @@ async function handle(sig, Signals) {
       const ok = await ensureLoggedIn();
       if (ok && !loggedIn) { sessionStart = Date.now(); tg('✅ رجع تسجيل الدخول في سهم'); }
       if (ok) await ensureUSMarket().catch(() => {});
+      await pushShot('تحديث دوري');
       if (ok) await saveSession().catch(() => {});
       if (!ok && loggedIn) {
         const hrs = ((Date.now() - sessionStart) / 3600000).toFixed(1);
