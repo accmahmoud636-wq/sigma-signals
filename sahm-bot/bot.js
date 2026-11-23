@@ -467,6 +467,25 @@ async function applySession() {
   }
 }
 
+// قطع الاتصال: تسجيل خروج من سهم + مسح الجلسة المحفوظة
+async function logoutSahm() {
+  await mongoose.connection.collection('sahmsessions').deleteMany({});
+  try {
+    await ensureBrowser();
+    const out = page.getByText('تسجيل الخروج').first();
+    if (await out.count()) { await out.click({ force: true }).catch(() => {}); await sleep(1500);
+      const yes = page.getByRole('button', { name: /^\s*(تأكيد|نعم|تسجيل الخروج|حسناً)\s*$/ }).locator('visible=true').last();
+      if (await yes.count()) await yes.click().catch(() => {}); }
+    await page.evaluate(() => { try { localStorage.clear(); sessionStorage.clear(); } catch (_) {} }).catch(() => {});
+    await ctx.clearCookies();
+    await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+  } catch (e) { log('قطع الاتصال: ' + e.message, 'warn'); }
+  loggedIn = false; lastSession = null;
+  await Settings.updateOne({ key: 'sahm' }, { $set: { brokerLoggedIn: false, account: null } });
+  tg('🔌 تم قطع الاتصال بسهم — البوت متوقف ومش هينفذ لحد ما تدخل تاني');
+  await setLogin('idle', 'تم قطع الاتصال بسهم');
+}
+
 let lastCmd = null;
 async function checkCommands() {
   try { await applySession(); } catch (e) { log('نقل الجلسة: ' + e.message, 'error'); }
@@ -477,6 +496,7 @@ async function checkCommands() {
   try {
     if (cmd.type === 'login') await startLogin(s.sahmPhone, s.sahmMethod);
     else if (cmd.type === 'otp') await submitOtp(cmd.code);
+    else if (cmd.type === 'logout') await logoutSahm();
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
     // تشخيص: إيه اللي ظاهر في الصفحة
