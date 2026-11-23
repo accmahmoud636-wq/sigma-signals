@@ -15,7 +15,7 @@ const { chromium } = require('playwright');
 // الإعدادات بتتقرا من منصة MILLIONAIRE (صفحة 🤖 بوت سهم) قبل كل إشارة
 const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3,
                    minPrice: 3, maxPrice: 5, maxPerDay: 5, session: '', broker: 'sahm',
-                   sizeMode: 'fixed', sizePct: 10, market: 'US', orderType: 'market', dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
+                   sizeMode: 'fixed', sizePct: 10, market: 'US', orderType: 'market', fundAccount: '', dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
 let C = { ...DEFAULTS };
 let Settings; // collection botsettings
 async function refreshSettings() {
@@ -142,6 +142,28 @@ async function openBrowser() {
 let lastExchange = null, lastFund = null, lastAssetAt = 0;
 const onMarket = (want) => lastExchange && (want === 'SA' ? lastExchange === 'S' : lastExchange !== 'S');
 async function ensureUSMarket() {
+  const okMarket = await ensureMarketOnly();
+  if (!okMarket) return false;
+  return ensureFund();
+}
+// اختيار المحفظة المحددة في المنصة (مثلاً 800906239 الهامش) من قائمة المحافظ في صفحة سهم
+async function ensureFund() {
+  const want = String(C.fundAccount || '').trim();
+  if (!want || lastFund === want) return true;
+  const before = lastFund;
+  const cur = before ? page.getByText(before).locator('visible=true').first() : null;
+  if (cur && await cur.count()) {
+    await cur.click().catch(() => {}); await sleep(1000);
+    const opt = page.locator(':is(li,div,span,a,button):visible', { hasText: want }).last();
+    if (await opt.count()) await opt.click().catch(() => {});
+    for (let i = 0; i < 10 && lastFund !== want; i++) await sleep(1000);
+  }
+  const ok = lastFund === want;
+  log(ok ? `💼 اتحوّلت للمحفظة ${want}` : `⚠️ ما قدرتش أختار المحفظة ${want} (الحالية ${lastFund})`, ok ? 'info' : 'warn');
+  if (!ok) { await page.keyboard.press('Escape').catch(() => {}); await pushShot('فشل اختيار المحفظة ' + want); }
+  return ok;
+}
+async function ensureMarketOnly() {
   const want = C.market === 'SA' ? 'SA' : 'US', other = want === 'US' ? 'SA' : 'US';
   if (onMarket(want)) return true;
   if (!lastExchange) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(6000); if (onMarket(want)) return true; }
@@ -408,7 +430,8 @@ async function prepareTicket() {
   if (!panel) { await openTicketSearch(); panel = await ticketPanel(); }
   if (!panel) throw new Error('تذكرة التداول ما فتحتش');
   // المحفظة (الأمريكي = رقم المحفظة الحالية، مثلاً 800906239 الهامش)
-  await pickIn(panel, 0, lastFund ? new RegExp(lastFund) : /الهامش|الرئيسية/);
+  const fund = String(C.fundAccount || lastFund || '').trim();
+  await pickIn(panel, 0, fund ? new RegExp(fund) : /الهامش|الرئيسية/);
   await pickIn(panel, 1, useMarketOrder() ? /السوق/ : /المحدد/);
   await setSide(panel, 'شراء');
   if (Date.now() - ticketAt > 10 * 60 * 1000) { ticketAt = Date.now(); log('🎫 تذكرة التداول مفتوحة وجاهزة — مستنية الإشارة'); }
@@ -432,7 +455,7 @@ async function placeBuy(sig) {
 
   // ⚡ المسار السريع: لو التذكرة مفتوحة والسوق صح → على طول للتنفيذ (من غير تحميل صفحات)
   const want = C.market === 'SA' ? 'SA' : 'US';
-  const ready = loggedIn && onMarket(want) && (await ticketPanel());
+  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && (await ticketPanel());
   if (!ready) {
     if (!(await ensureLoggedIn())) throw new Error('مش مسجل دخول في سهم — ادخل يدوي في نافذة البوت');
     await dismissPopups();
@@ -967,8 +990,9 @@ async function handle(sig, Signals) {
   let appliedMarket = null, lastTry = 0;
   setInterval(async () => {
     await refreshSettings().catch(() => {});
-    const want = C.market === 'SA' ? 'SA' : 'US';
-    if (loggedIn && !working && want !== appliedMarket && Date.now() - lastTry > 90 * 1000) {
+    const want = (C.market === 'SA' ? 'SA' : 'US') + '|' + (C.fundAccount || '');
+    const drift = C.fundAccount && lastFund && lastFund !== String(C.fundAccount);
+    if (loggedIn && !working && (want !== appliedMarket || drift) && Date.now() - lastTry > 90 * 1000) {
       lastTry = Date.now();
       enqueue(async () => { if (await ensureUSMarket().catch(() => false)) { appliedMarket = want; await prepareTicket().catch((e) => log('تجهيز التذكرة: ' + e.message, 'warn')); } }, 2 * 60 * 1000, 'تحويل السوق');
     }
