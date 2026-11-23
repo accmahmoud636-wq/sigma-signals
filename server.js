@@ -965,7 +965,7 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
     const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : undefined;
     const upd = {
       paused: bool(b.paused), dryRun: bool(b.dryRun), autoBracket: bool(b.autoBracket),
-      broker:    ['sahm'].includes(b.broker) ? b.broker : undefined,
+      broker:    ['sahm','sahm-vps'].includes(b.broker) ? b.broker : undefined,
       market:    ['US','SA'].includes(b.market) ? b.market : undefined,
       sizeMode:  ['fixed','percent'].includes(b.sizeMode) ? b.sizeMode : undefined,
       sizePct:   num(b.sizePct, 0.1, 100),
