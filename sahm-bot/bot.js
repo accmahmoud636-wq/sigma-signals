@@ -244,6 +244,44 @@ async function openTicketSearch() {
   throw new Error('خانة البحث عن السهم ما ظهرتش في تذكرة التداول');
 }
 
+// ---------- تذكرة التداول الدائمة ----------
+// بنفتحها مرة واحدة ونجهّزها (المحفظة + محدد + شراء)، ولما الإشارة توصل بنكتب الرمز والسعر والكمية بس
+async function ticketPanel() {
+  const s = page.getByPlaceholder(/رمز أو اسم الشركة/).locator('visible=true').first();
+  if (!(await s.count())) return null;
+  const p = s.locator('xpath=ancestor::div[.//*[contains(normalize-space(.),"إرسال الأمر")]][1]');
+  return (await p.count()) ? p : null;
+}
+async function setSide(panel, side) {
+  const b = panel.getByText(side, { exact: true }).first();
+  if (await b.count()) await b.click().catch(() => {});
+}
+async function pickIn(panel, idx, re) {
+  const sel = panel.locator('.n-select').nth(idx);
+  if (!(await sel.count())) return false;
+  const cur = (await sel.innerText().catch(() => '')).trim();
+  if (re.test(cur)) return true;
+  await sel.click();
+  await sleep(500);
+  const opts = page.locator('.n-base-select-option:visible');
+  const o = opts.filter({ hasText: re }).first();
+  if (await o.count()) await o.click(); else if (await opts.count()) await opts.first().click(); else { await page.keyboard.press('Escape'); return false; }
+  await sleep(400);
+  return true;
+}
+let ticketAt = 0;
+async function prepareTicket() {
+  let panel = await ticketPanel();
+  if (!panel) { await openTicketSearch(); panel = await ticketPanel(); }
+  if (!panel) throw new Error('تذكرة التداول ما فتحتش');
+  // المحفظة (الأمريكي = رقم المحفظة الحالية، مثلاً 800906239 الهامش)
+  await pickIn(panel, 0, lastFund ? new RegExp(lastFund) : /الهامش|الرئيسية/);
+  await pickIn(panel, 1, /المحدد/);
+  await setSide(panel, 'شراء');
+  if (Date.now() - ticketAt > 10 * 60 * 1000) { ticketAt = Date.now(); log('🎫 تذكرة التداول مفتوحة وجاهزة — مستنية الإشارة'); }
+  return panel;
+}
+
 // ---------- تنفيذ أمر شراء ----------
 async function placeBuy(sig) {
   const symbol = sig.symbol.toUpperCase();
@@ -265,50 +303,37 @@ async function placeBuy(sig) {
   await dismissPopups();
   if (!(await ensureUSMarket())) throw new Error('صفحة سهم مش على السوق المختار (' + (C.market || 'US') + ')');
 
-  // 1) فتح نموذج التداول (لو مش مفتوح) — زرار التداول هو الدايرة الخضرا فوق
-  if (!page.url().startsWith(URL_PORTFOLIO)) { await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }).catch(() => {}); }
-  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-  const search = await openTicketSearch();
-
-  // 2) الرمز من تبويب الأمريكي
-  await search.click();
-  await sleep(500);
-  // تبويب "الأمريكي" في نتائج البحث (الظاهر بس)
-  const usTab = page.getByText(C.market === 'SA' ? 'السعودي' : 'الأمريكي', { exact: true }).locator('visible=true').first();
-  if (await usTab.count()) { await usTab.click(); await sleep(300); }
-  await search.fill(symbol);
-  await sleep(1500);
-  // النتيجة: عنصر ظاهر مكتوب فيه الرمز بالظبط
-  const result = page.getByText(symbol, { exact: true }).locator('visible=true').first();
-  await result.waitFor({ state: 'visible', timeout: 10000 });
+  // 1-5) التذكرة جاهزة ومفتوحة (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
+  const t0 = Date.now();
+  const panel = await prepareTicket();
+  const search = panel.getByPlaceholder(/رمز أو اسم الشركة|رمز|بحث/).first();
+  await search.click(); await search.fill(''); await search.fill(symbol);
+  // نتيجة البحث: عنصر نصه الرمز بالظبط، ومش جوه جدول الأوامر/الأسهم
+  const result = page.locator(`xpath=//*[normalize-space(text())="${symbol}"][not(ancestor::tr)][not(ancestor::table)]`).locator('visible=true').first();
+  await result.waitFor({ state: 'visible', timeout: 8000 });
   await result.click();
-  await sleep(1500);
-
-  // 3) شراء
-  await page.locator('.buy').locator('visible=true').first().click();
-
-  // 4) النوع: محدد (القوائم بالترتيب: 0 المحفظة، 1 النوع، 2 الجلسة، 3 الأمر المرفق)
-  const selTexts = await page.locator('.n-select').allInnerTexts();
-  if (!/المحدد/.test(selTexts[1] || '')) await pickSelect(1, 'المحدد');
-
-  // 5) السعر والكمية
-  await page.getByPlaceholder('أدخل السعر').locator('visible=true').first().fill(String(limit));
-  await page.getByPlaceholder('أدخل الكمية').locator('visible=true').first().fill(String(qty));
-
+  await sleep(700);
+  await setSide(panel, 'شراء');
+  await panel.getByPlaceholder('أدخل السعر').first().fill(String(limit));
+  await panel.getByPlaceholder('أدخل الكمية').first().fill(String(qty));
+  log(`⚡ التذكرة اتملت في ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
+  const selCount = await panel.locator('.n-select').count();
   // 6) الجلسة: نسجل الاختيارات المتاحة (لضبطها بعد أول تجربة)
-  const sessionOpts = await listSelectOptions(2).catch(() => []);
-  if (C.session) await pickSelect(2, C.session);
+  const sessionOpts = [];
+  if (C.session && selCount > 2) await pickIn(panel, 2, new RegExp(C.session)).catch(() => {});
 
   // 7) الأمر المرفق: جني الربح / وقف الخسارة
-  const before = await page.locator('input').count();
-  if (C.autoBracket) await pickSelect(3, 'جني الربح/ وقف الخسارة');
+  const before = await panel.locator('input').count();
+  let bracketOk = false;
+  if (C.autoBracket && selCount > 3) bracketOk = await pickIn(panel, 3, /جني الربح/).catch(() => false);
+  if (C.autoBracket && !bracketOk) log('⚠️ خانة الأمر المرفق (هدف/وقف) مش موجودة في التذكرة — الشراء من غير هدف/وقف تلقائي', 'warn');
   await sleep(600);
-  const inputs = page.locator('input');
+  const inputs = panel.locator('input');
   const after = await inputs.count();
   const newPh = [];
   for (let i = before; i < after; i++) newPh.push(await inputs.nth(i).getAttribute('placeholder'));
   // أول خانة جديدة = سعر جني الربح، التانية = سعر وقف الخسارة (نتأكد منها في وضع DRY_RUN)
-  if (C.autoBracket && after - before >= 2) {
+  if (bracketOk && after - before >= 2) {
     await inputs.nth(before).fill(String(tp));
     await inputs.nth(before + 1).fill(String(sl));
   }
@@ -319,14 +344,12 @@ async function placeBuy(sig) {
   await pushShot(`${C.dry ? 'تجربة' : 'قبل الإرسال'}: شراء ${qty} ${symbol} @ ${limit} | هدف ${tp} | وقف ${sl}`);
 
   if (C.dry) {
-    await page.getByText('إرسال الأمر').first().waitFor();
-    // نقفل النموذج من غير إرسال
-    await page.keyboard.press('Escape');
+    // وضع التجربة: من غير إرسال — التذكرة تفضل مفتوحة للإشارة الجاية
     return { status: 'dry-run', ...info };
   }
 
   // 8) إرسال + تأكيد
-  await page.getByText('إرسال الأمر', { exact: true }).first().click();
+  await panel.getByText('إرسال الأمر').first().click();
   await sleep(1000);
   if (await page.locator('input[type=password]').count()) {
     throw new Error('سهم طالبة كلمة مرور التداول (قفل التداول) — افتح القفل يدوي في نافذة البوت');
@@ -805,7 +828,7 @@ async function handle(sig, Signals) {
     const want = C.market === 'SA' ? 'SA' : 'US';
     if (loggedIn && !working && want !== appliedMarket && Date.now() - lastTry > 90 * 1000) {
       lastTry = Date.now();
-      enqueue(async () => { if (await ensureUSMarket().catch(() => false)) appliedMarket = want; }, 2 * 60 * 1000, 'تحويل السوق');
+      enqueue(async () => { if (await ensureUSMarket().catch(() => false)) { appliedMarket = want; await prepareTicket().catch((e) => log('تجهيز التذكرة: ' + e.message, 'warn')); } }, 2 * 60 * 1000, 'تحويل السوق');
     }
   }, 20 * 1000);
   // تحديث المحفظة تلقائياً كل دقيقة: ضغطة على "المحافظ" (أخف من ريفرش الصفحة كلها)
@@ -818,6 +841,7 @@ async function handle(sig, Signals) {
       if (await nav.count()) await nav.click().catch(() => {});
       for (let i = 0; i < 6 && lastAssetAt < t0; i++) await sleep(1000);
       if (lastAssetAt < t0) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(5000); }
+      if (!(await ticketPanel())) await prepareTicket().catch(() => {});
     }, 90 * 1000, 'تحديث المحفظة');
   }, 60 * 1000);
   beat(); setInterval(async () => { await refreshSettings().catch(() => {}); beat(); }, 60 * 1000);
