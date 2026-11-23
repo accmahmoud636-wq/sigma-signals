@@ -480,8 +480,21 @@ async function prepareTicket() {
 
 // اختيار السهم في التذكرة: نكتب الرمز، ونختار النتيجة من قايمة البحث (بأكتر من طريقة)
 async function selectSymbol(panel, symbol) {
+  // خانة البحث في التذكرة ممكن تكون "زرار" بيفتح نافذة بحث فيها خانة تانية —
+  // فبنضغطها، ونكتب في الخانة اللي عليها التركيز (focus) فعلاً
   const search = panel.locator('input:visible').first();
-  await search.click(); await search.fill(''); await search.pressSequentially(symbol, { delay: 15 });
+  await search.click().catch(() => {});
+  await sleep(600);
+  const focused = await page.evaluate(() => { const a = document.activeElement; return a && a.tagName === 'INPUT' ? (a.placeholder || 'input') : ''; }).catch(() => '');
+  if (focused) {
+    await page.keyboard.press('Control+A').catch(() => {}); await page.keyboard.press('Backspace').catch(() => {});
+    await page.keyboard.type(symbol, { delay: 20 });
+  } else {
+    // دوّر على أي خانة بحث ظاهرة اتفتحت (نافذة البحث)
+    const alt = page.locator('input:visible').filter({ hasNot: page.locator('xpath=self::*[@type="number"]') }).last();
+    await alt.click().catch(() => {}); await alt.fill('').catch(() => {}); await alt.pressSequentially(symbol, { delay: 20 }).catch(() => {});
+  }
+  log(`🔎 كتبت ${symbol} في: ${focused || 'خانة البحث المنبثقة'}`);
   const sym = symbol.toUpperCase();
   const tryPick = () => page.evaluate((sym) => {
     // كل العناصر الظاهرة اللي نصها بيبدأ بالرمز بالظبط (أو الرمز لوحده) — من قايمة البحث المنبثقة
