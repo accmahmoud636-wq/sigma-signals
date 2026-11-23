@@ -263,7 +263,12 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
     </div>
 
     <!-- 3) لوحة التحكم -->
-    <div class="card">
+      <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">📡 آخر تنبيهات وصلت من TradingView</h2><button class="pf-tab" onclick="loadWH()">🔄</button></div>
+    <div class="hint" style="margin:6px 0">أي تنبيه TradingView بيبعته على الـ Webhook بيظهر هنا فوراً — لو التنبيه طلع في TradingView ومش ظاهر هنا، يبقى المشكلة في إعدادات التنبيه نفسه (Webhook URL).</div>
+    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>النتيجة</th><th>الرسالة اللي وصلت</th></tr></thead><tbody id="whLog"></tbody></table></div>
+  </div>
+<div class="card">
       <h2>📊 لوحة التحكم بالتداول</h2>
       <div class="stats">
         <div class="stat"><b id="s-net">—</b><span>قيمة الحساب</span></div>
@@ -618,8 +623,11 @@ async function loadAN(){
 }
 async function anHistory(){ await fetch('/api/bot/history',{method:'POST',headers:H}); toast('⬇️ البوت بيفتح سجل الأوامر في سهم...'); setTimeout(loadAN,25000); }
 
-load(true); loadStats(); loadTrades(); loadLogs(); loadPF(); anRange('today');
-setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); loadAN(); }, 30000);
+async function loadWH(){ const r=await fetch('/api/bot/webhooklog',{headers:H}); if(!r.ok) return; const l=await r.json();
+  $('whLog').innerHTML = l.length ? l.map(x=>`<tr><td>${new Date(x.at).toLocaleString('ar-EG',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td><td>${x.result||''}</td><td style="font-size:11px;max-width:420px;word-break:break-all">${String(x.raw||'').replace(/</g,'&lt;').slice(0,300)}</td></tr>`).join('') : '<tr><td colspan="3" class="hint" style="text-align:center">لسه ما وصلش أي تنبيه على الـ Webhook</td></tr>'; }
+
+load(true); loadStats(); loadTrades(); loadLogs(); loadPF(); anRange('today'); loadWH();
+setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); loadAN(); loadWH(); }, 30000);
 </script>
 </body>
 </html>
