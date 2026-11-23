@@ -15,7 +15,7 @@ const { chromium } = require('playwright');
 // الإعدادات بتتقرا من منصة MILLIONAIRE (صفحة 🤖 بوت سهم) قبل كل إشارة
 const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3,
                    minPrice: 3, maxPrice: 5, maxPerDay: 5, session: '', broker: 'sahm',
-                   sizeMode: 'fixed', sizePct: 10, dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
+                   sizeMode: 'fixed', sizePct: 10, market: 'US', dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
 let C = { ...DEFAULTS };
 let Settings; // collection botsettings
 async function refreshSettings() {
@@ -94,10 +94,28 @@ async function openBrowser() {
       const t = r.request().resourceType(); if (t !== 'xhr' && t !== 'fetch') return;
       const body = await r.text(); if (!body || body[0] !== '{' || body.length > 200000) return;
       const p = u.replace(/^https?:\/\//, '').split('?')[0];
-      await mongoose.connection.collection('sahmapi').updateOne({ path: p }, { $set: { path: p, body, at: new Date() } }, { upsert: true });
+      const query = u.split('?')[1] || '', req = (r.request().postData() || '').slice(0, 1000);
+      await mongoose.connection.collection('sahmapi').updateOne({ path: p }, { $set: { path: p, body, query, req, method: r.request().method(), at: new Date() } }, { upsert: true });
     } catch (_) {}
   });
   await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' });
+}
+
+// السوق المختار من المنصة: US أمريكي / SA سعودي — نحوّل صفحة سهم ليه
+async function ensureUSMarket() {
+  const want = C.market === 'SA' ? 'SA' : 'US', other = want === 'US' ? 'SA' : 'US';
+  const vis = (code) => page.getByText(new RegExp('^\\s*' + code + '\\s*$')).locator('visible=true').first();
+  if ((await vis(want).count()) && !(await vis(other).count())) return true;
+  if (!(await vis(other).count())) { log('⚠️ ما لقيتش زرار السوق (SA/US) في صفحة سهم', 'warn'); return false; }
+  await vis(other).click().catch(() => {});
+  await sleep(1200);
+  const names = want === 'US' ? 'US|الأمريكي|السوق الأمريكي' : 'SA|السعودي|السوق السعودي';
+  const opt = page.locator(':is(li,div,span,a,button):visible', { hasText: new RegExp('^\\s*(' + names + ')\\s*$') }).last();
+  if (await opt.count()) await opt.click().catch(() => {});
+  await sleep(2500);
+  const ok = (await vis(want).count()) > 0 && !(await vis(other).count());
+  log(ok ? `${want === 'US' ? '🇺🇸' : '🇸🇦'} اتحوّلت لسوق ${want} في سهم` : `⚠️ ما قدرتش أتحوّل لسوق ${want}`, ok ? 'info' : 'warn');
+  return ok;
 }
 
 // فحص بدون تنقل: هل فيه زرار "تسجيل الخروج" (يعني مسجل دخول)
@@ -174,6 +192,7 @@ async function placeBuy(sig) {
 
   // 0) قفل أي جولة تعريفية أو نافذة منبثقة
   await dismissPopups();
+  if (!(await ensureUSMarket())) throw new Error('صفحة سهم مش على السوق المختار (' + (C.market || 'US') + ')');
 
   // 1) فتح نموذج التداول (لو مش مفتوح)
   const search = page.getByPlaceholder('رمز أو اسم الشركة').locator('visible=true').first();
@@ -186,7 +205,7 @@ async function placeBuy(sig) {
   await search.click();
   await sleep(500);
   // تبويب "الأمريكي" في نتائج البحث (الظاهر بس)
-  const usTab = page.getByText('الأمريكي', { exact: true }).locator('visible=true').first();
+  const usTab = page.getByText(C.market === 'SA' ? 'السعودي' : 'الأمريكي', { exact: true }).locator('visible=true').first();
   if (await usTab.count()) { await usTab.click(); await sleep(300); }
   await search.fill(symbol);
   await sleep(1500);
@@ -391,6 +410,7 @@ async function submitOtp(code) {
       await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }).catch(() => {});
       loggedIn = true;
       tg('✅ تم تسجيل الدخول في سهم من المنصة');
+      await ensureUSMarket().catch(() => {});
       await saveSession().catch((e) => log('حفظ الجلسة: ' + e.message, 'warn'));
       return setLogin('success', 'تم تسجيل الدخول في سهم');
     }
@@ -434,6 +454,7 @@ async function applySession() {
   await sleep(3000);
   if (await isLoggedIn()) {
     loggedIn = true;
+    await ensureUSMarket().catch(() => {});
     tg(doc.from === 'server' ? '✅ رجعت جلسة سهم المحفوظة — البوت مسجل دخول' : '✅ جلسة سهم اتنقلت من الكمبيوتر — البوت مسجل دخول على السيرفر');
     await setLogin('success', 'تم تسجيل الدخول (جلسة منقولة من الكمبيوتر)');
   } else {
@@ -590,6 +611,7 @@ async function handle(sig, Signals) {
       await page.reload({ waitUntil: "domcontentloaded" });
       const ok = await ensureLoggedIn();
       if (ok && !loggedIn) { sessionStart = Date.now(); tg('✅ رجع تسجيل الدخول في سهم'); }
+      if (ok) await ensureUSMarket().catch(() => {});
       if (ok) await saveSession().catch(() => {});
       if (!ok && loggedIn) {
         const hrs = ((Date.now() - sessionStart) / 3600000).toFixed(1);
