@@ -104,6 +104,7 @@ async function openBrowser() {
         if (mk && data) await mongoose.connection.collection('sahmportfolio').updateOne({ key: 'sahm' },
           { $set: { [`${mk}.${pm[1]}`]: data, [`${mk}.at`]: new Date(), [`${mk}.fund`]: (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund } }, { upsert: true });
       }
+      if (/queryAllAsset/.test(p)) lastAssetAt = Date.now();
       if (/queryAllAsset/.test(p)) { lastExchange = (req.match(/exchangeType=(\w+)/) || [])[1] || lastExchange; lastFund = (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund; }
       await mongoose.connection.collection('sahmapi').updateOne({ path: p }, { $set: { path: p, body, query, req, method: r.request().method(), at: new Date() } }, { upsert: true });
     } catch (_) {}
@@ -113,7 +114,7 @@ async function openBrowser() {
 
 // السوق المختار من المنصة: US أمريكي / SA سعودي
 // بنعرف الصفحة على أنهي سوق من طلبات سهم نفسها (exchangeType=S يعني السعودي)
-let lastExchange = null, lastFund = null;
+let lastExchange = null, lastFund = null, lastAssetAt = 0;
 const onMarket = (want) => lastExchange && (want === 'SA' ? lastExchange === 'S' : lastExchange !== 'S');
 async function ensureUSMarket() {
   const want = C.market === 'SA' ? 'SA' : 'US', other = want === 'US' ? 'SA' : 'US';
@@ -726,6 +727,18 @@ async function handle(sig, Signals) {
       busy = busy.then(async () => { if (await ensureUSMarket().catch(() => false)) appliedMarket = want; }).catch(() => {});
     }
   }, 20 * 1000);
+  // تحديث المحفظة تلقائياً كل دقيقة: ضغطة على "المحافظ" (أخف من ريفرش الصفحة كلها)
+  setInterval(() => {
+    if (!loggedIn || working) return;
+    busy = busy.then(async () => {
+      if (!page || page.isClosed() || working) return;
+      const t0 = Date.now();
+      const nav = page.getByText('المحافظ', { exact: true }).locator('visible=true').first();
+      if (await nav.count()) await nav.click().catch(() => {});
+      for (let i = 0; i < 6 && lastAssetAt < t0; i++) await sleep(1000);
+      if (lastAssetAt < t0) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(5000); }
+    }).catch(() => {});
+  }, 60 * 1000);
   beat(); setInterval(async () => { await refreshSettings().catch(() => {}); beat(); }, 60 * 1000);
   await openBrowser();
   // أوامر المنصة (تسجيل الدخول/الرمز) — كل ثانيتين
