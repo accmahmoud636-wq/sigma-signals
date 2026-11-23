@@ -101,8 +101,21 @@ async function openBrowser() {
         const ex = (req.match(/exchangeType=(\w+)/) || [])[1] || lastExchange;
         const mk = ex ? (ex === 'S' ? 'SA' : 'US') : null;
         let data = null; try { data = JSON.parse(body).data; } catch (_) {}
-        if (mk && data) await mongoose.connection.collection('sahmportfolio').updateOne({ key: 'sahm' },
-          { $set: { [`${mk}.${pm[1]}`]: data, [`${mk}.at`]: new Date(), [`${mk}.fund`]: (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund } }, { upsert: true });
+        if (mk && data) {
+          const set = { [`${mk}.${pm[1]}`]: data, [`${mk}.at`]: new Date(), [`${mk}.fund`]: (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund };
+          // متوسط تكلفة كل سهم بنحفظه دايماً — عشان نحسب ربح/خسارة البيع بعد ما السهم يخرج من المحفظة
+          for (const h of (data.holdsList || [])) if (h.stockCode && Number(h.costPrice) > 0) set[`${mk}.costs.${String(h.stockCode).replace(/\./g, '_')}`] = Number(h.costPrice);
+          await mongoose.connection.collection('sahmportfolio').updateOne({ key: 'sahm' }, { $set: set }, { upsert: true });
+        }
+      }
+      // سجل الأوامر (اليوم + سجل الأوامر القديم لو اتفتح): بنحفظ كل أمر مرة واحدة للتحليلات
+      if (/order/i.test(p) && !/Statistic/i.test(p)) {
+        let d = null; try { d = JSON.parse(body).data; } catch (_) {}
+        const list = d && (Array.isArray(d) ? d : d.dataList || d.list || d.records);
+        if (Array.isArray(list) && list.length && (list[0].orderInfo || list[0].entrustBs || list[0].stockCode)) {
+          const ex = (req.match(/exchangeType=(\w+)/) || [])[1] || lastExchange;
+          await storeOrders(list, ex ? (ex === 'S' ? 'SA' : 'US') : 'US').catch(() => {});
+        }
       }
       if (/queryAllAsset/.test(p)) lastAssetAt = Date.now();
       if (/queryAllAsset/.test(p)) { lastExchange = (req.match(/exchangeType=(\w+)/) || [])[1] || lastExchange; lastFund = (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund; }
@@ -281,6 +294,7 @@ async function placeBuy(sig) {
   const shot = path.join(SHOTS, `${Date.now()}-${symbol}.png`);
   await page.screenshot({ path: shot });
   const info = { symbol, limit, qty, tp, sl, sessionOpts, newFields: newPh, shot };
+  await pushShot(`${C.dry ? 'تجربة' : 'قبل الإرسال'}: شراء ${qty} ${symbol} @ ${limit} | هدف ${tp} | وقف ${sl}`);
 
   if (C.dry) {
     await page.getByText('إرسال الأمر').first().waitFor();
@@ -300,6 +314,7 @@ async function placeBuy(sig) {
   await sleep(1500);
   const after2 = path.join(SHOTS, `${Date.now()}-${symbol}-sent.png`);
   await page.screenshot({ path: after2 });
+  await pushShot(`بعد إرسال شراء ${qty} ${symbol}`);
   return { status: 'sent', ...info, shot: after2 };
 }
 
@@ -361,6 +376,35 @@ async function sellOrder({ symbol, qty, price, confirm }) {
     log('بيع: ' + e.message, 'error');
     return setOrder('error', 'فشل: ' + e.message.split('\n')[0].slice(0, 140));
   } finally { working = false; }
+}
+
+// ---------- سجل الأوامر للتحليلات (collection: sahmorders) ----------
+async function storeOrders(list, mk) {
+  const col = mongoose.connection.collection('sahmorders');
+  const pf = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' }, { projection: { [`${mk}.costs`]: 1 } });
+  const costs = (pf && pf[mk] && pf[mk].costs) || {};
+  for (const x of list) {
+    const o = x.orderInfo || x;
+    const id = String(o.entrustId || o.id || x.id || ''); if (!id) continue;
+    const side = String(o.entrustBs || '') === '1' ? 'BUY' : String(o.entrustBs || '') === '2' ? 'SELL' : String(o.entrustBs || '');
+    const qty = Number(o.entrustQty || o.entrustAmount || 0), filled = Number(o.businessAmount || o.filledQty || 0);
+    const avg = Number(o.businessPrice || 0), fee = Number(o.totalFee || 0);
+    const t = Number(o.originalEntrustTime || o.originalBusinessTime || o.updateTime || 0);
+    const symbol = String(o.stockCode || '');
+    const doc = { id, market: mk, fund: String(o.fundAccount || x.fundAccount || ''), symbol, side, qty, price: Number(o.entrustPrice || 0),
+      filled, avg, fee, status: String(x.status || o.status || ''), statusDesc: x.statusDesc || o.statusDesc || '',
+      time: t ? new Date(t) : null, tradeDate: String(o.tradeDate || ''), updatedAt: new Date() };
+    const prev = await col.findOne({ id }, { projection: { cost: 1 } });
+    // تكلفة البيع: بنثبّتها أول مرة نشوف الأمر (قبل ما متوسط التكلفة يتغير)
+    if (side === 'SELL' && filled > 0 && avg > 0) {
+      const cost = prev && prev.cost ? prev.cost : Number(costs[symbol.replace(/\./g, '_')]) || null;
+      doc.cost = cost;
+      doc.pl = cost ? (avg - cost) * filled - fee : null;
+      doc.plPct = cost ? ((avg - cost) / cost) * 100 : null;
+      doc.basis = cost ? cost * filled : null;
+    }
+    await col.updateOne({ id }, { $set: doc }, { upsert: true });
+  }
 }
 
 // ===== تسجيل الدخول من المنصة (رقم الجوال + رمز التحقق) =====
@@ -618,6 +662,12 @@ async function checkCommands() {
     else if (cmd.type === 'logout') await logoutSahm();
     else if (cmd.type === 'update') await selfUpdate();
     else if (cmd.type === 'sell') await sellOrder(cmd);
+    else if (cmd.type === 'history') {
+      const h = page.getByText('سجل الأوامر').locator('visible=true').first();
+      if (await h.count()) { await h.click().catch(() => {}); await sleep(6000); await pushShot('سجل الأوامر'); }
+      await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }).catch(() => {});
+      await setLogin(loggedIn ? 'success' : 'idle', 'اتسحب سجل الأوامر من سهم');
+    }
     else if (cmd.type === 'shot') { await pushShot('طلب من المنصة'); await setLogin(loggedIn ? 'success' : 'idle', 'اتصوّرت صفحة سهم'); }
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
@@ -688,6 +738,7 @@ async function handle(sig, Signals) {
   } catch (e) {
 
     await page.screenshot({ path: path.join(SHOTS, `${Date.now()}-${sig.symbol}-error.png`) }).catch(() => {});
+    await pushShot(`خطأ في شراء ${sig.symbol}: ${String(e.message).split('\n')[0].slice(0, 80)}`);
     // تشخيص: إيه اللي ظاهر في صفحة سهم ساعة الخطأ
     try {
       const frames = page.frames().map((f) => f.url().replace(/^https?:\/\//, '').slice(0, 50)).filter((u) => u && !/google|linkedin|recaptcha|about:blank|facebook|clarity/.test(u));
