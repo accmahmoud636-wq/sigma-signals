@@ -655,6 +655,16 @@ async function handle(sig, Signals) {
     if (!working) { const acc = await readAccount().catch(() => null); if (acc) set.account = acc; }
     await Settings.updateOne({ key: 'sahm' }, { $set: set }).catch(() => {});
   };
+  // لما السوق يتغير من المنصة: نحوّل صفحة سهم فوراً (من غير ما نستنى الريفرش الدوري)
+  let appliedMarket = null, lastTry = 0;
+  setInterval(async () => {
+    await refreshSettings().catch(() => {});
+    const want = C.market === 'SA' ? 'SA' : 'US';
+    if (loggedIn && !working && want !== appliedMarket && Date.now() - lastTry > 90 * 1000) {
+      lastTry = Date.now();
+      busy = busy.then(async () => { if (await ensureUSMarket().catch(() => false)) appliedMarket = want; }).catch(() => {});
+    }
+  }, 20 * 1000);
   beat(); setInterval(async () => { await refreshSettings().catch(() => {}); beat(); }, 60 * 1000);
   await openBrowser();
   // أوامر المنصة (تسجيل الدخول/الرمز) — كل ثانيتين
