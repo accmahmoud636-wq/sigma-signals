@@ -498,6 +498,29 @@ async function logoutSahm() {
   await setLogin('idle', 'تم قطع الاتصال بسهم');
 }
 
+// تحديث البوت من GitHub (زرار في المنصة) — بيتأكد إن الملف سليم قبل ما يستبدله
+async function selfUpdate() {
+  const url = 'https://api.github.com/repos/accmahmoud636-wq/sigma-signals/contents/sahm-bot/bot.js?ref=main';
+  await setLogin('sending', 'جاري تحميل آخر نسخة من البوت...');
+  const code = await new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'sahm-bot', Accept: 'application/vnd.github.raw' } }, (r) => {
+      if (r.statusCode !== 200) return reject(new Error('GitHub ' + r.statusCode));
+      let d = ''; r.setEncoding('utf8'); r.on('data', (c) => (d += c)); r.on('end', () => resolve(d));
+    }).on('error', reject);
+  });
+  const tmp = path.join(__dirname, 'bot.new.js');
+  fs.writeFileSync(tmp, code);
+  const chk = require('child_process').spawnSync(process.execPath, ['--check', tmp]);
+  if (chk.status !== 0) { fs.unlinkSync(tmp); return setLogin('error', 'ملف البوت على GitHub فيه خطأ — التحديث اتلغى'); }
+  if (code === fs.readFileSync(__filename, 'utf8')) { fs.unlinkSync(tmp); return setLogin(loggedIn ? 'success' : 'idle', 'البوت أصلاً على آخر نسخة'); }
+  fs.renameSync(tmp, __filename);
+  await setLogin('sending', 'اتحدّث — البوت بيعيد التشغيل (دقيقة)...');
+  tg('⬆️ البوت اتحدّث من GitHub وبيعيد التشغيل');
+  await sleep(1500);
+  try { await ctx.close(); } catch (_) {}
+  process.exit(0); // systemd بيشغّله تاني بالنسخة الجديدة
+}
+
 let lastCmd = null;
 async function checkCommands() {
   try { await applySession(); } catch (e) { log('نقل الجلسة: ' + e.message, 'error'); }
@@ -505,10 +528,13 @@ async function checkCommands() {
   const cmd = s && s.command;
   if (!cmd || cmd.id === lastCmd) return;
   lastCmd = cmd.id;
+  // أمر قديم (من قبل إعادة التشغيل) ما ننفذوش تاني
+  if (cmd.at && Date.now() - new Date(cmd.at).getTime() > 2 * 60 * 1000) return;
   try {
     if (cmd.type === 'login') await startLogin(s.sahmPhone, s.sahmMethod);
     else if (cmd.type === 'otp') await submitOtp(cmd.code);
     else if (cmd.type === 'logout') await logoutSahm();
+    else if (cmd.type === 'update') await selfUpdate();
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
     // تشخيص: إيه اللي ظاهر في الصفحة
