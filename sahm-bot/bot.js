@@ -433,12 +433,24 @@ async function pickIn(panel, idx, re) {
   if (!(await sel.count())) return false;
   const cur = (await sel.innerText().catch(() => '')).trim();
   if (re.test(cur)) return true;
-  await sel.click();
+  await sel.click().catch(() => {});
   await sleep(500);
-  const opts = page.locator('.n-base-select-option:visible');
-  const o = opts.filter({ hasText: re }).first();
-  if (await o.count()) await o.click(); else if (await opts.count()) await opts.first().click(); else { await page.keyboard.press('Escape'); return false; }
+  // نختار من القايمة المفتوحة بالـ JavaScript مباشرة (القايمة بتتحرك/بتتعمل animation فالضغط العادي بيفشل)
+  const res = await page.evaluate(({ src, flags }) => {
+    const r = new RegExp(src, flags);
+    const opts = [...document.querySelectorAll('.n-base-select-option')].filter((e) => e.offsetParent !== null || e.getClientRects().length);
+    const texts = opts.map((e) => e.innerText.trim());
+    const hit = opts.find((e) => r.test(e.innerText.trim()));
+    if (hit) { hit.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); hit.click(); }
+    return { ok: !!hit, texts };
+  }, { src: re.source, flags: re.flags }).catch((e) => ({ ok: false, texts: [String(e.message)] }));
   await sleep(400);
+  const now = (await sel.innerText().catch(() => '')).trim();
+  if (!re.test(now)) {
+    log(`⚠️ اختيار "${re.source}" في القايمة ${idx + 1} ما نفعش — الاختيارات المتاحة: ${res.texts.join(' ¦ ') || '(القايمة ما فتحتش)'} — المختار دلوقتي: ${now || '—'}`, 'warn');
+    await page.keyboard.press('Escape').catch(() => {});
+    return false;
+  }
   return true;
 }
 let ticketAt = 0;
@@ -490,8 +502,9 @@ async function placeBuy(sig) {
   await result.click();
   await sleep(700);
   await setSide(panel, 'شراء');
-  const mkt = useMarketOrder();
-  await pickIn(panel, 1, mkt ? /السوق/ : /المحدد/);
+  let mkt = useMarketOrder();
+  if (mkt && !(await pickIn(panel, 1, /السوق/))) { log('⚠️ نوع "السوق" مش متاح — هستخدم أمر محدد', 'warn'); mkt = false; }
+  if (!mkt) await pickIn(panel, 1, /المحدد/);
   const priceField = fieldByLabel(panel, 'السعر');
   if (!mkt) await priceField.fill(String(limit));
   else if (await priceField.isEditable().catch(() => false)) await priceField.fill(String(limit)).catch(() => {});
