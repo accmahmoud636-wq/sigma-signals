@@ -108,7 +108,9 @@ const BotSettingsSchema = new mongoose.Schema({
   paused:     { type: Boolean, default: false },   // إيقاف طارئ
   dryRun:     { type: Boolean, default: true },    // تجربة من غير إرسال
   amount:     { type: Number,  default: 100 },     // مبلغ الصفقة $
-  offsetPct:  { type: Number,  default: 0.5 },     // سعر المحدد فوق الإشارة %
+  offsetPct:  { type: Number,  default: 0.5 },
+  orderType:  { type: String,  default: 'market' },
+  fundAccount:{ type: String,  default: '' },       // رقم المحفظة في سهم (مثلاً 800906239) // market أمر سوق / limit محدد     // سعر المحدد فوق الإشارة %
   tpPct:      { type: Number,  default: 5 },
   slPct:      { type: Number,  default: 3 },
   minPrice:   { type: Number,  default: 3 },
@@ -971,6 +973,8 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
       sizePct:   num(b.sizePct, 0.1, 100),
       amount:    num(b.amount, 1, 1000000),
       offsetPct: num(b.offsetPct, 0, 5),
+      orderType: ['market','limit'].includes(b.orderType) ? b.orderType : undefined,
+      fundAccount: typeof b.fundAccount === 'string' ? b.fundAccount.replace(/\D/g, '').slice(0, 15) : undefined,
       tpPct:     num(b.tpPct, 0.1, 100),
       slPct:     num(b.slPct, 0.1, 100),
       minPrice:  num(b.minPrice, 0, 100000),
