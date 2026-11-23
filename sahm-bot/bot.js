@@ -235,6 +235,12 @@ async function openTicketSearch() {
     for (let i = 0; i < 8 && !el; i++) { await sleep(1000); el = await find(); }
     if (el) return el;
   }
+  // الدايرة الخضرا فوق على الشمال (زرار التداول) — بنضغط على مكانها مباشرة
+  for (const [x, y] of [[42, 40], [40, 38], [44, 42]]) {
+    await page.mouse.click(x, y).catch(() => {});
+    for (let i = 0; i < 6 && !el; i++) { await sleep(1000); el = await find(); }
+    if (el) { log('🎫 فتحت التذكرة من الدايرة الخضرا'); return el; }
+  }
   const inputs = [];
   for (const f of page.frames()) { const ins = f.locator('input:visible'); const n = Math.min(await ins.count(), 15);
     for (let i = 0; i < n; i++) inputs.push((await ins.nth(i).getAttribute('placeholder').catch(() => '')) || '(بدون)'); }
@@ -841,8 +847,9 @@ async function handle(sig, Signals) {
       const nav = page.getByText('المحافظ', { exact: true }).locator('visible=true').first();
       if (await nav.count()) await nav.click().catch(() => {});
       for (let i = 0; i < 6 && lastAssetAt < t0; i++) await sleep(1000);
-      if (lastAssetAt < t0) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(5000); }
-      if (!(await ticketPanel())) await prepareTicket().catch(() => {});
+      // ريفرش كامل بس لو البيانات واقفة أكتر من 5 دقايق (الريفرش بيقفل التذكرة)
+      if (Date.now() - lastAssetAt > 5 * 60 * 1000) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {}); }
+      if (!(await ticketPanel())) await prepareTicket().catch((e) => log('تجهيز التذكرة: ' + e.message, 'warn'));
     }, 90 * 1000, 'تحديث المحفظة');
   }, 60 * 1000);
   beat(); setInterval(async () => { await refreshSettings().catch(() => {}); beat(); }, 60 * 1000);
@@ -896,7 +903,8 @@ async function handle(sig, Signals) {
     if (working) return;
     try {
       await ensureBrowser();
-      await page.reload({ waitUntil: "domcontentloaded" });
+      // لو التذكرة مفتوحة ما نعملش ريفرش (التحديث الدوري كل دقيقة كفاية كنشاط للجلسة)
+      if (!(await ticketPanel().catch(() => null))) { await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {}); }
       const ok = await ensureLoggedIn();
       if (ok && !loggedIn) { sessionStart = Date.now(); tg('✅ رجع تسجيل الدخول في سهم'); }
       if (ok) await ensureUSMarket().catch(() => {});
