@@ -288,13 +288,15 @@ async function inFrames(make, timeout = 15000) {
 
 async function openLoginModal() {
   await ensureBrowser();
-  await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
-  await sleep(3000);
+  if (!page.url().startsWith(URL_PORTFOLIO)) {
+    await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+    await sleep(1500);
+  }
   if (await isLoggedIn()) return 'already';
   await dismissPopups();
   const findPhone = (t) => inFrames((f) => f.getByPlaceholder('رقم الهاتف'), t);
-  let phoneIn = await findPhone(3000);
+  let phoneIn = await findPhone(1500);
   if (!phoneIn) {
     // زرار التداول بيفتح نافذة الدخول لما تكون مش مسجل
     const btn = page.getByText(/التسجيل\s*\/\s*تسجيل الدخول/).locator('visible=true').first();
@@ -444,14 +446,16 @@ async function applySession() {
   await ensureBrowser();
   const st = doc.state;
   if (st.cookies && st.cookies.length) await ctx.addCookies(st.cookies);
-  for (const o of st.origins || []) {
-    if (!o.localStorage || !o.localStorage.length) continue;
-    await page.goto(o.origin, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-    await page.evaluate((items) => { for (const { name, value } of items) localStorage.setItem(name, value); }, o.localStorage).catch(() => {});
-  }
+  // localStorage لمواقع سهم بس — بنحطه قبل ما الصفحة تحمّل (من غير ما نفتح كل موقع لوحده)
+  const ls = (st.origins || []).filter((o) => /sahmcapital\.com/.test(o.origin) && o.localStorage && o.localStorage.length)
+    .map((o) => ({ origin: o.origin, items: o.localStorage }));
+  if (ls.length) await ctx.addInitScript((data) => {
+    const d = data.find((x) => x.origin === location.origin);
+    if (d && !sessionStorage.getItem('__mm_ls')) { for (const { name, value } of d.items) localStorage.setItem(name, value); sessionStorage.setItem('__mm_ls', '1'); }
+  }, ls);
   await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
-  await sleep(3000);
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  await sleep(2000);
   if (await isLoggedIn()) {
     loggedIn = true;
     await ensureUSMarket().catch(() => {});
