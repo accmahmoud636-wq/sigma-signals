@@ -83,6 +83,8 @@ async function openBrowser() {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     args: ['--disable-blink-features=AutomationControlled'],
   });
+  // أي ضغطة/تحميل ليه حد أقصى — من غيره ممكن البوت يستنى للأبد ويقف
+  ctx.setDefaultTimeout(20000); ctx.setDefaultNavigationTimeout(45000);
   page = ctx.pages()[0] || (await ctx.newPage());
   page.on('crash', () => log('💥 صفحة سهم وقعت (crash)', 'warn'));
   ctx.on('close', () => log('المتصفح اتقفل', 'warn'));
@@ -708,6 +710,14 @@ async function readAccount() {
 
 // ---------- معالجة إشارة ----------
 let busy = Promise.resolve();
+// طابور المهام: كل مهمة ليها حد أقصى للوقت — لو علّقت، الطابور يكمّل وما يقفش البوت كله
+function enqueue(fn, ms = 3 * 60 * 1000, name = '') {
+  busy = busy.then(() => Promise.race([
+    Promise.resolve().then(fn),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + name)), ms)),
+  ])).catch((e) => { if (/timeout/.test(e.message)) log(`⏱️ مهمة علّقت واتلغت: ${name}`, 'warn'); working = false; });
+  return busy;
+}
 let loggedIn = false, working = false;
 async function handle(sig, Signals) {
   const tag = `${sig.symbol} @ $${sig.price}`;
@@ -775,25 +785,26 @@ async function handle(sig, Signals) {
     const want = C.market === 'SA' ? 'SA' : 'US';
     if (loggedIn && !working && want !== appliedMarket && Date.now() - lastTry > 90 * 1000) {
       lastTry = Date.now();
-      busy = busy.then(async () => { if (await ensureUSMarket().catch(() => false)) appliedMarket = want; }).catch(() => {});
+      enqueue(async () => { if (await ensureUSMarket().catch(() => false)) appliedMarket = want; }, 2 * 60 * 1000, 'تحويل السوق');
     }
   }, 20 * 1000);
   // تحديث المحفظة تلقائياً كل دقيقة: ضغطة على "المحافظ" (أخف من ريفرش الصفحة كلها)
   setInterval(() => {
     if (!loggedIn || working) return;
-    busy = busy.then(async () => {
+    enqueue(async () => {
       if (!page || page.isClosed() || working) return;
       const t0 = Date.now();
       const nav = page.getByText('المحافظ', { exact: true }).locator('visible=true').first();
       if (await nav.count()) await nav.click().catch(() => {});
       for (let i = 0; i < 6 && lastAssetAt < t0; i++) await sleep(1000);
       if (lastAssetAt < t0) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(5000); }
-    }).catch(() => {});
+    }, 90 * 1000, 'تحديث المحفظة');
   }, 60 * 1000);
   beat(); setInterval(async () => { await refreshSettings().catch(() => {}); beat(); }, 60 * 1000);
   await openBrowser();
   // أوامر المنصة (تسجيل الدخول/الرمز) — كل ثانيتين
-  setInterval(() => { busy = busy.then(() => checkCommands()).catch(() => {}); }, 2000);
+  let cmdQueued = false;
+  setInterval(() => { if (cmdQueued) return; cmdQueued = true; enqueue(() => checkCommands().finally(() => { cmdQueued = false; }), 4 * 60 * 1000, 'أوامر المنصة').then(() => { cmdQueued = false; }); }, 2000);
 
   if (!(await ensureLoggedIn())) {
     console.log('🔐 سجّل الدخول: من المنصة (صفحة التداول الآلي → دخول سهم) أو من نافذة المتصفح');
@@ -815,9 +826,22 @@ async function handle(sig, Signals) {
     [{ $match: { operationType: 'insert', 'fullDocument.action': 'BUY', 'fullDocument.source': { $ne: 'email' } } }],
     { fullDocument: 'updateLookup' }
   );
-  stream.on('change', (ch) => {
-    busy = busy.then(async () => { working = true; try { await handle(ch.fullDocument, Signals); } finally { working = false; } });
-  });
+  const seen = new Set();
+  const onSignal = (doc) => {
+    const id = String(doc._id); if (seen.has(id)) return; seen.add(id);
+    log(`📥 إشارة وصلت: ${doc.symbol} @ $${doc.price}`);
+    enqueue(async () => { working = true; try { await handle(doc, Signals); } finally { working = false; } }, 4 * 60 * 1000, 'تنفيذ ' + doc.symbol);
+  };
+  stream.on('change', (ch) => onSignal(ch.fullDocument));
+  // احتياطي: كل 15 ثانية نشوف لو فيه إشارة جديدة (آخر 3 دقايق) ما اتعالجتش — لو الاتصال اللحظي وقع
+  const startedAt = new Date();
+  setInterval(async () => {
+    try {
+      const since = new Date(Math.max(startedAt.getTime(), Date.now() - 3 * 60 * 1000));
+      const list = await Signals.find({ action: 'BUY', source: { $ne: 'email' }, tradeResult: { $exists: false }, _id: { $gt: mongoose.Types.ObjectId.createFromTime(Math.floor(since.getTime() / 1000)) } }).toArray();
+      list.forEach(onSignal);
+    } catch (_) {}
+  }, 15 * 1000);
   stream.on('error', (e) => { console.error('stream:', e.message); tg('⚠️ انقطع اتصال البوت بقاعدة البيانات — أعد تشغيله'); });
 
   // ===== إبقاء الجلسة حية =====
