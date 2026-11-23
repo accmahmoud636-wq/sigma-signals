@@ -164,6 +164,10 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
           <option value="SA">🇸🇦 السوق السعودي</option>
         </select>
       </div>
+      <div class="field">
+        <label class="l">رقم المحفظة في سهم</label>
+        <input class="inp" id="fundAccount" placeholder="مثلاً 800906239 (فاضي = المفتوحة حالياً)" inputmode="numeric" onchange="post({fundAccount:this.value.trim()})">
+      </div>
       <div class="conn bad" id="brokerConn">— غير متصل</div>
 
       <div id="loginBox" style="margin-top:12px">
@@ -242,6 +246,13 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
       <div class="two field">
         <div><label class="l">أقصى صفقات في اليوم</label><input class="inp" id="maxPerDay" type="number" min="0"></div>
         <div><label class="l">سعر الأمر فوق الإشارة %</label><input class="inp" id="offsetPct" type="number" step="0.1" min="0"></div>
+      </div>
+      <div class="field"><label class="l">نوع الأمر</label>
+        <select class="sel" id="orderType">
+          <option value="market">⚡ أمر سوق — تنفيذ فوري لحظة الإشارة</option>
+          <option value="limit">🎯 أمر محدد — بسعر الإشارة + النسبة</option>
+        </select>
+        <div class="hint">أمر السوق بيشتغل في الجلسة العادية بس (5:30 م – 12 ص بتوقيت السعودية). برّه الجلسة البوت بيستخدم المحدد تلقائياً.</div>
       </div>
       <div class="toggle-row"><span>إغلاق الصفقات تلقائياً (هدف + وقف مع الشراء)</span><label class="toggle"><input type="checkbox" id="autoBracket"><span class="slider"></span></label></div>
       <div class="toggle-row"><span>تنفيذ حقيقي <small style="color:var(--muted2)">(مقفول = تجربة من غير إرسال)</small></span><label class="toggle"><input type="checkbox" id="live"><span class="slider"></span></label></div>
@@ -332,6 +343,8 @@ function sizeUI(){ const p=$('sizeMode').value==='percent'; $('sizePctBox').styl
 function fillForm(){
   $('broker').value = 'sahm-vps';
   $('market').value = S.market || 'US';
+  $('orderType').value = S.orderType || 'market';
+  $('fundAccount').value = S.fundAccount || '';
   $('sizeMode').value = S.sizeMode || 'fixed';
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>$(k).value = S[k] ?? '');
   $('session').value = S.session || '';
@@ -390,7 +403,7 @@ function setMarket(){
 function save(){
   const live = $('live').checked;
   if (live && S.dryRun && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')) return;
-  const b = { broker:$('broker').value, market:$('market').value, sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value };
+  const b = { broker:$('broker').value, market:$('market').value, orderType:$('orderType').value, fundAccount:$('fundAccount').value.trim(), sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value };
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>b[k]=Number($(k).value));
   if (b.minPrice > b.maxPrice) return toast('⚠️ أقل سعر أكبر من أعلى سعر');
   post(b);
