@@ -84,6 +84,15 @@ td.m{font-family:var(--mono)}
 pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;font-family:var(--mono);font-size:12px;direction:ltr;text-align:left;white-space:pre-wrap;margin:10px 0}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:.3s;z-index:30}
 .toast.show{opacity:1}
+
+.pf-tabs{display:flex;gap:6px}.pf-tab{background:transparent;border:1px solid var(--border2);color:var(--muted2);padding:5px 14px;border-radius:8px;cursor:pointer;font-family:var(--ar);font-weight:700}
+.pf-tab.on{background:var(--gold3);color:var(--gold);border-color:var(--gold)}
+.pf-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.pf-box{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.pf-box .v{font-family:var(--mono);font-size:20px;font-weight:700}.pf-box .k{font-size:11px;color:var(--muted2);margin-top:4px}
+.pf-tbl{width:100%;border-collapse:collapse;font-size:13px}.pf-tbl th{color:var(--muted2);font-weight:500;padding:8px;border-bottom:1px solid var(--border);text-align:right}
+.pf-tbl td{padding:8px;border-bottom:1px solid var(--border);font-family:var(--mono)}
+.up{color:var(--green)}.dn{color:var(--red)}
 </style>
 </head>
 <body>
@@ -97,6 +106,19 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
 </header>
 
 <div class="wrap">
+  <div class="card" style="margin-bottom:16px" id="pfCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">💼 محفظتي في سهم</h2>
+      <div class="pf-tabs"><button class="pf-tab on" id="pfUS" onclick="pfSet('US')">🇺🇸 الأمريكي</button><button class="pf-tab" id="pfSA" onclick="pfSet('SA')">🇸🇦 السعودي</button></div>
+    </div>
+    <div class="hint" id="pfInfo" style="margin-top:6px"></div>
+    <div class="pf-sum" id="pfSum"></div>
+    <h3 style="font-size:14px;margin:6px 0">📈 الأسهم المملوكة</h3>
+    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>الكمية</th><th>متوسط الشراء</th><th>السعر الحالي</th><th>القيمة السوقية</th><th>الربح/الخسارة</th><th>%</th></tr></thead><tbody id="pfHolds"></tbody></table></div>
+    <h3 style="font-size:14px;margin:14px 0 6px">🧾 أوامر اليوم</h3>
+    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>العملية</th><th>الكمية</th><th>السعر</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
+    <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">البيانات الخام (للمراجعة)</summary><pre id="pfRaw" style="white-space:pre-wrap;font-size:11px;color:var(--muted2);max-height:300px;overflow:auto"></pre></details>
+  </div>
   <div class="grid">
 
     <!-- 1) المصادقة والإعداد -->
@@ -435,8 +457,41 @@ function openTpl(){ $('whUrl').textContent = location.origin + '/webhook'; $('tp
 function closeTpl(){ $('tpl').style.display='none'; }
 function copyTpl(){ navigator.clipboard?.writeText($('tplJson').textContent); toast('✓ تم النسخ'); }
 
-load(true); loadStats(); loadTrades(); loadLogs();
-setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); }, 15000);
+
+// ===== محفظتي =====
+let PF={}, PFM='US';
+const pick=(o,keys)=>{ if(!o) return undefined; for(const k of keys){ if(o[k]!==undefined && o[k]!==null && o[k]!=='') return o[k]; } };
+const num=(v)=>{ const n=parseFloat(String(v??'').replace(/,/g,'')); return isFinite(n)?n:null; };
+const fm=(v,d=2)=>{ const n=num(v); return n===null?'—':n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); };
+const cls=(v)=>{ const n=num(v); return n===null||n===0?'':n>0?'up':'dn'; };
+function pfSet(m){ PFM=m; $('pfUS').classList.toggle('on',m==='US'); $('pfSA').classList.toggle('on',m==='SA'); renderPF(); }
+async function loadPF(){ const r=await fetch('/api/bot/portfolio',{headers:H}); if(!r.ok) return; PF=await r.json(); renderPF(); }
+function listOf(d){ if(!d) return []; if(Array.isArray(d)) return d; for(const k of ['holdsList','dataList','list','positions','records']) if(Array.isArray(d[k])) return d[k]; return []; }
+function renderPF(){
+  const D=PF[PFM]||{}, cur=PFM==='US'?'$':'ر.س';
+  const A=D.queryAllAsset||{}, sec=A.security||{}, P=D.queryTodayProfitLoss||{};
+  $('pfInfo').textContent = D.at ? ('المحفظة '+(D.fund||'')+' — آخر تحديث: '+new Date(D.at).toLocaleString('ar-EG')) : 'لسه مفيش بيانات للسوق ده — البوت لازم يكون مسجل دخول وفاتح على السوق ده';
+  const holds=listOf(D.queryHoldsList);
+  const mv=holds.reduce((s,h)=>s+(num(pick(h,['marketValue','marketVal','positionValue','assetValue']))||0),0);
+  const pl=holds.reduce((s,h)=>s+(num(pick(h,['incomeBalance','floatProfit','profitLoss','unrealizedPL','unrealizedProfitLoss','floatingPL']))||0),0);
+  const totalCash=pick(A,['totalCash'])??pick(sec,['securityTotalCash','cashAssetBalance']);
+  const net = pick(P,['totalAsset','netAsset','netAssets']) ?? ((num(totalCash)||0)+mv);
+  const today = pick(P,['todayProfitLoss','todayProfit','dayProfitLoss','todayIncome']);
+  const boxes=[['صافي الأصول',net],['إجمالي النقد',totalCash],['القوة الشرائية',pick(sec,['buyingPower'])],['أقصى قوة شرائية',pick(sec,['maxBuyingPower'])],['القيمة السوقية للأسهم',mv],['ربح/خسارة غير محققة',pl,true],['ربح/خسارة اليوم',today,true],['قابل للسحب',pick(sec,['cashCanWithDraw'])]];
+  $('pfSum').innerHTML=boxes.filter(b=>b[1]!==undefined).map(([k,v,c])=>`<div class="pf-box"><div class="v ${c?cls(v):''}">${fm(v)} <span style="font-size:12px">${cur}</span></div><div class="k">${k}</div></div>`).join('');
+  $('pfHolds').innerHTML = holds.length ? holds.map(h=>{
+    const plv=pick(h,['incomeBalance','floatProfit','profitLoss','unrealizedPL','unrealizedProfitLoss','floatingPL']);
+    let pct=pick(h,['profitRatio','incomeRatio','floatProfitRatio','profitLossRatio','plRatio']); if(num(pct)!==null && Math.abs(num(pct))<5 && !String(pct).includes('%')) pct=num(pct)*100;
+    return `<tr><td><b>${pick(h,['stockCode','securityCode','symbol','code'])||'—'}</b> <span class="hint">${pick(h,['stockName','securityName','name'])||''}</span></td><td>${fm(pick(h,['currentAmount','holdAmount','quantity','qty','enableAmount','currentQty']),0)}</td><td>${fm(pick(h,['costPrice','avgPrice','averagePrice','avgCost']),4)}</td><td>${fm(pick(h,['lastPrice','currentPrice','marketPrice','price']),4)}</td><td>${fm(pick(h,['marketValue','marketVal','positionValue']))}</td><td class="${cls(plv)}">${fm(plv)}</td><td class="${cls(pct)}">${num(pct)===null?'—':fm(pct)+'%'}</td></tr>`; }).join('')
+    : '<tr><td colspan="7" class="hint" style="text-align:center">مفيش أسهم</td></tr>';
+  const orders=listOf(D.queryTodayOrder);
+  $('pfOrders').innerHTML = orders.length ? orders.map(o=>`<tr><td><b>${pick(o,['stockCode','securityCode','symbol'])||'—'}</b></td><td>${pick(o,['entrustBsName','bsName','side','entrustBs'])||'—'}</td><td>${fm(pick(o,['entrustAmount','quantity','qty']),0)}</td><td>${fm(pick(o,['entrustPrice','price']),4)}</td><td>${pick(o,['entrustStatusName','statusName','status'])||'—'}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="hint" style="text-align:center">مفيش أوامر النهارده</td></tr>';
+  $('pfRaw').textContent = JSON.stringify({holds:holds.slice(0,3), asset:A, today:P}, null, 1).slice(0,4000);
+}
+
+load(true); loadStats(); loadTrades(); loadLogs(); loadPF();
+setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); }, 15000);
 </script>
 </body>
 </html>
