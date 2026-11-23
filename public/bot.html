@@ -116,7 +116,7 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
     <h3 style="font-size:14px;margin:6px 0">📈 الأسهم المملوكة</h3>
     <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>الكمية</th><th>متوسط الشراء</th><th>السعر الحالي</th><th>القيمة السوقية</th><th>الربح/الخسارة</th><th>%</th><th></th></tr></thead><tbody id="pfHolds"></tbody></table></div>
     <h3 style="font-size:14px;margin:14px 0 6px">🧾 أوامر اليوم</h3>
-    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>العملية</th><th>الكمية</th><th>السعر</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
+    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>سعر الأمر</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>العمولة</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
     <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">البيانات الخام (للمراجعة)</summary><pre id="pfRaw" style="white-space:pre-wrap;font-size:11px;color:var(--muted2);max-height:300px;overflow:auto"></pre></details>
   </div>
   <div class="grid">
@@ -491,8 +491,11 @@ function renderPF(){
     return `<tr><td><b>${pick(h,['stockCode','securityCode','symbol','code'])||'—'}</b> <span class="hint">${pick(h,['companyNameAR','companyNameEN','stockName','securityName','name'])||''}</span></td><td>${fm(q,0)}</td><td>${fm(pick(h,['costPrice','avgPrice','averagePrice','avgCost']),4)}</td><td>${fm(pick(h,['lastPrice','currentPrice','marketPrice','price']),4)}</td><td>${fm(pick(h,['marketValue','marketVal','positionValue']))}</td><td class="${cls(plv)}">${fm(plv)}</td><td class="${cls(pct)}">${num(pct)===null?'—':fm(pct)+'%'}</td><td><button onclick="sellOpen('${pick(h,['stockCode','securityCode','symbol'])}',${q||0},${l||0})" style="background:rgba(255,77,77,.12);border:1px solid rgba(255,77,77,.45);color:var(--red);border-radius:7px;padding:4px 14px;cursor:pointer;font-family:var(--ar);font-weight:700">بيع</button></td></tr>`; }).join('')
     : '<tr><td colspan="8" class="hint" style="text-align:center">مفيش أسهم</td></tr>';
   const orders=listOf(D.queryTodayOrder);
-  $('pfOrders').innerHTML = orders.length ? orders.map(o=>`<tr><td><b>${pick(o,['stockCode','securityCode','symbol'])||'—'}</b></td><td>${pick(o,['entrustBsName','bsName','side','entrustBs'])||'—'}</td><td>${fm(pick(o,['entrustAmount','quantity','qty']),0)}</td><td>${fm(pick(o,['entrustPrice','price']),4)}</td><td>${pick(o,['entrustStatusName','statusName','status'])||'—'}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="hint" style="text-align:center">مفيش أوامر النهارده</td></tr>';
+  $('pfOrders').innerHTML = orders.length ? orders.map(x=>{ const o=x.orderInfo||x;
+    const bs=String(pick(o,['entrustBs','bsFlag','side'])||''); const side=bs==='1'?'<span class="up">شراء</span>':bs==='2'?'<span class="dn">بيع</span>':bs;
+    const t=num(pick(o,['originalEntrustTime','originalBusinessTime','updateTime'])); const tm=t?new Date(t).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):'—';
+    return `<tr><td>${tm}</td><td><b>${pick(o,['stockCode','securityCode','symbol'])||'—'}</b></td><td>${side}</td><td>${fm(pick(o,['entrustQty','entrustAmount','quantity']),0)}</td><td>${fm(pick(o,['entrustPrice','price']),4)}</td><td>${fm(pick(o,['businessAmount','filledQty']),0)}</td><td>${fm(pick(o,['businessPrice']),4)}</td><td>${fm(pick(o,['totalFee']),2)}</td><td>${pick(x,['statusDesc'])||pick(o,['statusDesc'])||'—'}</td></tr>`; }).join('')
+    : '<tr><td colspan="9" class="hint" style="text-align:center">مفيش أوامر النهارده</td></tr>';
   $('pfRaw').textContent = JSON.stringify({holds:holds.slice(0,3), asset:A, today:P}, null, 1).slice(0,4000);
 }
 
