@@ -1048,6 +1048,18 @@ app.post('/api/bot/sahm-otp', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// قطع الاتصال بسهم: البوت بيسجل خروج ويمسح الجلسة المحفوظة ويوقف التنفيذ
+app.post('/api/bot/sahm-logout', auth, adminOnly, async (req, res) => {
+  try {
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
+      paused: true,
+      command: { id: Date.now().toString(36), type: 'logout', at: new Date() },
+      loginState: 'sending', loginMsg: 'جاري قطع الاتصال بسهم...'
+    } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/bot/trades', auth, adminOnly, async (req, res) => {
   try {
     const list = await Signal.find({ 'tradeResult.broker': 'sahm' })
