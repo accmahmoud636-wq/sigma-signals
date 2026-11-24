@@ -84,7 +84,7 @@ async function openBrowser() {
     args: ['--disable-blink-features=AutomationControlled'],
   });
   // أي ضغطة/تحميل ليه حد أقصى — من غيره ممكن البوت يستنى للأبد ويقف
-  ctx.setDefaultTimeout(20000); ctx.setDefaultNavigationTimeout(45000);
+  ctx.setDefaultTimeout(10000); ctx.setDefaultNavigationTimeout(45000);
   await preloadSession().catch((e) => console.log('preload:', e.message));
   page = ctx.pages()[0] || (await ctx.newPage());
   page.on('crash', () => log('💥 صفحة سهم وقعت (crash)', 'warn'));
@@ -259,6 +259,20 @@ async function ensureLoggedIn() {
 }
 
 // قفل الجولات التعريفية والنوافذ المنبثقة في سهم
+// نقفل أي نافذة/رسالة مفتوحة فوق التذكرة (زي "تم إرسال الأمر") — في خطوة واحدة سريعة
+async function closeDialogs() {
+  await page.evaluate(() => {
+    const vis = (e) => e && e.getClientRects().length;
+    // النوافذ المفتوحة ما عدا تذكرة التداول نفسها (اللي فيها "إرسال الأمر")
+    const boxes = [...document.querySelectorAll('.n-modal, .n-dialog, [role=dialog]')].filter((d) => vis(d) && !/إرسال الأمر/.test(d.innerText));
+    for (const d of boxes) {
+      const ok = [...d.querySelectorAll('button')].filter(vis).find((b) => /^\s*(حسناً|حسنا|تم|موافق|إغلاق|اغلاق|فهمت|OK|Close)\s*$/i.test(b.innerText));
+      if (ok) { ok.click(); continue; }
+      const x = d.querySelector('.n-dialog__close, .n-card-header__close, .n-base-close');
+      if (vis(x)) x.click();
+    }
+  }).catch(() => {});
+}
 async function dismissPopups() {
   for (let i = 0; i < 5; i++) {
     const skip = page.getByRole('button', { name: /^\s*(تخطي|حسناً|فهمت|تم)\s*$/ }).locator('visible=true').first();
@@ -334,7 +348,9 @@ function usRegularSession() {
   const d = ny.getDay(), m = ny.getHours() * 60 + ny.getMinutes();
   return d >= 1 && d <= 5 && m >= 9 * 60 + 30 && m < 16 * 60;
 }
-const useMarketOrder = () => C.orderType !== 'limit' && (C.market === 'SA' || usRegularSession());
+// أمر محدد دايماً (شراء وبيع) — عشان يشتغل في البري ماركت والافتر ماركت كمان
+// الشراء: سعر الإشارة + offsetPct (افتراضي 0.5%) | البيع: السعر الحالي - 1% عشان يتنفذ على طول
+const useMarketOrder = () => false;
 
 // ---------- الخروج التلقائي: بيع سوق فوراً عند الهدف الأول أو الوقف ----------
 // السعر اللحظي من Yahoo (كل ثانيتين) — مع ما قبل/بعد الافتتاح
@@ -358,26 +374,21 @@ function livePrice(symbol) {
 // بيع فوري من التذكرة المفتوحة: سوق في الجلسة العادية، وبرّها محدد تحت السعر بـ 1% (عشان يتنفذ على طول)
 async function sellNow(symbol, qty, price) {
   const t0 = Date.now();
-  const mkt = useMarketOrder();
+  await closeDialogs();
   const panel = await prepareTicket();
-  await setSide(panel, 'بيع');
-  await pickIn(panel, 1, mkt ? /السوق/ : /المحدد/);
   await selectSymbol(panel, symbol);
   await setSide(panel, 'بيع');
-  if (!mkt) await (await priceField(panel)).fill(String(round(price * 0.99)));
+  await setTradingSession(panel);
+  await (await priceField(panel)).fill(String(round(price * 0.99)));
   await (await qtyField(panel)).fill(String(qty));
-  const txt = await panel.innerText().catch(() => '');
-  if (!/بيع/.test(txt)) throw new Error('التذكرة مش على بيع');
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
-  await panel.getByText('إرسال الأمر').locator('visible=true').first().click();
-  await sleep(600);
-  const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
-  if (await ok.count()) await ok.click();
-  log(`⚡ بيع ${mkt ? 'سوق' : 'محدد'} ${qty} ${symbol} — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
-  await sleep(700);
+  await assertRealFund(panel);
+  await panel.getByText('إرسال الأمر').locator('visible=true').first().click({ timeout: 3000 });
+  await confirmOrder();
+  log(`⚡ بيع محدد ${qty} ${symbol} @ ${round(price * 0.99)} — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد بيع ${qty} ${symbol}`).catch(() => {});
-  await setSide(panel, 'شراء').catch(() => {}); // نرجّع التذكرة جاهزة للشراء
-  return mkt;
+  setSide(panel, 'شراء').catch(() => {}); // نرجّع التذكرة جاهزة للشراء
+  return false;
 }
 
 const closingNow = new Set();
@@ -398,12 +409,9 @@ async function monitorPositions() {
       if (!monitorWarned) { monitorWarned = true; log('⚠️ مصدر السعر اللحظي مش راد — بستخدم سعر محفظة سهم (أبطأ)', 'warn'); }
     }
     let reason = null;
-    if (px != null && p.tp && px >= p.tp) reason = '🎯 الهدف الأول';
+    if (px != null && p.tp && px >= p.tp) reason = '🎯 الهدف +' + (C.tpPct || 5) + '%';
     else if (px != null && p.sl && px <= p.sl) reason = '🛑 الوقف';
-    else {
-      const sg = p.signalId ? await Signals.findOne({ _id: p.signalId }, { projection: { status: 1 } }) : null;
-      if (sg && sg.status && sg.status !== 'open') reason = '📡 تنبيه خروج من TradingView';
-    }
+    // البيع على الهدف أو الوقف بس — تنبيه "الهدف الأول" بتاع المؤشر مش بيبيع (عشان نوصل لـ 5%)
     if (px != null) await col.updateOne({ _id: p._id }, { $set: { lastPrice: px, lastAt: new Date() } });
     if (!reason) return;
     closingNow.add(String(p._id));
@@ -413,6 +421,19 @@ async function monitorPositions() {
       working = true;
       try {
         if (C.dry) { tg(`🧪 تجربة: كان هيبيع ${p.qty} ${p.symbol} (${reason}) عند ${px}`); await col.updateOne({ _id: p._id }, { $set: { status: 'closed', exitPrice: px, closedAt: new Date(), dry: true } }); return; }
+        // أمان: قبل البيع نتأكد إن السهم لسه في محفظة سهم (لو اتباع يدوي ما نبيعش تاني)
+        const pf = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' }, { projection: { [`${p.market}.queryHoldsList`]: 1, [`${p.market}.at`]: 1 } });
+        const holds = pf && pf[p.market] && pf[p.market].queryHoldsList && pf[p.market].queryHoldsList.holdsList;
+        if (Array.isArray(holds)) {
+          const h = holds.find((x) => String(x.stockCode).toUpperCase() === p.symbol);
+          const have = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
+          if (have <= 0) {
+            await col.updateOne({ _id: p._id }, { $set: { status: 'closed', closedAt: new Date(), reason: 'اتباع يدوي / مش في المحفظة' } });
+            tg(`ℹ️ ${p.symbol} مش موجود في محفظة سهم — اتقفل في البوت من غير بيع (غالباً اتباع يدوي)`);
+            return;
+          }
+          if (have < p.qty) p.qty = have;
+        }
         const mkt = await sellNow(p.symbol, p.qty, px);
         const pnl = (px - p.entry) * p.qty, pct = ((px - p.entry) / p.entry) * 100;
         await col.updateOne({ _id: p._id }, { $set: { status: 'closed', exitPrice: px, closedAt: new Date(), pnl, pct, orderType: mkt ? 'market' : 'limit' } });
@@ -422,6 +443,9 @@ async function monitorPositions() {
         await col.updateOne({ _id: p._id }, { $set: { status: tries >= 3 ? 'error' : 'open', tries } });
         tg(`❌ فشل البيع التلقائي ${p.symbol} (محاولة ${tries}/3): ${String(e.message).split('\n')[0].slice(0, 120)}` + (tries >= 3 ? '\n⚠️ بيعه بإيدك من المنصة أو من سهم' : ' — هيحاول تاني'), 'error');
         await pushShot('خطأ في البيع التلقائي ' + p.symbol);
+        // نبدأ المحاولة الجاية من صفحة نضيفة
+        await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        await sleep(3000);
       } finally { working = false; closingNow.delete(String(p._id)); }
     }).catch(() => { working = false; closingNow.delete(String(p._id)); });
   }));
@@ -445,7 +469,7 @@ async function pickIn(panel, idx, re) {
   const cur = (await sel.innerText().catch(() => '')).trim();
   if (re.test(cur)) return true;
   await sel.click().catch(() => {});
-  await sleep(500);
+  await sleep(250);
   // نختار من القايمة المفتوحة بالـ JavaScript مباشرة (القايمة بتتحرك/بتتعمل animation فالضغط العادي بيفشل)
   const res = await page.evaluate(({ src, flags }) => {
     const r = new RegExp(src, flags);
@@ -455,7 +479,7 @@ async function pickIn(panel, idx, re) {
     if (hit) { hit.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); hit.click(); }
     return { ok: !!hit, texts };
   }, { src: re.source, flags: re.flags }).catch((e) => ({ ok: false, texts: [String(e.message)] }));
-  await sleep(400);
+  await sleep(150);
   const now = (await sel.innerText().catch(() => '')).trim();
   if (!re.test(now)) {
     log(`⚠️ اختيار "${re.source}" في القايمة ${idx + 1} ما نفعش — الاختيارات المتاحة: ${res.texts.join(' ¦ ') || '(القايمة ما فتحتش)'} — المختار دلوقتي: ${now || '—'}`, 'warn');
@@ -464,6 +488,14 @@ async function pickIn(panel, idx, re) {
   }
   return true;
 }
+// أمان: قبل الإرسال نقرأ المحفظة المختارة في التذكرة نفسها — لازم تكون الحقيقية (مش التجريبي)
+async function assertRealFund(panel) {
+  const txt = (await panel.locator('.n-select:visible').nth(0).innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  const want = String(C.fundAccount || lastFund || '').trim();
+  if (/تجريبي|demo/i.test(txt)) throw new Error('التذكرة على محفظة التداول التجريبي (' + txt + ') — الأمر اتلغى');
+  if (want && !txt.includes(want)) throw new Error(`المحفظة في التذكرة "${txt || '؟'}" مش ${want} — الأمر اتلغى`);
+  return txt;
+}
 let ticketAt = 0;
 async function prepareTicket() {
   let panel = await ticketPanel();
@@ -471,7 +503,10 @@ async function prepareTicket() {
   if (!panel) throw new Error('تذكرة التداول ما فتحتش');
   // المحفظة (الأمريكي = رقم المحفظة الحالية، مثلاً 800906239 الهامش)
   const fund = String(C.fundAccount || lastFund || '').trim();
-  await pickIn(panel, 0, fund ? new RegExp(fund) : /الهامش|الرئيسية/);
+  if (!(await pickIn(panel, 0, fund ? new RegExp(fund) : /الهامش|الرئيسية/))) {
+    await sleep(300);
+    if (!(await pickIn(panel, 0, fund ? new RegExp(fund) : /الهامش|الرئيسية/))) throw new Error('ما قدرتش أختار المحفظة الحقيقية ' + (fund || '') + ' في التذكرة');
+  }
   await pickIn(panel, 1, useMarketOrder() ? /السوق/ : /المحدد/);
   await setSide(panel, 'شراء');
   if (Date.now() - ticketAt > 10 * 60 * 1000) { ticketAt = Date.now(); log('🎫 تذكرة التداول مفتوحة وجاهزة — مستنية الإشارة'); }
@@ -486,9 +521,30 @@ const SEARCH_PH = /رمز أو اسم الشركة|Symbol or company name/;
 async function selectSymbol(panel, symbol) {
   const sym = symbol.toUpperCase();
   const esc = sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  await page.getByText(SEARCH_PH).locator('visible=true').first().click();
-  const box = page.getByRole('textbox', { name: SEARCH_PH }).locator('visible=true').first();
+  // نقفل أي قايمة مفتوحة من الإشارة اللي قبلها
+  await page.keyboard.press('Escape').catch(() => {});
+  let box = page.getByRole('textbox', { name: SEARCH_PH }).locator('visible=true').first();
+  if (!(await box.count())) {
+    // التذكرة ممكن تكون فاضية (فيها نص "رمز أو اسم الشركة") أو فيها سهم من قبل → نجرب كذا هدف وكل ضغطة ليها وقت قصير
+    const p = panel || (await ticketPanel()) || page;
+    const targets = [
+      page.getByText(SEARCH_PH).locator('visible=true').first(),
+      p.locator('.n-base-selection:visible').first(),
+      p.locator('.n-input:visible').first(),
+      p.locator('input:visible').first(),
+    ];
+    for (const t of targets) {
+      if (!(await t.count().catch(() => 0))) continue;
+      await tryClick(t);
+      await sleep(150);
+      box = page.getByRole('textbox', { name: SEARCH_PH }).locator('visible=true').first();
+      if (await box.count()) break;
+    }
+    if (!(await box.count())) box = p.locator('input:visible').first();
+  }
   await box.waitFor({ state: 'visible', timeout: 5000 });
+  await tryClick(box);
+  await box.fill('').catch(() => {});
   await box.fill(sym);
   log(`🔎 كتبت ${sym} في خانة البحث`);
   const result = page.getByText(new RegExp('\\S.*' + esc + '$')).locator('visible=true').first();
@@ -499,8 +555,15 @@ async function selectSymbol(panel, symbol) {
     await pushShot('ما لقيتش ' + sym + ' في البحث');
     throw new Error(`السهم ${sym} ما ظهرش في نتايج البحث (${texts.map((t) => t.replace(/\s+/g, ' ').slice(0, 40)).slice(0, 5).join(' ¦ ') || 'مفيش'})`);
   }
-  await result.click();
-  await sleep(600);
+  if (!(await tryClick(result))) throw new Error('ما قدرتش أضغط على ' + sym + ' في نتايج البحث');
+  await sleep(200);
+}
+// ضغطة سريعة: عادي ← بالقوة ← بالـ JS (من غير ما نستنى 20 ثانية)
+async function tryClick(loc) {
+  try { await loc.click({ timeout: 1500 }); return true; } catch (_) {}
+  try { await loc.click({ timeout: 1000, force: true }); return true; } catch (_) {}
+  try { await loc.evaluate((el) => el.click(), null, { timeout: 1000 }); return true; } catch (_) {}
+  return false;
 }
 // خانات الكمية والسعر بالاسم (زي التسجيل) — ولو ما لقاهاش بالعنوان اللي جنبها
 async function qtyField(panel) {
@@ -523,73 +586,106 @@ async function placeBuy(sig) {
     else log(`نسبة من المحفظة: قيمة الحساب بالدولار مش معروفة — استخدام المبلغ الثابت ${C.amount}$`, 'warn');
   }
   const qty = Math.floor(amount / (C.orderType === 'limit' ? limit : sig.price * 1.01));
-  const tp = round(sig.tp || sig.price * (1 + C.tpPct / 100));
+  // الهدف = سعر الدخول + نسبة الهدف من الإعدادات (افتراضي 5%) — مش هدف المؤشر
+  const tp = round(sig.price * (1 + (C.tpPct || 5) / 100));
   const sl = round(sig.sl || sig.price * (1 - C.slPct / 100));
   if (qty < 1) throw new Error(`المبلغ ${amount.toFixed(2)}$ أقل من سعر سهم واحد`);
 
-  // ⚡ المسار السريع: لو التذكرة مفتوحة والسوق صح → على طول للتنفيذ (من غير تحميل صفحات)
+  // ⚡ المسار السريع: لو التذكرة مفتوحة والسوق صح → على طول للتنفيذ
   const want = C.market === 'SA' ? 'SA' : 'US';
-  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && !(await isDemo()) && (await ticketPanel());
+  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && (await ticketPanel());
   if (!ready) {
     if (!(await ensureLoggedIn())) throw new Error('مش مسجل دخول في سهم — ادخل يدوي في نافذة البوت');
     await dismissPopups();
     if (!(await ensureUSMarket())) throw new Error('صفحة سهم مش على السوق المختار (' + (C.market || 'US') + ')');
   }
 
-  // 1-5) التذكرة جاهزة ومفتوحة (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
+  // التذكرة جاهزة من قبل (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
   const t0 = Date.now();
+  await closeDialogs();
   const panel = await prepareTicket();
   await selectSymbol(panel, symbol);
   await setSide(panel, 'شراء');
-  let mkt = useMarketOrder();
-  if (mkt && !(await pickIn(panel, 1, /السوق/))) { log('⚠️ نوع "السوق" مش متاح — هستخدم أمر محدد', 'warn'); mkt = false; }
-  if (!mkt) await pickIn(panel, 1, /المحدد/);
-  if (!mkt) await (await priceField(panel)).fill(String(limit));
+  const sess = await setTradingSession(panel);
+  await (await priceField(panel)).fill(String(limit));
   await (await qtyField(panel)).fill(String(qty));
-  log(`⚡ التذكرة اتملت في ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
-  const selCount = await panel.locator('.n-select:visible').count();
-  // 6) الجلسة: نسجل الاختيارات المتاحة (لضبطها بعد أول تجربة)
-  const sessionOpts = [];
-  if (C.session && selCount > 2) await pickIn(panel, 2, new RegExp(C.session)).catch(() => {});
-
-  // 7) الأمر المرفق: جني الربح / وقف الخسارة
-  const before = await panel.locator('input:visible').count();
-  let bracketOk = false;
-  if (C.autoBracket && selCount > 3) bracketOk = await pickIn(panel, 3, /جني الربح/).catch(() => false);
-  if (C.autoBracket && !bracketOk) log('⚠️ خانة الأمر المرفق (هدف/وقف) مش موجودة في التذكرة — الشراء من غير هدف/وقف تلقائي', 'warn');
-  await sleep(600);
-  const inputs = panel.locator('input:visible');
-  const after = await inputs.count();
-  const newPh = [];
-  for (let i = before; i < after; i++) newPh.push(await inputs.nth(i).getAttribute('placeholder'));
-  // أول خانة جديدة = سعر جني الربح، التانية = سعر وقف الخسارة (نتأكد منها في وضع DRY_RUN)
-  if (bracketOk && after - before >= 2) {
-    await inputs.nth(before).fill(String(tp));
-    await inputs.nth(before + 1).fill(String(sl));
-  }
-
-  const shot = null;
-  const info = { symbol, limit, qty, tp, sl, mkt, sessionOpts, newFields: newPh, shot };
-  if (C.dry) await pushShot(`تجربة: شراء ${qty} ${symbol} @ ${limit} | هدف ${tp} | وقف ${sl}`);
+  const fillSec = ((Date.now() - t0) / 1000).toFixed(1);
+  const info = { symbol, limit, qty, tp, sl, mkt: false, session: sess, sessionOpts: [sess], newFields: [], fillSec };
 
   if (C.dry) {
-    // وضع التجربة: من غير إرسال — التذكرة تفضل مفتوحة للإشارة الجاية
+    log(`🧪 تجربة: التذكرة اتملت في ${fillSec} ث (${sess})`);
+    pushShot(`تجربة: شراء ${qty} ${symbol} @ ${limit} | هدف ${tp} | وقف ${sl} | ${sess}`).catch(() => {});
     return { status: 'dry-run', ...info };
   }
 
-  // 8) إرسال + تأكيد
+  // إرسال + تأكيد
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
-  await panel.getByText('إرسال الأمر').locator('visible=true').first().click();
-  log(`${mkt ? '⚡ أمر سوق' : '🎯 أمر محدد'} — اتضغط "إرسال الأمر" بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث من وصول الإشارة للبوت`);
-  await sleep(600);
-  if (await page.locator('input[type=password]').count()) {
-    throw new Error('سهم طالبة كلمة مرور التداول (قفل التداول) — افتح القفل يدوي في نافذة البوت');
-  }
-  const confirm = page.getByRole('button', { name: /تأكيد|موافق|إرسال/ }).last();
-  if (await confirm.count()) await confirm.click();
-  await sleep(800);
+  await assertRealFund(panel);
+  await panel.getByText('إرسال الأمر').locator('visible=true').first().click({ timeout: 3000 });
+  await confirmOrder();
+  setTimeout(() => closeDialogs(), 1500);
+  log(`🎯 أمر محدد ${qty} ${symbol} @ ${limit} (${sess}) — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد إرسال شراء ${qty} ${symbol}`).catch(() => {});
   return { status: 'sent', ...info };
+}
+
+// تأكيد الأمر: بنستنى زرار التأكيد لحد 1.5 ث بس (لو مفيش تأكيد نكمل على طول)
+async function confirmOrder() {
+  const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
+  try { await ok.waitFor({ state: 'visible', timeout: 1500 }); await tryClick(ok); } catch (_) {}
+  if (await page.locator('input[type=password]:visible').count()) throw new Error('سهم طالبة كلمة مرور التداول (قفل التداول) — افتح القفل يدوي في نافذة البوت');
+}
+
+// ---------- الجلسة: عادية / ما قبل الافتتاح / بعد الإغلاق ----------
+// البوت بيعرف الجلسة من ساعة نيويورك. أول مرة بيدوّر في التذكرة على اختيار "تداول ممتد" (مربع اختيار أو قايمة)
+// ويحفظ مكانه — بعد كده بيختاره على طول من غير تدوير
+const EXT_RE = /ممتد|خارج (أوقات|ساعات)|قبل (الافتتاح|السوق|التداول)|بعد (الإغلاق|السوق|التداول)|Extended|Pre[- ]?market|After[- ]?hours|Outside/i;
+const PRE_RE = /قبل (الافتتاح|السوق|التداول)|Pre[- ]?market/i;
+const POST_RE = /بعد (الإغلاق|السوق|التداول)|After[- ]?hours/i;
+const REG_RE = /عادي|العادية|الرسمية|نظامي|Regular|Normal|Core/i;
+let extCtl = null; // null = لسه ما دوّرناش | {kind:'none'} | {kind:'check'} | {kind:'select', idx}
+function usSession() {
+  const ny = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const m = ny.getHours() * 60 + ny.getMinutes();
+  if (m >= 4 * 60 && m < 9 * 60 + 30) return 'pre';
+  if (m >= 9 * 60 + 30 && m < 16 * 60) return 'regular';
+  if (m >= 16 * 60 && m < 20 * 60) return 'post';
+  return 'closed';
+}
+async function findExtControl(panel) {
+  const cb = panel.locator('.n-checkbox:visible, .n-switch:visible, label:visible').filter({ hasText: EXT_RE }).first();
+  if (await cb.count()) return { kind: 'check' };
+  const n = await panel.locator('.n-select:visible').count();
+  for (let i = 2; i < n; i++) {
+    const sel = panel.locator('.n-select:visible').nth(i);
+    if (EXT_RE.test(await sel.innerText().catch(() => '')) || REG_RE.test(await sel.innerText().catch(() => ''))) return { kind: 'select', idx: i };
+    await sel.click().catch(() => {}); await sleep(300);
+    const texts = await page.evaluate(() => [...document.querySelectorAll('.n-base-select-option')].filter((e) => e.getClientRects().length).map((e) => e.innerText.trim())).catch(() => []);
+    await page.keyboard.press('Escape').catch(() => {});
+    if (texts.some((t) => EXT_RE.test(t))) { log(`🕓 لقيت اختيار الجلسة في القايمة ${i + 1}: ${texts.join(' ¦ ')}`); return { kind: 'select', idx: i, opts: texts }; }
+  }
+  return { kind: 'none' };
+}
+async function setTradingSession(panel) {
+  if (C.market === 'SA') return 'السوق السعودي';
+  const s = usSession();
+  const label = { pre: 'ما قبل الافتتاح', regular: 'الجلسة الرسمية', post: 'بعد الإغلاق', closed: 'السوق مقفول' }[s];
+  if (!extCtl) {
+    extCtl = await findExtControl(panel);
+    if (extCtl.kind === 'none') log('🕓 التذكرة مفيهاش اختيار تداول ممتد — سهم بيحدد الجلسة لوحده');
+    else if (extCtl.kind === 'check') log('🕓 لقيت مربع "تداول ممتد" في التذكرة');
+  }
+  const extended = s === 'pre' || s === 'post';
+  if (extCtl.kind === 'check') {
+    const cb = panel.locator('.n-checkbox:visible, .n-switch:visible, label:visible').filter({ hasText: EXT_RE }).first();
+    const on = await cb.evaluate((el) => /checked|active/.test(el.className) || !!el.querySelector('input:checked, [class*=checked], [class*=active]')).catch(() => false);
+    if (on !== extended) await tryClick(cb);
+  } else if (extCtl.kind === 'select') {
+    const re = s === 'pre' ? (extCtl.opts && extCtl.opts.some((t) => PRE_RE.test(t)) ? PRE_RE : EXT_RE)
+      : s === 'post' ? (extCtl.opts && extCtl.opts.some((t) => POST_RE.test(t)) ? POST_RE : EXT_RE) : REG_RE;
+    await pickIn(panel, extCtl.idx, re);
+  }
+  return label + (extCtl.kind === 'none' ? '' : extended ? ' ✓ممتد' : '');
 }
 
 // ---------- بيع من المنصة (زرار "بيع" في محفظتي) ----------
@@ -1021,7 +1117,9 @@ async function handle(sig, Signals) {
 
   const st = loadState();
   if (st.trades >= C.maxPerDay) { tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`); return skip(`⛔ حد الصفقات اليومي (${C.maxPerDay})`); }
-  if (st.symbols.includes(sig.symbol)) return skip(`↷ تخطي ${tag}: اتشرى النهارده`);
+  // نفس السهم مسموح أكتر من مرة في اليوم — بس مش وهو لسه مفتوح (عشان ما نضاعفش)
+  const openSame = await mongoose.connection.collection('botpositions').findOne({ symbol: String(sig.symbol).toUpperCase(), status: { $in: ['open', 'closing'] } });
+  if (openSame) return skip(`↷ تخطي ${tag}: فيه صفقة مفتوحة على نفس السهم`);
 
   try {
     const r = await placeBuy(sig);
@@ -1033,7 +1131,7 @@ async function handle(sig, Signals) {
     tg(
       (r.status === 'sent' ? '✅ <b>اتنفذ على سهم</b>' : '🧪 <b>تجربة (من غير إرسال)</b>') +
       `\n${r.symbol} | كمية ${r.qty} | ${r.mkt ? 'أمر سوق' : 'محدد $' + r.limit}\n🎯 $${r.tp} | 🛑 $${r.sl}` +
-      (r.status === 'dry-run' ? `\nالجلسات: ${r.sessionOpts.join(' / ')}\nخانات الهدف/الوقف: ${r.newFields.join(' / ')}` : '')
+      `\n🕓 ${r.session} | ⚡ ${r.fillSec} ث`
     );
 
   } catch (e) {
