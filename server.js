@@ -1153,6 +1153,40 @@ app.get('/api/bot/portfolio', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// صفقات البوت المفتوحة (للشارت)
+app.get('/api/bot/positions', auth, adminOnly, async (req, res) => {
+  try {
+    const open = await mongoose.connection.collection('botpositions')
+      .find({ status: { $in: ['open', 'closing'] } }).sort({ openedAt: -1 }).limit(20).toArray();
+    res.json(open);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// شموع السهم (دقيقة، مع البري ماركت والافتر) — من Yahoo
+app.get('/api/bot/candles', auth, adminOnly, (req, res) => {
+  const sym = String(req.query.symbol || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
+  const iv = ['1m', '2m', '5m', '15m'].includes(req.query.interval) ? req.query.interval : '1m';
+  if (!sym) return res.status(400).json({ error: 'symbol' });
+  const r2 = https.get({ hostname: 'query1.finance.yahoo.com',
+    path: `/v8/finance/chart/${encodeURIComponent(sym)}?interval=${iv}&range=${iv === '1m' ? '1d' : '5d'}&includePrePost=true`,
+    headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 }, (r) => {
+    let d = ''; r.on('data', (c) => (d += c)); r.on('end', () => {
+      try {
+        const x = JSON.parse(d).chart.result[0];
+        const q = x.indicators.quote[0];
+        const out = [];
+        x.timestamp.forEach((t, i) => {
+          if (q.open[i] == null || q.close[i] == null) return;
+          out.push({ time: t, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume[i] || 0 });
+        });
+        res.json({ symbol: sym, candles: out, last: x.meta.regularMarketPrice });
+      } catch (e) { res.status(502).json({ error: 'yahoo' }); }
+    });
+  });
+  r2.on('error', () => res.status(502).json({ error: 'yahoo' }));
+  r2.on('timeout', () => r2.destroy());
+});
+
 // لقطة شاشة صفحة سهم من البوت
 app.get('/api/bot/shot', auth, adminOnly, async (req, res) => {
   try {
