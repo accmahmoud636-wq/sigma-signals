@@ -99,9 +99,59 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
 </style>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-.ch-tabs{display:flex;gap:6px;flex-wrap:wrap}.ch-tab{padding:6px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;cursor:pointer;font-weight:700}
-.ch-tab.on{background:#f59e0b;color:#111;border-color:#f59e0b}.ch-info{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;margin:10px 0}
-.ch-info b{font-size:15px}#chBox{height:380px;width:100%}.ch-iv{padding:4px 9px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;cursor:pointer}.ch-iv.on{background:#334155;color:#fff}
+/* ===== تخطيط احترافي مضغوط ===== */
+.wrap{max-width:1360px;margin:14px auto;padding:0 14px}
+.card{padding:14px;border-radius:12px;margin-bottom:12px}
+.card h2{font-size:14px;margin-bottom:10px}
+.row-h{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.row-h h2{margin:0}
+.h3{font-size:12px;color:var(--gold);margin:12px 0 6px;font-weight:700}
+.inp,.sel{padding:7px 9px;font-size:12px}
+label.l{font-size:11px;margin-bottom:4px}
+.field{margin-bottom:8px}
+.btn{padding:8px 12px;font-size:13px}
+.hint{font-size:11px}
+.sub{margin:12px 0 8px;font-size:12px}
+.slide{margin-bottom:10px}
+.grid{gap:12px;margin-bottom:0}
+.g21{display:grid;grid-template-columns:minmax(0,3fr) minmax(240px,1fr);gap:12px;align-items:start}
+.g11{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:1000px){.g21,.g11{grid-template-columns:1fr}}
+.empty{color:var(--muted2);text-align:center;padding:22px;font-size:12px}
+.tw{overflow-x:auto}
+.scroll{max-height:360px}
+.pf-sum{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:8px 0}
+.pf-box{padding:8px}.pf-box .v{font-size:15px}.pf-box .k{font-size:10px}
+.pf-tbl{font-size:12px}.pf-tbl td,.pf-tbl th{padding:6px}
+.pf-tab{padding:4px 11px;font-size:12px}
+/* شريط الحالة */
+.sbar{position:sticky;top:52px;z-index:4;background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sbar-l{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sbar .conn{margin:0;padding:5px 10px;font-size:12px;border-radius:7px}
+.sbar .state-pill{padding:5px 10px;font-size:12px;border-radius:7px;min-width:90px}
+.ibtn{width:30px;height:28px;border-radius:7px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;font-size:13px}
+.ibtn.g{color:var(--green)}.ibtn.r{color:var(--red)}.ibtn:disabled{opacity:.3;cursor:not-allowed}
+.live-sw{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted2);background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:3px 8px;cursor:pointer}
+.live-sw .toggle{width:38px;height:20px}.live-sw .slider:before{width:14px;height:14px}
+.live-sw .toggle input:checked+.slider:before{transform:translateX(18px)}
+.kpis{display:flex;gap:6px;margin-right:auto;flex-wrap:wrap}
+.kpi{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:4px 10px;text-align:center;min-width:86px}
+.kpi span{display:block;font-size:10px;color:var(--muted2)}.kpi b{font-family:var(--mono);font-size:13px}
+/* تبويبات الصفحة */
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.mt{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted2);padding:9px 16px;font-family:var(--ar);font-size:13px;font-weight:700;cursor:pointer}
+.mt.on{color:var(--gold);border-bottom-color:var(--gold)}
+.pane{display:none}.pane.on{display:block}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:6px}.tools .btn{font-size:12px;padding:7px}
+/* الشارت */
+.ch-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.ch-head h2{margin:0}
+.ch-tabs{display:flex;gap:5px;flex-wrap:wrap}
+.ch-tab{padding:4px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;font-weight:700;font-family:var(--mono);font-size:12px}
+.ch-tab.on{background:var(--gold);color:#000;border-color:var(--gold)}
+.ch-info{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin:8px 0}.ch-info b{font-family:var(--mono)}
+#chBox{height:340px;width:100%;display:none}
+.ch-iv{padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);cursor:pointer;font-size:11px}
+.ch-iv.on{color:var(--gold);border-color:var(--gold)}
 </style>
 </head>
 <body>
@@ -114,229 +164,238 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
   </div>
 </header>
 
+<!-- شريط الحالة: أهم حاجة في الصفحة — دايماً ظاهر -->
+<div class="sbar">
+  <div class="sbar-l">
+    <div class="conn bad" id="brokerConn">— غير متصل</div>
+    <div class="state-pill" id="state">—</div>
+    <button class="ibtn g" id="btnStart" onclick="setPaused(false)" title="بدء">▶</button>
+    <button class="ibtn r" id="btnStop" onclick="setPaused(true)" title="إيقاف">⏸</button>
+    <label class="live-sw" title="مقفول = تجربة من غير إرسال"><span>تنفيذ حقيقي</span><span class="toggle"><input type="checkbox" id="live" onchange="toggleLive(this)"><span class="slider"></span></span></label>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><span>قيمة الحساب</span><b id="s-net">—</b></div>
+    <div class="kpi"><span>القوة الشرائية</span><b id="s-bp">—</b></div>
+    <div class="kpi"><span>ربح/خسارة اليوم</span><b id="s-pnl">—</b></div>
+    <div class="kpi"><span>صفقات</span><b id="s-total">—</b></div>
+    <div class="kpi"><span>محجوز</span><b id="s-res">—</b></div>
+    <div class="kpi"><span>مبلغ الصفقة</span><b id="s-amt">—</b></div>
+  </div>
+</div>
+
 <div class="wrap">
-  <div class="card" style="margin-bottom:16px" id="chCard">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <h2 style="margin:0">📈 صفقاتي المفتوحة</h2>
-      <div style="display:flex;gap:4px"><button class="ch-iv on" data-iv="1m" onclick="chIv('1m')">1د</button><button class="ch-iv" data-iv="5m" onclick="chIv('5m')">5د</button><button class="ch-iv" data-iv="15m" onclick="chIv('15m')">15د</button></div>
-    </div>
-    <div class="ch-tabs" id="chTabs" style="margin-top:10px"></div>
-    <div class="ch-info" id="chInfo"></div>
-    <div id="chBox"></div>
-    <div id="chEmpty" style="color:#94a3b8;padding:20px;text-align:center">مفيش صفقات مفتوحة دلوقتي — أول ما البوت يشتري سهم هيظهر هنا بالشارت والدخول والهدف والوقف</div>
-  </div>
-  <div class="card" style="margin-bottom:16px" id="pfCard">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <h2 style="margin:0">💼 محفظتي في سهم</h2>
-      <div class="pf-tabs"><button class="pf-tab on" id="pfUS" onclick="pfSet('US')">🇺🇸 الأمريكي</button><button class="pf-tab" id="pfSA" onclick="pfSet('SA')">🇸🇦 السعودي</button></div>
-    </div>
-    <div class="hint" id="pfInfo" style="margin-top:6px"></div>
-    <div class="pf-sum" id="pfSum"></div>
-    <h3 style="font-size:14px;margin:6px 0">📈 الأسهم المملوكة</h3>
-    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>الكمية</th><th>متوسط الشراء</th><th>السعر الحالي</th><th>القيمة السوقية</th><th>الربح/الخسارة</th><th>%</th><th></th></tr></thead><tbody id="pfHolds"></tbody></table></div>
-    <h3 style="font-size:14px;margin:14px 0 6px">🧾 أوامر اليوم</h3>
-    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>سعر الأمر</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
-    <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">البيانات الخام (للمراجعة)</summary><pre id="pfRaw" style="white-space:pre-wrap;font-size:11px;color:var(--muted2);max-height:300px;overflow:auto"></pre></details>
+  <div class="mtabs">
+    <button class="mt on" data-p="trade" onclick="mtab('trade')">📈 التداول</button>
+    <button class="mt" data-p="logs" onclick="mtab('logs')">🧾 السجلات</button>
+    <button class="mt" data-p="an" onclick="mtab('an')">📊 التحليلات</button>
+    <button class="mt" data-p="set" onclick="mtab('set')">⚙️ الإعدادات</button>
   </div>
 
-  <div class="card" style="margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <h2 style="margin:0">📊 سجل الأوامر والتحليلات</h2>
-      <div class="an-f">
-        <button class="pf-tab on" data-r="today" onclick="anRange('today',this)">اليوم</button>
-        <button class="pf-tab" data-r="week" onclick="anRange('week',this)">7 أيام</button>
-        <button class="pf-tab" data-r="month" onclick="anRange('month',this)">30 يوم</button>
-        <button class="pf-tab" data-r="all" onclick="anRange('all',this)">الكل</button>
-        <span class="hint">من</span><input type="date" id="anFrom" onchange="anRange('custom')"><span class="hint">إلى</span><input type="date" id="anTo" onchange="anRange('custom')">
-        <button class="pf-tab" onclick="anHistory()" title="يسحب سجل الأوامر القديم من سهم">⬇️ سجل سهم</button>
+  <!-- ===== 📈 التداول ===== -->
+  <section class="pane on" id="p-trade">
+    <div class="g21">
+      <div class="card" id="chCard">
+        <div class="ch-head">
+          <h2>📈 الصفقات المفتوحة</h2>
+          <div style="display:flex;gap:4px"><button class="ch-iv on" data-iv="1m" onclick="chIv('1m')">1د</button><button class="ch-iv" data-iv="5m" onclick="chIv('5m')">5د</button><button class="ch-iv" data-iv="15m" onclick="chIv('15m')">15د</button></div>
+        </div>
+        <div class="ch-tabs" id="chTabs"></div>
+        <div class="ch-info" id="chInfo"></div>
+        <div id="chBox"></div>
+        <div id="chEmpty" class="empty">مفيش صفقات مفتوحة — أول ما البوت يشتري سهم هيظهر هنا بالشارت والدخول والهدف والوقف</div>
+      </div>
+      <div class="card">
+        <h2>🧪 إشارة تجريبية</h2>
+        <div class="field"><input class="inp" id="tSym" type="text" placeholder="الرمز مثلاً SOUN" style="text-transform:uppercase"></div>
+        <div class="field"><input class="inp" id="tPrice" type="number" step="0.01" placeholder="السعر $"></div>
+        <button class="btn btn-gold" onclick="sendTest()">إرسال إشارة BUY</button>
+        <div class="hint">بتوصل للبوت زي تنبيه TradingView بالظبط. في وضع التجربة بيملا الأمر من غير إرسال.</div>
+        <div class="hint" id="acctHint"></div>
       </div>
     </div>
-    <div class="hint" id="anInfo" style="margin-top:6px"></div>
-    <div class="pf-sum" id="anSum"></div>
-    <h3 style="font-size:14px;margin:6px 0">🏷️ حسب السهم</h3>
-    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>شراء</th><th>بيع</th><th>قيمة الشراء</th><th>قيمة البيع</th><th>العمولات</th><th>الربح/الخسارة المحقق</th></tr></thead><tbody id="anSym"></tbody></table></div>
-    <h3 style="font-size:14px;margin:14px 0 6px">🧾 الأوامر</h3>
-    <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="pf-tbl"><thead><tr><th>التاريخ</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>التكلفة</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="anOrd"></tbody></table></div>
-  </div>
-  <div class="grid">
 
-    <!-- 1) المصادقة والإعداد -->
+    <div class="card" id="pfCard">
+      <div class="row-h">
+        <h2>💼 محفظتي في سهم</h2>
+        <div class="pf-tabs"><button class="pf-tab on" id="pfUS" onclick="pfSet('US')">🇺🇸 الأمريكي</button><button class="pf-tab" id="pfSA" onclick="pfSet('SA')">🇸🇦 السعودي</button></div>
+      </div>
+      <div class="hint" id="pfInfo"></div>
+      <div class="pf-sum" id="pfSum"></div>
+      <h3 class="h3">الأسهم المملوكة</h3>
+      <div class="tw"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>الكمية</th><th>متوسط الشراء</th><th>السعر الحالي</th><th>القيمة السوقية</th><th>الربح/الخسارة</th><th>%</th><th></th></tr></thead><tbody id="pfHolds"></tbody></table></div>
+      <h3 class="h3">أوامر اليوم</h3>
+      <div class="tw"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>سعر الأمر</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="pfOrders"></tbody></table></div>
+      <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">البيانات الخام (للمراجعة)</summary><pre id="pfRaw" style="font-size:11px;color:var(--muted2);max-height:260px;overflow:auto"></pre></details>
+    </div>
+  </section>
+
+  <!-- ===== 🧾 السجلات ===== -->
+  <section class="pane" id="p-logs">
     <div class="card">
-      <h2>🔐 المصادقة والإعداد</h2>
-      <div class="sub">الوسيط</div>
-      <div class="field">
-        <label class="l">اختر الوسيط</label>
-        <select class="sel" id="broker">
-          <option value="sahm-vps">🇸🇦 منصة سهم</option>
-          <option disabled>tastytrade — قريباً</option>
-          <option disabled>Interactive Brokers — قريباً</option>
-          <option disabled>TradeZero — قريباً</option>
-        </select>
+      <div class="row-h">
+        <h2>🧾 سجل التداول</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="tabs">
+            <div class="tab on" data-f="all" onclick="filt(this)">الكل</div>
+            <div class="tab" data-f="sent" onclick="filt(this)">تم التنفيذ</div>
+            <div class="tab" data-f="dry-run" onclick="filt(this)">تجربة</div>
+            <div class="tab" data-f="error" onclick="filt(this)">فشل</div>
+          </div>
+          <button class="btn-sm" onclick="exportCSV()">⬇ تصدير</button>
+        </div>
       </div>
-      <div class="field" id="marketBox">
-        <label class="l">السوق</label>
-        <select class="sel" id="market" onchange="setMarket()">
-          <option value="US">🇺🇸 السوق الأمريكي</option>
-          <option value="SA">🇸🇦 السوق السعودي</option>
-        </select>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>الوقت</th><th>الرمز</th><th>الحالة</th><th>السعر</th><th>الأسهم</th><th>المبلغ</th><th>هدف / وقف</th><th>الربح/الخسارة</th><th>ملاحظة</th></tr></thead>
+          <tbody id="trades"><tr><td colspan="9" class="empty">لا توجد عمليات بعد</td></tr></tbody>
+        </table>
       </div>
-      <div class="field">
-        <label class="l">رقم المحفظة في سهم</label>
-        <input class="inp" id="fundAccount" placeholder="مثلاً 800906239 (فاضي = المفتوحة حالياً)" inputmode="numeric" onchange="post({fundAccount:this.value.trim()})">
+    </div>
+    <div class="g11">
+      <div class="card">
+        <div class="row-h"><h2>📡 تنبيهات TradingView</h2><button class="pf-tab" onclick="loadWH()">🔄</button></div>
+        <div class="hint">لو التنبيه طلع في TradingView ومش ظاهر هنا → المشكلة في إعدادات التنبيه (Webhook URL).</div>
+        <div class="scroll" style="margin-top:6px"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>النتيجة</th><th>الرسالة</th></tr></thead><tbody id="whLog"></tbody></table></div>
       </div>
-      <div class="conn bad" id="brokerConn">— غير متصل</div>
+      <div class="card">
+        <h2>📜 سجل البوت</h2>
+        <div class="scroll" id="logs"><div class="log" style="color:var(--muted2)">لا يوجد سجل بعد</div></div>
+      </div>
+    </div>
+  </section>
 
-      <div id="loginBox" style="margin-top:12px">
-        <label class="l">رقم الجوال المسجّل في سهم</label>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <span class="inp" style="width:70px;text-align:center">+966</span>
-          <input class="inp" id="sPhone" type="tel" placeholder="5xxxxxxxx" maxlength="10">
+  <!-- ===== 📊 التحليلات ===== -->
+  <section class="pane" id="p-an">
+    <div class="card">
+      <div class="row-h">
+        <h2>📊 سجل الأوامر والتحليلات</h2>
+        <div class="an-f">
+          <button class="pf-tab on" data-r="today" onclick="anRange('today',this)">اليوم</button>
+          <button class="pf-tab" data-r="week" onclick="anRange('week',this)">7 أيام</button>
+          <button class="pf-tab" data-r="month" onclick="anRange('month',this)">30 يوم</button>
+          <button class="pf-tab" data-r="all" onclick="anRange('all',this)">الكل</button>
+          <span class="hint">من</span><input type="date" id="anFrom" onchange="anRange('custom')"><span class="hint">إلى</span><input type="date" id="anTo" onchange="anRange('custom')">
+          <button class="pf-tab" onclick="anHistory()" title="يسحب سجل الأوامر القديم من سهم">⬇️ سجل سهم</button>
         </div>
-        <div class="two field">
-          <select class="sel" id="sMethod"><option value="sms">رسالة نصية SMS</option><option value="whatsapp">واتساب</option></select>
-          <button class="btn btn-gold" onclick="sahmLogin()">🔑 دخول سهم</button>
-        </div>
-        <div id="otpBox" style="display:none">
-          <label class="l">رمز التحقق اللي وصلك</label>
+      </div>
+      <div class="hint" id="anInfo"></div>
+      <div class="pf-sum" id="anSum"></div>
+      <h3 class="h3">حسب السهم</h3>
+      <div class="tw"><table class="pf-tbl"><thead><tr><th>الرمز</th><th>شراء</th><th>بيع</th><th>قيمة الشراء</th><th>قيمة البيع</th><th>العمولات</th><th>الربح/الخسارة المحقق</th></tr></thead><tbody id="anSym"></tbody></table></div>
+      <h3 class="h3">الأوامر</h3>
+      <div class="tw" style="max-height:420px;overflow-y:auto"><table class="pf-tbl"><thead><tr><th>التاريخ</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>التكلفة</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="anOrd"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===== ⚙️ الإعدادات ===== -->
+  <section class="pane" id="p-set">
+    <div class="grid">
+      <div class="card">
+        <h2>🎯 الصفقة</h2>
+        <div class="field">
+          <label class="l">حجم الصفقة</label>
           <div class="two">
-            <input class="inp" id="sOtp" type="text" inputmode="numeric" maxlength="8" placeholder="123456" style="letter-spacing:4px;text-align:center">
-            <button class="btn btn-green" onclick="sahmOtp()">✔ تأكيد الرمز</button>
+            <select class="sel" id="sizeMode" onchange="sizeUI()">
+              <option value="fixed">مبلغ ثابت ($)</option>
+              <option value="percent">نسبة من المحفظة (%)</option>
+            </select>
+            <input class="inp" id="amount" type="number" min="1" placeholder="المبلغ $">
           </div>
         </div>
-        <div class="hint" id="loginMsg"></div>
-        <button class="btn" onclick="showShot()" style="width:100%;margin-top:8px;border:1px solid var(--border2);background:transparent">📸 شوف صفحة سهم على السيرفر</button>
-        <button class="btn" onclick="botUpdate()" style="width:100%;margin-top:8px;border:1px solid var(--border2);background:transparent">⬆️ تحديث البوت من GitHub</button>
-        <button class="btn" id="logoutBtn" onclick="sahmLogout()" style="width:100%;margin-top:8px;border:1px solid rgba(255,77,77,.4);color:var(--red);background:transparent">🔌 قطع الاتصال بسهم</button>
+        <div class="slide" id="sizePctBox">
+          <div class="slide-top"><span>نسبة الصفقة من المحفظة</span></div>
+          <div class="slide-row"><input type="range" id="sizePct" min="1" max="50" step="1" oninput="lbl('sizePct','%')"><span class="badge" id="sizePct-v"></span></div>
+        </div>
+        <div class="slide">
+          <div class="slide-top"><span>🎯 الهدف (بيع عند +%)</span></div>
+          <div class="slide-row"><input type="range" id="tpPct" min="0.5" max="30" step="0.5" oninput="lbl('tpPct','%')"><span class="badge" id="tpPct-v"></span></div>
+        </div>
+        <div class="slide">
+          <div class="slide-top"><span>🛑 الوقف (بيع عند -%)</span></div>
+          <div class="slide-row"><input type="range" id="slPct" min="0.5" max="20" step="0.5" oninput="lbl('slPct','%')"><span class="badge" id="slPct-v"></span></div>
+        </div>
+        <div class="field"><label class="l">سعر الأمر فوق الإشارة % (عشان يتنفذ على طول)</label><input class="inp" id="offsetPct" type="number" step="0.1" min="0"></div>
+        <div class="hint">كل الأوامر محددة (Limit) — بتشتغل في البري ماركت والجلسة الرسمية والافتر، والبوت بيختار "تداول ممتد" لوحده.</div>
+        <!-- مخفي: البوت بيستخدم أمر محدد دايماً ومراقبة الهدف/الوقف بنفسه -->
+        <select class="sel" id="orderType" style="display:none"><option value="limit">limit</option><option value="market">market</option></select>
+        <input type="checkbox" id="autoBracket" style="display:none">
       </div>
-      <div class="hint">البوت لازم يكون شغال على الجهاز/السيرفر. رقم الجوال بيتحفظ في المنصة، ورمز التحقق ما بيتحفظش.</div>
 
-      <div class="sub">تليجرام</div>
-      <div class="field">
-        <label class="l">رمز بوت تليجرام (Token)</label>
-        <input class="inp" id="tgToken" type="password" placeholder="123456:ABC...">
+      <div class="card">
+        <h2>🛡️ إدارة المخاطر</h2>
+        <div class="limits">
+          <div class="lim g"><label class="l">هدف الربح اليومي ($)</label><input class="inp" id="dailyProfitTarget" type="number" min="0"></div>
+          <div class="lim r"><label class="l">حد الخسارة اليومي ($)</label><input class="inp" id="dailyLossLimit" type="number" min="0"></div>
+        </div>
+        <div class="two field">
+          <div><label class="l">أقل سعر للسهم $</label><input class="inp" id="minPrice" type="number" step="0.5" min="0"></div>
+          <div><label class="l">أعلى سعر للسهم $</label><input class="inp" id="maxPrice" type="number" step="0.5" min="0"></div>
+        </div>
+        <div class="field"><label class="l">أقصى صفقات في اليوم</label><input class="inp" id="maxPerDay" type="number" min="0"></div>
+        <details style="margin-bottom:10px"><summary class="hint" style="cursor:pointer">متقدم</summary>
+          <div class="field" style="margin-top:8px"><label class="l">نص جلسة التداول في سهم (فاضي = تلقائي)</label><input class="inp" id="session" type="text" style="font-family:var(--ar)"></div>
+        </details>
+        <button class="btn btn-gold" onclick="save()">💾 حفظ الإعدادات</button>
       </div>
-      <div class="field">
-        <label class="l">معرف الشات / القناة (Chat ID)</label>
-        <input class="inp" id="tgChatId" type="text" placeholder="-100xxxxxxxx">
-      </div>
-      <div class="two">
-        <button class="btn btn-ghost" onclick="saveTelegram()">💾 حفظ</button>
-        <button class="btn btn-ghost" onclick="testTelegram()">📨 تجربة</button>
-      </div>
-      <div class="conn bad" id="tgConn" style="margin-top:10px">— غير متصل</div>
-    </div>
 
-    <!-- 2) إعدادات التداول -->
-    <div class="card">
-      <h2>⚙️ إعدادات التداول</h2>
-      <div class="field">
-        <label class="l">حجم الصفقة</label>
+      <div class="card">
+        <h2>🔌 الاتصال بسهم</h2>
+        <div class="two field">
+          <div><label class="l">الوسيط</label>
+            <select class="sel" id="broker">
+              <option value="sahm-vps">🇸🇦 سهم</option>
+              <option disabled>tastytrade — قريباً</option>
+              <option disabled>Interactive Brokers — قريباً</option>
+            </select></div>
+          <div><label class="l">السوق</label>
+            <select class="sel" id="market" onchange="setMarket()">
+              <option value="US">🇺🇸 الأمريكي</option>
+              <option value="SA">🇸🇦 السعودي</option>
+            </select></div>
+        </div>
+        <div class="field"><label class="l">رقم المحفظة</label>
+          <input class="inp" id="fundAccount" placeholder="800906239 (فاضي = المفتوحة)" inputmode="numeric" onchange="post({fundAccount:this.value.trim()})"></div>
+        <div id="loginBox">
+          <label class="l">رقم الجوال المسجّل في سهم</label>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <span class="inp" style="width:62px;text-align:center">+966</span>
+            <input class="inp" id="sPhone" type="tel" placeholder="5xxxxxxxx" maxlength="10">
+          </div>
+          <div class="two field">
+            <select class="sel" id="sMethod"><option value="sms">SMS</option><option value="whatsapp">واتساب</option></select>
+            <button class="btn btn-gold" onclick="sahmLogin()">🔑 اتصال</button>
+          </div>
+          <div id="otpBox" style="display:none">
+            <label class="l">رمز التحقق</label>
+            <div class="two">
+              <input class="inp" id="sOtp" type="text" inputmode="numeric" maxlength="8" placeholder="123456" style="letter-spacing:4px;text-align:center">
+              <button class="btn btn-green" onclick="sahmOtp()">✔ تأكيد</button>
+            </div>
+          </div>
+          <div class="hint" id="loginMsg"></div>
+        </div>
+
+        <div class="sub">تليجرام</div>
+        <div class="two field">
+          <input class="inp" id="tgToken" type="password" placeholder="Bot Token">
+          <input class="inp" id="tgChatId" type="text" placeholder="Chat ID">
+        </div>
         <div class="two">
-          <select class="sel" id="sizeMode" onchange="sizeUI()">
-            <option value="fixed">مبلغ ثابت ($)</option>
-            <option value="percent">نسبة من المحفظة (%)</option>
-          </select>
-          <input class="inp" id="amount" type="number" min="1" placeholder="المبلغ $">
+          <button class="btn btn-ghost" onclick="saveTelegram()">💾 حفظ</button>
+          <button class="btn btn-ghost" onclick="testTelegram()">📨 تجربة</button>
+        </div>
+        <div class="conn bad" id="tgConn" style="margin-top:8px">— غير متصل</div>
+
+        <div class="sub">أدوات</div>
+        <div class="tools">
+          <button class="btn btn-ghost" onclick="showShot()">📸 صفحة سهم</button>
+          <button class="btn btn-ghost" onclick="botUpdate()">⬆️ تحديث البوت</button>
+          <button class="btn btn-ghost" onclick="openTpl()">📋 قالب التنبيه</button>
+          <button class="btn btn-ghost" id="logoutBtn" onclick="sahmLogout()" style="color:var(--red);border-color:rgba(255,77,77,.4)">🔌 قطع الاتصال</button>
         </div>
       </div>
-      <div class="slide" id="sizePctBox">
-        <div class="slide-top"><span>نسبة الصفقة الواحدة من حجم المحفظة %</span></div>
-        <div class="slide-row"><input type="range" id="sizePct" min="1" max="50" step="1" oninput="lbl('sizePct','%')"><span class="badge" id="sizePct-v"></span></div>
-      </div>
-      <div class="slide">
-        <div class="slide-top"><span>نسبة جني الربح %</span></div>
-        <div class="slide-row"><input type="range" id="tpPct" min="0.5" max="30" step="0.5" oninput="lbl('tpPct','%')"><span class="badge" id="tpPct-v"></span></div>
-      </div>
-      <div class="slide">
-        <div class="slide-top"><span>نسبة وقف الخسارة %</span></div>
-        <div class="slide-row"><input type="range" id="slPct" min="0.5" max="20" step="0.5" oninput="lbl('slPct','%')"><span class="badge" id="slPct-v"></span></div>
-      </div>
-      <div class="limits">
-        <div class="lim g"><label class="l">هدف الربح اليومي ($)</label><input class="inp" id="dailyProfitTarget" type="number" min="0"></div>
-        <div class="lim r"><label class="l">حد الخسارة اليومي ($)</label><input class="inp" id="dailyLossLimit" type="number" min="0"></div>
-      </div>
-      <div class="two field">
-        <div><label class="l">أقل سعر للسهم $</label><input class="inp" id="minPrice" type="number" step="0.5" min="0"></div>
-        <div><label class="l">أعلى سعر للسهم $</label><input class="inp" id="maxPrice" type="number" step="0.5" min="0"></div>
-      </div>
-      <div class="two field">
-        <div><label class="l">أقصى صفقات في اليوم</label><input class="inp" id="maxPerDay" type="number" min="0"></div>
-        <div><label class="l">سعر الأمر فوق الإشارة %</label><input class="inp" id="offsetPct" type="number" step="0.1" min="0"></div>
-      </div>
-      <div class="field"><label class="l">نوع الأمر</label>
-        <select class="sel" id="orderType">
-          <option value="market">⚡ أمر سوق — تنفيذ فوري لحظة الإشارة</option>
-          <option value="limit">🎯 أمر محدد — بسعر الإشارة + النسبة</option>
-        </select>
-        <div class="hint">أمر السوق بيشتغل في الجلسة العادية بس (5:30 م – 12 ص بتوقيت السعودية). برّه الجلسة البوت بيستخدم المحدد تلقائياً.</div>
-      </div>
-      <div class="toggle-row"><span>إغلاق الصفقات تلقائياً (هدف + وقف مع الشراء)</span><label class="toggle"><input type="checkbox" id="autoBracket"><span class="slider"></span></label></div>
-      <div class="toggle-row"><span>تنفيذ حقيقي <small style="color:var(--muted2)">(مقفول = تجربة من غير إرسال)</small></span><label class="toggle"><input type="checkbox" id="live"><span class="slider"></span></label></div>
-      <details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:12px;color:var(--muted2)">إعدادات متقدمة</summary>
-        <div class="field" style="margin-top:8px"><label class="l">نص جلسة التداول في سهم (فاضي = الافتراضي)</label><input class="inp" id="session" type="text" style="font-family:var(--ar)"></div>
-      </details>
-      <button class="btn btn-gold" onclick="save()">💾 حفظ الإعدادات</button>
     </div>
-
-    <!-- 3) لوحة التحكم -->
-      <div class="card" style="margin-top:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">📡 آخر تنبيهات وصلت من TradingView</h2><button class="pf-tab" onclick="loadWH()">🔄</button></div>
-    <div class="hint" style="margin:6px 0">أي تنبيه TradingView بيبعته على الـ Webhook بيظهر هنا فوراً — لو التنبيه طلع في TradingView ومش ظاهر هنا، يبقى المشكلة في إعدادات التنبيه نفسه (Webhook URL).</div>
-    <div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>الوقت</th><th>النتيجة</th><th>الرسالة اللي وصلت</th></tr></thead><tbody id="whLog"></tbody></table></div>
-  </div>
-<div class="card">
-      <h2>📊 لوحة التحكم بالتداول</h2>
-      <div class="stats">
-        <div class="stat"><b id="s-net">—</b><span>قيمة الحساب</span></div>
-        <div class="stat"><b id="s-bp">—</b><span>القوة الشرائية</span></div>
-        <div class="stat"><b id="s-amt">—</b><span>مبلغ الصفقة</span></div>
-        <div class="stat"><b id="s-res">—</b><span>أموال محجوزة في صفقات</span></div>
-        <div class="stat"><b id="s-total">—</b><span>إجمالي الصفقات</span></div>
-        <div class="stat"><b id="s-pnl">—</b><span>ربح/خسارة اليوم (تقديري)</span></div>
-      </div>
-      <button class="btn btn-ghost" onclick="openTpl()">📋 قوالب الإشارات</button>
-      <div class="ctl">
-        <button class="btn btn-green" id="btnStart" onclick="setPaused(false)">▶ بدء</button>
-        <div class="state-pill" id="state">—</div>
-        <button class="btn btn-red" id="btnStop" onclick="setPaused(true)">⏸ إيقاف</button>
-      </div>
-      <button class="btn btn-red" disabled title="قريباً">إغلاق جميع الصفقات (قريباً)</button>
-      <div class="sub" style="margin-top:14px">🧪 إشارة تجريبية</div>
-      <div class="two field">
-        <input class="inp" id="tSym" type="text" placeholder="الرمز مثلاً SOUN" style="text-transform:uppercase">
-        <input class="inp" id="tPrice" type="number" step="0.01" placeholder="السعر $">
-      </div>
-      <button class="btn btn-ghost" onclick="sendTest()">إرسال إشارة BUY للبوت</button>
-      <div class="hint">بتبعت إشارة شراء للبوت كأنها جاية من تريدينج فيو. في وضع التجربة بيملا الأمر ويصوّره من غير إرسال.</div>
-      <div class="hint" id="acctHint"></div>
-    </div>
-  </div>
-
-  <!-- سجل التداول -->
-  <div class="tbl-card">
-    <div class="tbl-head">
-      <h2>🧾 سجل التداول</h2>
-      <div class="tabs">
-        <div class="tab on" data-f="all" onclick="filt(this)">الكل</div>
-        <div class="tab" data-f="sent" onclick="filt(this)">تم التنفيذ</div>
-        <div class="tab" data-f="dry-run" onclick="filt(this)">تجربة</div>
-        <div class="tab" data-f="error" onclick="filt(this)">فشل</div>
-      </div>
-      <button class="btn-sm" onclick="exportCSV()">⬇ تصدير</button>
-    </div>
-    <div class="scroll">
-      <table>
-        <thead><tr><th>الوقت</th><th>الرمز</th><th>الحالة</th><th>السعر</th><th>الأسهم</th><th>المبلغ</th><th>هدف / وقف</th><th>الربح/الخسارة</th><th>ملاحظة</th></tr></thead>
-        <tbody id="trades"><tr><td colspan="9" style="color:var(--muted2);text-align:center;padding:24px">لا توجد عمليات بعد</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- سجل التطبيق -->
-  <div class="tbl-card">
-    <div class="tbl-head"><h2>📜 سجل التطبيق</h2></div>
-    <div class="scroll" id="logs"><div class="log" style="color:var(--muted2)">لا يوجد سجل بعد</div></div>
-  </div>
+  </section>
 </div>
 
 <div class="modal" id="tpl"><div class="box">
@@ -650,7 +709,7 @@ let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[];
 function chInit(){
   if(chart || !window.LightweightCharts) return;
   const box=$('chBox');
-  chart=LightweightCharts.createChart(box,{height:380,layout:{background:{color:'#0b1220'},textColor:'#cbd5e1'},
+  chart=LightweightCharts.createChart(box,{height:340,layout:{background:{color:'#0b1220'},textColor:'#cbd5e1'},
     grid:{vertLines:{color:'#1e293b'},horzLines:{color:'#1e293b'}},timeScale:{timeVisible:true,secondsVisible:false},
     rightPriceScale:{borderColor:'#334155'},crosshair:{mode:0},
     localization:{timeFormatter:t=>new Date(t*1000).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}});
@@ -695,6 +754,13 @@ async function loadChart(fit){
     <span style="color:#94a3b8">من ${new Date(p.openedAt).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}</span>`;
 }
 loadPositions(); setInterval(loadPositions, 10000);
+
+function mtab(p){ document.querySelectorAll('.mt').forEach(b=>b.classList.toggle('on',b.dataset.p===p)); document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id==='p-'+p)); try{localStorage.setItem('bot_tab',p);}catch(_){} if(p==='trade'&&chart) chart.applyOptions({width:$('chBox').clientWidth}); }
+try{ const t=localStorage.getItem('bot_tab'); if(t&&document.getElementById('p-'+t)) mtab(t); }catch(_){}
+function toggleLive(el){
+  if(el.checked && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')){ el.checked=false; return; }
+  post({dryRun:!el.checked}, el.checked?'🟢 التنفيذ الحقيقي اشتغل':'🧪 وضع التجربة');
+}
 </script>
 </body>
 </html>
