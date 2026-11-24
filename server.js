@@ -1231,6 +1231,11 @@ app.get('/api/bot/trades', auth, adminOnly, async (req, res) => {
     const list = await Signal.find({ 'tradeResult.broker': 'sahm' })
       .sort({ 'tradeResult.at': -1 }).limit(50)
       .select('symbol price tp sl status strategy receivedAt tradeResult closePrice currentPrice').lean();
+    // نربط كل شراء بصفقته في البوت (التنفيذ الفعلي + البيع + الربح)
+    const ids = list.map((s) => s._id);
+    const pos = await mongoose.connection.collection('botpositions').find({ signalId: { $in: ids } }).toArray();
+    const byId = {}; pos.forEach((p) => { byId[String(p.signalId)] = p; });
+    list.forEach((s) => { const p = byId[String(s._id)]; if (p) s.position = { status: p.status, qty: p.qty, entry: p.entry, filledAt: p.filledAt, exitPrice: p.exitPrice, closedAt: p.closedAt, pnl: p.pnl, pct: p.pct, reason: p.reason, tp: p.tp, sl: p.sl, lastPrice: p.lastPrice }; });
     res.json(list);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
