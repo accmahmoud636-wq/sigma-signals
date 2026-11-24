@@ -92,7 +92,9 @@ async function openBrowser() {
   page.on('request', async (rq) => {
     try {
       const u = rq.url();
-      if (rq.method() === 'GET' || !/sahmcapital\.com/.test(u) || !/trade\/order/i.test(u) || /query/i.test(u)) return;
+      const watching = Date.now() < orderWatchUntil && rq.method() !== 'GET' && /sahmcapital\.com/.test(u) && !/query|heart|log|track|collect/i.test(u);
+      if (watching) log('📤 طلب اتبعت لسهم بعد الإرسال: ' + u.replace(/^https?:\/\//, '').split('?')[0]);
+      if (!watching && (rq.method() === 'GET' || !/sahmcapital\.com/.test(u) || !/trade\/order/i.test(u) || /query/i.test(u))) return;
       const h = rq.headers(); for (const k of Object.keys(h)) if (/cookie|authorization|token/i.test(k)) h[k] = '(موجود)';
       await mongoose.connection.collection('sahmorderreq').insertOne({ url: u, method: rq.method(), headers: h, post: (rq.postData() || '').slice(0, 3000), at: new Date() });
       log('🧩 اتسجّل طلب الأمر: ' + u.replace(/^https?:\/\//, '').split('?')[0]);
@@ -102,6 +104,11 @@ async function openBrowser() {
   // نسجّل بيانات الحساب اللي سهم بتجيبها (المحفظة، الأسهم، الرصيد) — عشان نعرضها في المنصة
   page.on('response', async (r) => {
     try {
+      if (Date.now() < orderWatchUntil && r.request().method() !== 'GET' && /sahmcapital\.com/.test(r.url()) && !/query|heart|log|track|collect/i.test(r.url())) {
+        const body = (await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+        log(`📥 رد سهم على الأمر (${r.status()}): ${body}`);
+        lastOrderReply = body;
+      }
       const u = r.url();
       if (!/sahmcapital\.com/.test(u) || /quoteapi|recaptcha|\/hq\//.test(u)) return;
       const t = r.request().resourceType(); if (t !== 'xhr' && t !== 'fetch') return;
@@ -383,6 +390,7 @@ async function sellNow(symbol, qty, price) {
   await (await qtyField(panel)).fill(String(qty));
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
   await assertRealFund(panel);
+  orderWatchUntil = Date.now() + 8000; lastOrderReply = '';
   await panel.getByText('إرسال الأمر').locator('visible=true').first().click({ timeout: 3000 });
   await confirmOrder();
   log(`⚡ بيع محدد ${qty} ${symbol} @ ${round(price * 0.99)} — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
@@ -391,10 +399,40 @@ async function sellNow(symbol, qty, price) {
   return false;
 }
 
+// أمر الشراء بيفضل "pending" لحد ما السهم يظهر فعلاً في محفظة سهم — ساعتها بس البوت يبدأ يراقب الهدف/الوقف
+async function holdsOf(mkt) {
+  const pf = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' }, { projection: { [`${mkt}.queryHoldsList`]: 1 } });
+  const l = pf && pf[mkt] && pf[mkt].queryHoldsList && pf[mkt].queryHoldsList.holdsList;
+  return Array.isArray(l) ? l : null;
+}
+async function checkPending(col) {
+  const pend = await col.find({ status: { $in: ['pending', 'unfilled'] } }).toArray();
+  for (const p of pend) {
+    const holds = await holdsOf(p.market);
+    if (!holds) continue;
+    const h = holds.find((x) => String(x.stockCode).toUpperCase() === p.symbol);
+    const have = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
+    const age = (Date.now() - new Date(p.openedAt)) / 60000;
+    if (have > 0) {
+      const entry = Number(h.costPrice) || p.entry;
+      // الهدف والوقف من سعر التنفيذ الحقيقي
+      const tp = round(entry * (1 + (C.tpPct || 5) / 100)), sl = round(entry * (1 - (C.slPct || 3) / 100));
+      await col.updateOne({ _id: p._id }, { $set: { status: 'open', qty: Math.min(have, p.qty) || have, entry, tp, sl, filledAt: new Date() } });
+      tg(`✅ <b>اتنفذ فعلاً: ${p.symbol}</b> — ${have} سهم @ ${entry}\n🎯 ${tp} (+${C.tpPct || 5}%) | 🛑 ${sl} (-${C.slPct || 3}%)`);
+    } else if (p.status === 'pending' && age > 3) {
+      await col.updateOne({ _id: p._id }, { $set: { status: 'unfilled' } });
+      tg(`⚠️ أمر شراء ${p.symbol} @ ${p.orderPrice || p.entry} <b>ما اتنفذش خلال 3 دقايق</b>\nافتح سهم ← الأوامر: لو لسه معلّق الغيه (أو سيبه والبوت هيتابعه لو اتنفذ)`, 'warn');
+    } else if (p.status === 'unfilled' && age > 360) {
+      await col.updateOne({ _id: p._id }, { $set: { status: 'expired' } });
+    }
+  }
+}
+
 const closingNow = new Set();
 let monitorWarned = false;
 async function monitorPositions() {
   const col = mongoose.connection.collection('botpositions');
+  await checkPending(col).catch((e) => log('checkPending: ' + e.message, 'warn'));
   const open = await col.find({ status: 'open' }).toArray();
   if (!open.length) return;
   const Signals = mongoose.connection.collection('signals');
@@ -429,7 +467,7 @@ async function monitorPositions() {
           const have = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
           if (have <= 0) {
             await col.updateOne({ _id: p._id }, { $set: { status: 'closed', closedAt: new Date(), reason: 'اتباع يدوي / مش في المحفظة' } });
-            tg(`ℹ️ ${p.symbol} مش موجود في محفظة سهم — اتقفل في البوت من غير بيع (غالباً اتباع يدوي)`);
+            tg(`ℹ️ ${p.symbol} مش موجود في محفظة سهم — اتقفل في البوت من غير بيع (اتباع يدوي أو أمر الشراء ما اتنفذش)`);
             return;
           }
           if (have < p.qty) p.qty = have;
@@ -497,6 +535,7 @@ async function assertRealFund(panel) {
   return txt;
 }
 let ticketAt = 0;
+let orderWatchUntil = 0, lastOrderReply = '';
 async function prepareTicket() {
   let panel = await ticketPanel();
   if (!panel) { await openTicketSearch(); panel = await ticketPanel(); }
@@ -586,9 +625,9 @@ async function placeBuy(sig) {
     else log(`نسبة من المحفظة: قيمة الحساب بالدولار مش معروفة — استخدام المبلغ الثابت ${C.amount}$`, 'warn');
   }
   const qty = Math.floor(amount / (C.orderType === 'limit' ? limit : sig.price * 1.01));
-  // الهدف = سعر الدخول + نسبة الهدف من الإعدادات (افتراضي 5%) — مش هدف المؤشر
-  const tp = round(sig.price * (1 + (C.tpPct || 5) / 100));
-  const sl = round(sig.sl || sig.price * (1 - C.slPct / 100));
+  // الهدف والوقف من المنصة بس (شريط الهدف/الوقف) — محسوبين من سعر الدخول (سعر الأمر)، ومتجاهلين أرقام المؤشر
+  const tp = round(limit * (1 + (C.tpPct || 5) / 100));
+  const sl = round(limit * (1 - (C.slPct || 3) / 100));
   if (qty < 1) throw new Error(`المبلغ ${amount.toFixed(2)}$ أقل من سعر سهم واحد`);
 
   // ⚡ المسار السريع: لو التذكرة مفتوحة والسوق صح → على طول للتنفيذ
@@ -621,6 +660,7 @@ async function placeBuy(sig) {
   // إرسال + تأكيد
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
   await assertRealFund(panel);
+  orderWatchUntil = Date.now() + 8000; lastOrderReply = '';
   await panel.getByText('إرسال الأمر').locator('visible=true').first().click({ timeout: 3000 });
   await confirmOrder();
   setTimeout(() => closeDialogs(), 1500);
@@ -631,8 +671,23 @@ async function placeBuy(sig) {
 
 // تأكيد الأمر: بنستنى زرار التأكيد لحد 1.5 ث بس (لو مفيش تأكيد نكمل على طول)
 async function confirmOrder() {
-  const ok = page.getByRole('button', { name: /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر)\s*$/ }).locator('visible=true').last();
-  try { await ok.waitFor({ state: 'visible', timeout: 1500 }); await tryClick(ok); } catch (_) {}
+  await sleep(450);
+  // نسجل أي نافذة ظهرت بعد "إرسال الأمر" (نصها وزراريرها) ونضغط زرار التأكيد جواها
+  const info = await page.evaluate(() => {
+    const vis = (e) => e && e.getClientRects().length;
+    const out = [];
+    const dl = [...document.querySelectorAll('.n-modal, .n-dialog, [role=dialog], .n-popconfirm, .n-popover')].filter(vis);
+    for (const d of dl) {
+      if (d.querySelector('input') && /إرسال الأمر/.test(d.innerText) && /الكمية/.test(d.innerText)) continue; // التذكرة نفسها
+      const btns = [...d.querySelectorAll('button')].filter(vis);
+      const re = /^\s*(تأكيد|موافق|إرسال|تأكيد الأمر|تأكيد الطلب|تأكيد الشراء|تأكيد البيع|متابعة|نعم|Confirm|Submit|OK|Yes)\s*$/i;
+      const hit = btns.find((b) => re.test(b.innerText));
+      out.push({ text: d.innerText.replace(/\s+/g, ' ').slice(0, 160), btns: btns.map((b) => b.innerText.trim()), clicked: hit ? hit.innerText.trim() : null });
+      if (hit) hit.click();
+    }
+    return out;
+  }).catch(() => []);
+  if (info.length) log('🪟 بعد الإرسال: ' + info.map((x) => `"${x.text}" [${x.btns.join(' | ')}]${x.clicked ? ' ← ضغطت ' + x.clicked : ''}`).join(' ¦ ').slice(0, 500));
   if (await page.locator('input[type=password]:visible').count()) throw new Error('سهم طالبة كلمة مرور التداول (قفل التداول) — افتح القفل يدوي في نافذة البوت');
 }
 
@@ -1118,18 +1173,18 @@ async function handle(sig, Signals) {
   const st = loadState();
   if (st.trades >= C.maxPerDay) { tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`); return skip(`⛔ حد الصفقات اليومي (${C.maxPerDay})`); }
   // نفس السهم مسموح أكتر من مرة في اليوم — بس مش وهو لسه مفتوح (عشان ما نضاعفش)
-  const openSame = await mongoose.connection.collection('botpositions').findOne({ symbol: String(sig.symbol).toUpperCase(), status: { $in: ['open', 'closing'] } });
+  const openSame = await mongoose.connection.collection('botpositions').findOne({ symbol: String(sig.symbol).toUpperCase(), status: { $in: ['open', 'closing', 'pending'] } });
   if (openSame) return skip(`↷ تخطي ${tag}: فيه صفقة مفتوحة على نفس السهم`);
 
   try {
     const r = await placeBuy(sig);
     if (r.status === 'sent') { st.trades++; st.symbols.push(sig.symbol); saveState(st); }
     if (r.status === 'sent') await mongoose.connection.collection('botpositions').insertOne({
-      symbol: r.symbol, qty: r.qty, entry: Number(sig.price), tp: r.tp, sl: r.sl, signalId: sig._id,
-      market: C.market === 'SA' ? 'SA' : 'US', status: 'open', openedAt: new Date() });
+      symbol: r.symbol, qty: r.qty, entry: r.limit, tp: r.tp, sl: r.sl, signalId: sig._id,
+      market: C.market === 'SA' ? 'SA' : 'US', status: 'pending', openedAt: new Date(), orderPrice: r.limit });
     await Signals.updateOne({ _id: sig._id }, { $set: { tradeResult: { broker: 'sahm', ...r, at: new Date() } } });
     tg(
-      (r.status === 'sent' ? '✅ <b>اتنفذ على سهم</b>' : '🧪 <b>تجربة (من غير إرسال)</b>') +
+      (r.status === 'sent' ? '📨 <b>أمر شراء اتبعت لسهم</b> (مستني التنفيذ)' : '🧪 <b>تجربة (من غير إرسال)</b>') +
       `\n${r.symbol} | كمية ${r.qty} | ${r.mkt ? 'أمر سوق' : 'محدد $' + r.limit}\n🎯 $${r.tp} | 🛑 $${r.sl}` +
       `\n🕓 ${r.session} | ⚡ ${r.fillSec} ث`
     );
