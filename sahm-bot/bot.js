@@ -13,7 +13,7 @@ const mongoose = require('mongoose');
 const { chromium } = require('playwright');
 
 // الإعدادات بتتقرا من منصة MILLIONAIRE (صفحة 🤖 بوت سهم) قبل كل إشارة
-const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3, trailOn: false, trailStart: 5, trailPct: 2,
+const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3, tradePin: '', trailOn: false, trailStart: 5, trailPct: 2,
                    minPrice: 3, maxPrice: 5, maxPerDay: 5, session: '', broker: 'sahm',
                    sizeMode: 'fixed', sizePct: 10, market: 'US', orderType: 'market', fundAccount: '', dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
 let C = { ...DEFAULTS };
@@ -394,8 +394,9 @@ async function sellNow(symbol, qty, price) {
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
   await assertRealFund(panel);
   orderWatchUntil = Date.now() + 8000; lastOrderReply = '';
-  await panel.getByText('إرسال الأمر').locator('visible=true').first().click({ timeout: 3000 });
+  await submitOrder(panel, 'بيع');
   await confirmOrder();
+  if (!(await verifySent(symbol))) throw new Error('ضغطت إرسال البيع بس مفيش طلب وصل لسهم');
   log(`⚡ بيع محدد ${qty} ${symbol} @ ${round(price * 0.99)} — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد بيع ${qty} ${symbol}`).catch(() => {});
   setSide(panel, 'شراء').catch(() => {}); // نرجّع التذكرة جاهزة للشراء
@@ -573,6 +574,31 @@ async function refreshPortfolio() {
   if (!working) await realTicket().catch(() => {});
   return true;
 }
+// زرار الإرسال الحقيقي: "إرسال الأمر" ممكن يكون عنوان التذكرة مش الزرار نفسه — بندوّر على الزرار الفعلي
+async function submitOrder(panel, side) {
+  const info = await panel.evaluate((root, side) => {
+    const vis = (e) => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+    const btns = [...root.querySelectorAll('button')].filter(vis);
+    const list = btns.map((b) => ({ t: b.innerText.replace(/\s+/g, ' ').trim(), cls: b.className, dis: b.disabled || /disabled/.test(b.className) }));
+    const sideRe = side === 'بيع' ? /بيع|Sell/i : /شراء|Buy/i;
+    // الأولوية: زرار فيه "إرسال الأمر" ← زرار رئيسي (primary) فيه شراء/بيع أو تأكيد ← آخر زرار رئيسي
+    let pick = btns.find((b) => /إرسال الأمر|Place Order|Submit/i.test(b.innerText));
+    if (!pick) pick = btns.filter((b) => /primary|success|error|warning/.test(b.className) && (sideRe.test(b.innerText) || /تأكيد|إرسال|Confirm/i.test(b.innerText))).pop();
+    if (!pick) pick = btns.filter((b) => /primary|success|error/.test(b.className)).pop();
+    if (pick && !pick.disabled) pick.click();
+    return { list, picked: pick ? pick.innerText.replace(/\s+/g, ' ').trim() : null, disabled: pick ? pick.disabled : null };
+  }, side).catch((e) => ({ err: e.message }));
+  log(`🔘 زراير التذكرة: ${(info.list || []).map((b) => b.t + (b.dis ? '(معطّل)' : '')).filter(Boolean).join(' | ')} ← ضغطت: ${info.picked || 'ولا حاجة'}`);
+  if (!info.picked || info.disabled) { await pushShot('مش لاقي زرار الإرسال'); throw new Error('ما لقيتش زرار إرسال الأمر في التذكرة' + (info.disabled ? ' (معطّل)' : '')); }
+}
+// بعد الإرسال: لو سهم ما استلمتش أي طلب خلال 4 ثواني نقول بوضوح
+async function verifySent(symbol) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < 4000) { if (lastOrderReply) return true; await sleep(250); }
+  log(`⚠️ ${symbol}: مفيش أي طلب وصل لسهم بعد الضغط على الإرسال — الأمر ما اتبعتش`, 'warn');
+  await pushShot('الأمر ما اتبعتش ' + symbol);
+  return false;
+}
 let ticketAt = 0;
 let orderWatchUntil = 0, lastOrderReply = '';
 async function prepareTicket() {
@@ -702,8 +728,9 @@ async function placeBuy(sig) {
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
   await assertRealFund(panel);
   orderWatchUntil = Date.now() + 8000; lastOrderReply = '';
-  await panel.getByText('إرسال الأمر').locator('visible=true').first().click({ timeout: 3000 });
+  await submitOrder(panel, 'شراء');
   await confirmOrder();
+  if (!(await verifySent(symbol))) throw new Error('ضغطت إرسال بس مفيش طلب وصل لسهم — الأمر ما اتبعتش (صورة الصفحة في 📸)');
   setTimeout(() => closeDialogs(), 1500);
   log(`🎯 أمر محدد ${qty} ${symbol} @ ${limit} (${sess}) — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد إرسال شراء ${qty} ${symbol}`).catch(() => {});
@@ -711,8 +738,25 @@ async function placeBuy(sig) {
 }
 
 // تأكيد الأمر: بنستنى زرار التأكيد لحد 1.5 ث بس (لو مفيش تأكيد نكمل على طول)
+// رمز التداول: سهم بتطلبه بعد "إرسال الأمر" — البوت بيدخله من الإعدادات (عمره ما بيتكتب في السجل)
+async function enterPinIfAsked() {
+  const dlg = page.locator('.n-modal:visible, .n-dialog:visible, [role=dialog]:visible, .n-drawer:visible')
+    .filter({ hasText: /رمز|PIN|كلمة المرور|كلمة السر|التحقق/i }).filter({ hasNotText: /أدخل الكمية|رمز أو اسم الشركة/ }).last();
+  try { await dlg.waitFor({ state: 'visible', timeout: 1500 }); } catch (_) { return false; }
+  const inputs = dlg.locator('input:visible');
+  const n = await inputs.count();
+  if (!n) return false;
+  if (!C.tradePin) { await pushShot('سهم طالبة رمز التداول'); throw new Error('سهم طالبة رمز التداول — احفظه في الإعدادات ← 🔌 الاتصال بسهم ← رمز التداول'); }
+  if (n >= 4) { await inputs.first().click().catch(() => {}); await page.keyboard.type(String(C.tradePin), { delay: 50 }); }
+  else { await inputs.first().fill(String(C.tradePin)); }
+  await sleep(350);
+  log('🔐 دخلت رمز التداول');
+  return true;
+}
+
 async function confirmOrder() {
   await sleep(450);
+  await enterPinIfAsked();
   // نسجل أي نافذة ظهرت بعد "إرسال الأمر" (نصها وزراريرها) ونضغط زرار التأكيد جواها
   const info = await page.evaluate(() => {
     const vis = (e) => e && e.getClientRects().length;
@@ -729,7 +773,8 @@ async function confirmOrder() {
     return out;
   }).catch(() => []);
   if (info.length) log('🪟 بعد الإرسال: ' + info.map((x) => `"${x.text}" [${x.btns.join(' | ')}]${x.clicked ? ' ← ضغطت ' + x.clicked : ''}`).join(' ¦ ').slice(0, 500));
-  if (await page.locator('input[type=password]:visible').count()) throw new Error('سهم طالبة كلمة مرور التداول (قفل التداول) — افتح القفل يدوي في نافذة البوت');
+  await sleep(600);
+  if (await page.locator('input[type=password]:visible').count()) { await pushShot('رمز التداول مرفوض'); throw new Error('سهم لسه طالبة رمز التداول — اتأكد إن الرمز المحفوظ في الإعدادات صح'); }
 }
 
 // ---------- الجلسة: عادية / ما قبل الافتتاح / بعد الإغلاق ----------
