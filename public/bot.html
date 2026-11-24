@@ -218,7 +218,7 @@ label.l{font-size:11px;margin-bottom:4px}
     <div class="card" id="pfCard">
       <div class="row-h">
         <h2>💼 محفظتي في سهم</h2>
-        <div class="pf-tabs"><button class="pf-tab on" id="pfUS" onclick="pfSet('US')">🇺🇸 الأمريكي</button><button class="pf-tab" id="pfSA" onclick="pfSet('SA')">🇸🇦 السعودي</button></div>
+        <div class="pf-tabs"><button class="pf-tab" onclick="pfRefresh(this)" title="يحدّث الرصيد والأسهم من سهم دلوقتي">🔄 تحديث</button><button class="pf-tab on" id="pfUS" onclick="pfSet('US')">🇺🇸 الأمريكي</button><button class="pf-tab" id="pfSA" onclick="pfSet('SA')">🇸🇦 السعودي</button></div>
       </div>
       <div class="hint" id="pfInfo"></div>
       <div class="pf-sum" id="pfSum"></div>
@@ -781,6 +781,9 @@ function toggleLive(el){
 }
 
 function toggleTrail(el){ $('trailOn').checked=el.checked; trailUI(); post({trailOn:el.checked}, el.checked?'📈 التريلنج اشتغل — البيع لما السعر يرجع من القمة':'🎯 التريلنج اتقفل — البيع عند الهدف الثابت'); }
+
+async function pfRefresh(b){ b.disabled=true; b.textContent='⏳ بيحدّث...'; await fetch('/api/bot/refreshpf',{method:'POST',headers:H}).catch(()=>{}); toast('🔄 البوت بيحدّث المحفظة من سهم (حوالي 15 ثانية)');
+  setTimeout(()=>{ loadPF(); }, 12000); setTimeout(()=>{ loadPF(); b.disabled=false; b.textContent='🔄 تحديث'; }, 22000); }
 </script>
 </body>
 </html>
