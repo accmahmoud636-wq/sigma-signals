@@ -382,6 +382,12 @@ label.l{font-size:11px;margin-bottom:4px}
           <div class="hint" id="loginMsg"></div>
         </div>
 
+        <div class="sub">رمز التداول في سهم</div>
+        <div class="two field">
+          <input class="inp" id="tradePin" type="password" inputmode="numeric" maxlength="8" placeholder="الرمز اللي سهم بتطلبه بعد إرسال الأمر" autocomplete="off">
+          <button class="btn btn-ghost" onclick="savePin()">💾 حفظ الرمز</button>
+        </div>
+        <div class="hint" id="pinState"></div>
         <div class="sub">تليجرام</div>
         <div class="two field">
           <input class="inp" id="tgToken" type="password" placeholder="Bot Token">
@@ -443,6 +449,7 @@ function fillForm(){
   if (S.sahmPhone && !$('sPhone').value) $('sPhone').value = S.sahmPhone;
   if (S.sahmMethod) $('sMethod').value = S.sahmMethod;
   $('tgToken').value = S.tgToken || '';
+  $('pinState').textContent = S.tradePinSet ? '✅ الرمز محفوظ — البوت هيدخله لوحده بعد إرسال الأمر' : '⚠️ الرمز مش محفوظ — سهم هتوقف الأمر عند طلب الرمز';
   ['sizePct','tpPct','slPct'].forEach(k=>lbl(k,'%')); sizeUI();
 }
 
@@ -498,6 +505,7 @@ function save(){
   post(b);
 }
 function setPaused(p){ post({paused:p}, p ? '⏸ التنفيذ اتوقف' : '▶ التنفيذ اشتغل'); }
+function savePin(){ const v=$('tradePin').value.trim(); if(!/^\d{4,8}$/.test(v)){ toast('اكتب الرمز أرقام بس'); return; } post({ tradePin:v }, '✅ رمز التداول اتحفظ'); $('tradePin').value=''; }
 function saveTelegram(){ post({ tgToken:$('tgToken').value, tgChatId:$('tgChatId').value }, '✅ بيانات تليجرام اتحفظت'); }
 async function testTelegram(){
   const r = await (await fetch('/api/bot/test-telegram',{method:'POST',headers:H})).json();
