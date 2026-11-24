@@ -13,7 +13,7 @@ const mongoose = require('mongoose');
 const { chromium } = require('playwright');
 
 // الإعدادات بتتقرا من منصة MILLIONAIRE (صفحة 🤖 بوت سهم) قبل كل إشارة
-const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3,
+const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3, trailOn: false, trailStart: 5, trailPct: 2,
                    minPrice: 3, maxPrice: 5, maxPerDay: 5, session: '', broker: 'sahm',
                    sizeMode: 'fixed', sizePct: 10, market: 'US', orderType: 'market', fundAccount: '', dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
 let C = { ...DEFAULTS };
@@ -447,7 +447,18 @@ async function monitorPositions() {
       if (!monitorWarned) { monitorWarned = true; log('⚠️ مصدر السعر اللحظي مش راد — بستخدم سعر محفظة سهم (أبطأ)', 'warn'); }
     }
     let reason = null;
-    if (px != null && p.tp && px >= p.tp) reason = '🎯 الهدف +' + (C.tpPct || 5) + '%';
+    // أعلى سعر وصله السهم من وقت الدخول (للهدف المتحرك)
+    const peak = Math.max(Number(p.peak) || 0, px || 0, Number(p.entry) || 0);
+    if (px != null && peak > (Number(p.peak) || 0)) await col.updateOne({ _id: p._id }, { $set: { peak } });
+    if (C.trailOn && p.entry) {
+      const startPx = p.entry * (1 + (Number(C.trailStart) || 0) / 100);
+      const trailing = peak >= startPx;
+      const tStop = trailing ? peak * (1 - (Number(C.trailPct) || 2) / 100) : null;
+      if (trailing && !p.trailing) { await col.updateOne({ _id: p._id }, { $set: { trailing: true } }); tg(`📈 ${p.symbol}: الهدف المتحرك اشتغل (القمة ${round(peak)}) — هيبيع لو رجع ${C.trailPct}%`); }
+      if (trailing) await col.updateOne({ _id: p._id }, { $set: { trailStop: round(Math.max(tStop, p.sl || 0)) } });
+      if (px != null && trailing && px <= tStop && px > p.entry * 0.98) reason = `📈 هدف متحرك (القمة ${round(peak)})`;
+      else if (px != null && p.sl && px <= p.sl) reason = '🛑 الوقف';
+    } else if (px != null && p.tp && px >= p.tp) reason = '🎯 الهدف +' + (C.tpPct || 5) + '%';
     else if (px != null && p.sl && px <= p.sl) reason = '🛑 الوقف';
     // البيع على الهدف أو الوقف بس — تنبيه "الهدف الأول" بتاع المؤشر مش بيبيع (عشان نوصل لـ 5%)
     if (px != null) await col.updateOne({ _id: p._id }, { $set: { lastPrice: px, lastAt: new Date() } });
@@ -475,7 +486,7 @@ async function monitorPositions() {
         const mkt = await sellNow(p.symbol, p.qty, px);
         const pnl = (px - p.entry) * p.qty, pct = ((px - p.entry) / p.entry) * 100;
         await col.updateOne({ _id: p._id }, { $set: { status: 'closed', exitPrice: px, closedAt: new Date(), pnl, pct, orderType: mkt ? 'market' : 'limit' } });
-        tg(`${reason === '🛑 الوقف' ? '🛑' : '🎯'} <b>اتباع ${p.symbol}</b> — ${reason}\nكمية ${p.qty} | دخول ${p.entry} → خروج ~${px}\n${pnl >= 0 ? '🟢' : '🔴'} ${pnl.toFixed(2)}$ (${pct.toFixed(2)}%) تقريبي قبل العمولة`);
+        tg(`${reason === '🛑 الوقف' ? '🛑' : reason.startsWith('📈') ? '📈' : '🎯'} <b>اتباع ${p.symbol}</b> — ${reason}\nكمية ${p.qty} | دخول ${p.entry} → خروج ~${px}\n${pnl >= 0 ? '🟢' : '🔴'} ${pnl.toFixed(2)}$ (${pct.toFixed(2)}%) تقريبي قبل العمولة`);
       } catch (e) {
         const tries = (p.tries || 0) + 1;
         await col.updateOne({ _id: p._id }, { $set: { status: tries >= 3 ? 'error' : 'open', tries } });
