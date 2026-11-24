@@ -1209,6 +1209,15 @@ app.post('/api/bot/shot', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// تحديث المحفظة فوراً (البوت يعمل ريفرش لصفحة سهم)
+app.post('/api/bot/refreshpf', auth, adminOnly, async (req, res) => {
+  try {
+    const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: {
+      command: { id: Date.now().toString(36), type: 'refreshpf', at: new Date() } } }, { upsert: true, new: true });
+    res.json(maskSettings(s));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // تحديث البوت على السيرفر من GitHub
 app.post('/api/bot/update', auth, adminOnly, async (req, res) => {
   try {
