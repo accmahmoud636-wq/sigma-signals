@@ -385,7 +385,7 @@ function livePrice(symbol) {
 async function sellNow(symbol, qty, price) {
   const t0 = Date.now();
   await closeDialogs();
-  const panel = await prepareTicket();
+  const panel = await realTicket();
   await selectSymbol(panel, symbol);
   await setSide(panel, 'بيع');
   await setTradingSession(panel);
@@ -549,6 +549,20 @@ async function assertRealFund(panel) {
   if (want && !txt.includes(want)) throw new Error(`المحفظة في التذكرة "${txt || '؟'}" مش ${want} — الأمر اتلغى`);
   return txt;
 }
+// تذكرة جاهزة على المحفظة الحقيقية — لو لقاها على التجريبي بيصلّحها لوحده ويعيد الفحص (مش بيفشل على طول)
+async function realTicket() {
+  for (let i = 0; i < 3; i++) {
+    if (await isDemo()) { log('🔁 الصفحة على التداول التجريبي — برجّعها للمحفظة الحقيقية', 'warn'); await ensureFund().catch(() => {}); }
+    const panel = await prepareTicket();
+    try { await assertRealFund(panel); return panel; }
+    catch (e) {
+      log(`🔁 ${e.message} — محاولة تصليح ${i + 1}/3`, 'warn');
+      await closeDialogs(); await ensureFund().catch(() => {}); await sleep(800);
+    }
+  }
+  await pushShot('المحفظة الحقيقية مش متاحة في التذكرة');
+  throw new Error('ما قدرتش أثبّت المحفظة الحقيقية ' + (C.fundAccount || '') + ' في التذكرة — الأمر اتلغى (مفيش أي أمر اتبعت)');
+}
 let ticketAt = 0;
 let orderWatchUntil = 0, lastOrderReply = '';
 async function prepareTicket() {
@@ -647,7 +661,7 @@ async function placeBuy(sig) {
 
   // ⚡ المسار السريع: لو التذكرة مفتوحة والسوق صح → على طول للتنفيذ
   const want = C.market === 'SA' ? 'SA' : 'US';
-  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && (await ticketPanel());
+  const ready = loggedIn && onMarket(want) && (!C.fundAccount || lastFund === String(C.fundAccount)) && !(await isDemo()) && (await ticketPanel());
   if (!ready) {
     if (!(await ensureLoggedIn())) throw new Error('مش مسجل دخول في سهم — ادخل يدوي في نافذة البوت');
     await dismissPopups();
@@ -657,7 +671,7 @@ async function placeBuy(sig) {
   // التذكرة جاهزة من قبل (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
   const t0 = Date.now();
   await closeDialogs();
-  const panel = await prepareTicket();
+  const panel = await realTicket();
   await selectSymbol(panel, symbol);
   await setSide(panel, 'شراء');
   const sess = await setTradingSession(panel);
@@ -666,8 +680,10 @@ async function placeBuy(sig) {
   const fillSec = ((Date.now() - t0) / 1000).toFixed(1);
   const info = { symbol, limit, qty, tp, sl, mkt: false, session: sess, sessionOpts: [sess], newFields: [], fillSec };
 
+  // فحص المحفظة حتى في التجربة — عشان التجربة تثبت إن الحقيقي هيروح على المحفظة الصح
+  info.fund = await assertRealFund(panel);
   if (C.dry) {
-    log(`🧪 تجربة: التذكرة اتملت في ${fillSec} ث (${sess})`);
+    log(`🧪 تجربة: التذكرة اتملت في ${fillSec} ث (${sess}) — المحفظة: ${info.fund}`);
     pushShot(`تجربة: شراء ${qty} ${symbol} @ ${limit} | هدف ${tp} | وقف ${sl} | ${sess}`).catch(() => {});
     return { status: 'dry-run', ...info };
   }
@@ -1201,7 +1217,7 @@ async function handle(sig, Signals) {
     tg(
       (r.status === 'sent' ? '📨 <b>أمر شراء اتبعت لسهم</b> (مستني التنفيذ)' : '🧪 <b>تجربة (من غير إرسال)</b>') +
       `\n${r.symbol} | كمية ${r.qty} | ${r.mkt ? 'أمر سوق' : 'محدد $' + r.limit}\n🎯 $${r.tp} | 🛑 $${r.sl}` +
-      `\n🕓 ${r.session} | ⚡ ${r.fillSec} ث`
+      `\n💼 ${r.fund || '—'}\n🕓 ${r.session} | ⚡ ${r.fillSec} ث`
     );
 
   } catch (e) {
