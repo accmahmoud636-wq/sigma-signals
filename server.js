@@ -130,6 +130,7 @@ const BotSettingsSchema = new mongoose.Schema({
   dailyLossLimit:    { type: Number, default: 0 }, // $ — 0 = بدون حد
   autoBracket:{ type: Boolean, default: true },    // إغلاق تلقائي: جني الربح/وقف الخسارة مع الشراء
   tgToken:    { type: String,  default: '' },
+  tradePin:   { type: String,  default: '' },       // رمز التداول في سهم (بيطلبه بعد إرسال الأمر)
   tgChatId:   { type: String,  default: '' },
   brokerLoggedIn: { type: Boolean, default: false },
   account:    { type: Object,  default: null },    // {netAssets, buyingPower, currency, at} من البوت
@@ -982,6 +983,7 @@ const maskSettings = (s) => {
   const o = s.toObject ? s.toObject() : { ...s };
   o.tgTokenSet = !!o.tgToken;
   o.tgToken = o.tgToken ? '••••' + o.tgToken.slice(-4) : '';
+  o.tradePinSet = !!o.tradePin; o.tradePin = '';   // الرمز ما بيرجعش للصفحة أبداً
   if (o.command) o.command = { type: o.command.type };
   return o;
 };
@@ -1021,6 +1023,7 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
     };
     // التوكن: بيتحفظ بس لو اتكتب توكن جديد (مش النسخة المخفية)
     if (typeof b.tgToken === 'string' && b.tgToken.trim() && !b.tgToken.startsWith('••••')) upd.tgToken = b.tgToken.trim();
+    if (typeof b.tradePin === 'string' && /^\d{4,8}$/.test(b.tradePin.trim())) upd.tradePin = b.tradePin.trim();
     Object.keys(upd).forEach(k => upd[k] === undefined && delete upd[k]);
     const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: upd }, { upsert: true, new: true });
     setTelegramFromSettings(s);
