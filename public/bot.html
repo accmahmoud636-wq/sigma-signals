@@ -171,6 +171,7 @@ label.l{font-size:11px;margin-bottom:4px}
     <div class="state-pill" id="state">—</div>
     <button class="ibtn g" id="btnStart" onclick="setPaused(false)" title="بدء">▶</button>
     <button class="ibtn r" id="btnStop" onclick="setPaused(true)" title="إيقاف">⏸</button>
+    <label class="live-sw" title="تريلنج ستوب على الربح — مقفول = بيع عند الهدف الثابت"><span>📈 تريلنج</span><span class="toggle"><input type="checkbox" id="trailTop" onchange="toggleTrail(this)"><span class="slider"></span></span></label>
     <label class="live-sw" title="مقفول = تجربة من غير إرسال"><span>تنفيذ حقيقي</span><span class="toggle"><input type="checkbox" id="live" onchange="toggleLive(this)"><span class="slider"></span></span></label>
   </div>
   <div class="kpis">
@@ -314,6 +315,12 @@ label.l{font-size:11px;margin-bottom:4px}
           <div class="slide-top"><span>🛑 الوقف (بيع عند -%)</span></div>
           <div class="slide-row"><input type="range" id="slPct" min="0.5" max="20" step="0.5" oninput="lbl('slPct','%')"><span class="badge" id="slPct-v"></span></div>
         </div>
+        <div class="toggle-row" style="margin-bottom:8px"><span>📈 هدف متحرك (Trailing)</span><label class="toggle"><input type="checkbox" id="trailOn" onchange="trailUI()"><span class="slider"></span></label></div>
+        <div id="trailBox" class="two field" style="display:none">
+          <div><label class="l">يبدأ لما الربح يوصل %</label><input class="inp" id="trailStart" type="number" step="0.5" min="0"></div>
+          <div><label class="l">يبيع لو رجع من القمة %</label><input class="inp" id="trailPct" type="number" step="0.5" min="0.1"></div>
+        </div>
+        <div class="hint" id="trailHint" style="display:none;margin:-4px 0 8px">مع الهدف المتحرك البوت ما بيبيعش عند الهدف الثابت — بيسيب الربح يجري ويبيع لما السعر يرجع النسبة دي من أعلى سعر وصله. الوقف الأساسي شغال لحد ما المتحرك يبدأ.</div>
         <div class="field"><label class="l">سعر الأمر فوق الإشارة % (عشان يتنفذ على طول)</label><input class="inp" id="offsetPct" type="number" step="0.1" min="0"></div>
         <div class="hint">كل الأوامر محددة (Limit) — بتشتغل في البري ماركت والجلسة الرسمية والافتر، والبوت بيختار "تداول ممتد" لوحده.</div>
         <!-- مخفي: البوت بيستخدم أمر محدد دايماً ومراقبة الهدف/الوقف بنفسه -->
@@ -418,6 +425,7 @@ const money = n => (n==null||isNaN(n)) ? '—' : '$' + Number(n).toLocaleString(
 
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 function lbl(id,suf){ $(id+'-v').textContent = Number($(id).value).toFixed(1) + suf; }
+function trailUI(){ const on=$('trailOn').checked; $('trailBox').style.display=on?'grid':'none'; $('trailHint').style.display=on?'block':'none'; }
 function sizeUI(){ const p=$('sizeMode').value==='percent'; $('sizePctBox').style.display=p?'block':'none'; $('amount').style.display=p?'none':'block'; }
 
 function fillForm(){
@@ -429,6 +437,7 @@ function fillForm(){
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>$(k).value = S[k] ?? '');
   $('session').value = S.session || '';
   $('autoBracket').checked = S.autoBracket !== false;
+  $('trailOn').checked = !!S.trailOn; $('trailTop').checked = !!S.trailOn; $('trailStart').value = S.trailStart ?? 5; $('trailPct').value = S.trailPct ?? 2; trailUI();
   $('live').checked = !S.dryRun;
   $('tgChatId').value = S.tgChatId || '';
   if (S.sahmPhone && !$('sPhone').value) $('sPhone').value = S.sahmPhone;
@@ -483,7 +492,7 @@ function setMarket(){
 function save(){
   const live = $('live').checked;
   if (live && S.dryRun && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')) return;
-  const b = { broker:$('broker').value, market:$('market').value, orderType:$('orderType').value, fundAccount:$('fundAccount').value.trim(), sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value };
+  const b = { broker:$('broker').value, market:$('market').value, orderType:$('orderType').value, fundAccount:$('fundAccount').value.trim(), sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value, trailOn:$('trailOn').checked, trailStart:Number($('trailStart').value), trailPct:Number($('trailPct').value) };
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>b[k]=Number($(k).value));
   if (b.minPrice > b.maxPrice) return toast('⚠️ أقل سعر أكبر من أعلى سعر');
   post(b);
@@ -749,7 +758,7 @@ async function loadChart(fit){
   vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
   chLines.forEach(l=>cs.removePriceLine(l)); chLines=[];
   const L=(price,color,title,style)=>price&&chLines.push(cs.createPriceLine({price:+price,color,lineWidth:2,lineStyle:style,axisLabelVisible:true,title}));
-  L(p.entry,'#3b82f6','دخول',0); L(p.tp,'#22c55e','🎯 هدف',2); L(p.sl,'#ef4444','🛑 وقف',2);
+  L(p.entry,'#3b82f6','دخول',0); if(!S.trailOn) L(p.tp,'#22c55e','🎯 هدف',2); L(p.sl,'#ef4444','🛑 وقف',2); if(S.trailOn&&p.entry) L(p.trailStop||(+p.entry*(1+(S.trailStart||0)/100)),'#f59e0b',p.trailStop?'📈 متحرك':'📈 يبدأ',1);
   // علامة الدخول على الشمعة
   const ot=Math.floor(new Date(p.openedAt).getTime()/1000);
   const bar=[...c].reverse().find(x=>x.time<=ot);
@@ -770,6 +779,8 @@ function toggleLive(el){
   if(el.checked && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')){ el.checked=false; return; }
   post({dryRun:!el.checked}, el.checked?'🟢 التنفيذ الحقيقي اشتغل':'🧪 وضع التجربة');
 }
+
+function toggleTrail(el){ $('trailOn').checked=el.checked; trailUI(); post({trailOn:el.checked}, el.checked?'📈 التريلنج اشتغل — البيع لما السعر يرجع من القمة':'🎯 التريلنج اتقفل — البيع عند الهدف الثابت'); }
 </script>
 </body>
 </html>
