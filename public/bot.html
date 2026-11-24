@@ -246,8 +246,8 @@ label.l{font-size:11px;margin-bottom:4px}
       </div>
       <div class="scroll">
         <table>
-          <thead><tr><th>الوقت</th><th>الرمز</th><th>الحالة</th><th>السعر</th><th>الأسهم</th><th>المبلغ</th><th>هدف / وقف</th><th>الربح/الخسارة</th><th>ملاحظة</th></tr></thead>
-          <tbody id="trades"><tr><td colspan="9" class="empty">لا توجد عمليات بعد</td></tr></tbody>
+          <thead><tr><th>الوقت</th><th>الرمز</th><th>الحالة</th><th>🟢 شراء</th><th>🔴 بيع</th><th>هدف / وقف</th><th>الربح/الخسارة</th><th>ملاحظة</th></tr></thead>
+          <tbody id="trades"><tr><td colspan="8" class="empty">لا توجد عمليات بعد</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -503,16 +503,25 @@ async function loadStats(){
   const p=$('s-pnl'); p.textContent = money(s.pnlToday); p.style.color = s.pnlToday>0?'var(--green)':s.pnlToday<0?'var(--red)':'';
 }
 
-const LBL = {'sent':'<span style="color:var(--green)">✅ اتنفذ</span>','dry-run':'<span style="color:var(--yellow)">🧪 تجربة</span>','error':'<span style="color:var(--red)">❌ فشل</span>'};
-function pnlOf(s){ const t=s.tradeResult||{}; if(t.status!=='sent') return null; const exit = s.status==='open'? s.currentPrice : s.closePrice; return exit && t.qty ? t.qty*(exit-t.limit) : null; }
+const LBL = {'sent':'<span style="color:var(--blue)">📨 اتبعت</span>','dry-run':'<span style="color:var(--yellow)">🧪 تجربة</span>','error':'<span style="color:var(--red)">❌ فشل</span>','skipped':'<span style="color:var(--muted2)">↷ تخطي</span>'};
+const PST = {pending:'<span style="color:var(--yellow)">⏳ مستني التنفيذ</span>',unfilled:'<span style="color:var(--red)">⚠️ ما اتنفذش</span>',expired:'<span style="color:var(--muted2)">⌛ انتهى</span>',open:'<span style="color:var(--blue)">🔵 مفتوحة</span>',closing:'<span style="color:var(--yellow)">⏳ بيتباع</span>',closed:'<span style="color:var(--green)">✅ مقفولة</span>',error:'<span style="color:var(--red)">❌ فشل البيع</span>'};
+const tm = d => d ? new Date(d).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : '';
+function pnlOf(s){ const p=s.position; if(!p) return null; if(p.pnl!=null) return p.pnl; if(p.status==='open'&&p.lastPrice&&p.entry) return (p.lastPrice-p.entry)*p.qty; return null; }
+function stOf(s){ const t=s.tradeResult||{}, p=s.position; if(t.status==='sent'&&p) return p.status==='closed'&&p.exitPrice==null ? '<span style="color:var(--muted2)">ℹ️ مش في المحفظة</span>' : (PST[p.status]||p.status); return LBL[t.status]||t.status||'—'; }
 function renderTrades(){
   const list = TR.filter(s => F==='all' || (s.tradeResult||{}).status===F);
-  if(!list.length){ $('trades').innerHTML='<tr><td colspan="9" style="color:var(--muted2);text-align:center;padding:24px">لا توجد عمليات</td></tr>'; return; }
-  $('trades').innerHTML = list.map(s=>{const t=s.tradeResult||{}; const p=pnlOf(s); return `<tr>
-    <td class="m">${t.at?new Date(t.at).toLocaleTimeString('ar'):'—'}</td><td class="m"><b>${s.symbol}</b></td><td>${LBL[t.status]||t.status||'—'}</td>
-    <td class="m">${t.limit?'$'+t.limit:'—'}</td><td class="m">${t.qty??'—'}</td><td class="m">${t.qty&&t.limit?money(t.qty*t.limit):'—'}</td>
-    <td class="m">${t.tp??'—'} / ${t.sl??'—'}</td><td class="m" style="color:${p>0?'var(--green)':p<0?'var(--red)':''}">${p==null?'—':money(p)}</td>
-    <td style="font-size:11px;color:var(--muted2)">${(t.error||'').slice(0,70)}</td></tr>`}).join('');
+  if(!list.length){ $('trades').innerHTML='<tr><td colspan="8" class="empty">لا توجد عمليات</td></tr>'; return; }
+  $('trades').innerHTML = list.map(s=>{const t=s.tradeResult||{}, p=s.position; const pn=pnlOf(s);
+    const buy = t.qty ? `${p&&p.filledAt?p.qty:t.qty} @ $${p&&p.filledAt?(+p.entry).toFixed(4):t.limit}<br><small style="color:var(--muted2)">${money((t.qty||0)*(t.limit||0))}${p&&p.filledAt?' · نُفّذ '+tm(p.filledAt):''}</small>` : '—';
+    const sell = p&&p.exitPrice!=null ? `$${(+p.exitPrice).toFixed(4)}<br><small style="color:var(--muted2)">${tm(p.closedAt)}</small>` : (p&&p.status==='open'&&p.lastPrice?`<small style="color:var(--muted2)">الحالي $${(+p.lastPrice).toFixed(4)}</small>`:'—');
+    const pct = p&&p.pct!=null ? ` (${p.pct>=0?'+':''}${(+p.pct).toFixed(2)}%)` : '';
+    const note = (p&&p.reason) || (t.error||'');
+    return `<tr>
+    <td class="m">${t.at?tm(t.at):'—'}</td><td class="m"><b>${s.symbol}</b></td><td>${stOf(s)}</td>
+    <td class="m">${buy}</td><td class="m">${sell}</td>
+    <td class="m">${(p&&p.tp)||t.tp||'—'} / ${(p&&p.sl)||t.sl||'—'}</td>
+    <td class="m" style="color:${pn>0?'var(--green)':pn<0?'var(--red)':''}">${pn==null?'—':money(pn)+pct}</td>
+    <td style="font-size:11px;color:var(--muted2)">${String(note).slice(0,70)}</td></tr>`}).join('');
 }
 function filt(el){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); el.classList.add('on'); F=el.dataset.f; renderTrades(); }
 async function loadTrades(){ const r=await fetch('/api/bot/trades',{headers:H}); if(!r.ok) return; TR=await r.json(); renderTrades(); }
