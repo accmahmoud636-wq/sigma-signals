@@ -474,19 +474,21 @@ async function monitorPositions() {
       working = true;
       try {
         if (C.dry) { tg(`🧪 تجربة: كان هيبيع ${p.qty} ${p.symbol} (${reason}) عند ${px}`); await col.updateOne({ _id: p._id }, { $set: { status: 'closed', exitPrice: px, closedAt: new Date(), dry: true } }); return; }
-        // أمان: قبل البيع نتأكد إن السهم لسه في محفظة سهم (لو اتباع يدوي ما نبيعش تاني)
-        const pf = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' }, { projection: { [`${p.market}.queryHoldsList`]: 1, [`${p.market}.at`]: 1 } });
-        const holds = pf && pf[p.market] && pf[p.market].queryHoldsList && pf[p.market].queryHoldsList.holdsList;
-        if (Array.isArray(holds)) {
-          const h = holds.find((x) => String(x.stockCode).toUpperCase() === p.symbol);
-          const have = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
-          if (have <= 0) {
-            await col.updateOne({ _id: p._id }, { $set: { status: 'closed', closedAt: new Date(), reason: 'اتباع يدوي / مش في المحفظة' } });
-            tg(`ℹ️ ${p.symbol} مش موجود في محفظة سهم — اتقفل في البوت من غير بيع (اتباع يدوي أو أمر الشراء ما اتنفذش)`);
-            return;
-          }
-          if (have < p.qty) p.qty = have;
+        // أمان: قبل البيع نتأكد إن السهم موجود فعلاً في المحفظة الحقيقية (بيانات محفظة تانية بتتجاهل)
+        const holds = await holdsOf(p.market);
+        if (!holds) {
+          await col.updateOne({ _id: p._id }, { $set: { status: 'open' } });
+          if (!p.waitWarned) { await col.updateOne({ _id: p._id }, { $set: { waitWarned: true } }); log(`⏳ ${p.symbol}: بيانات المحفظة الحقيقية مش جاهزة — مش هبيع غير لما أتأكد إن السهم معاك`, 'warn'); }
+          return;
         }
+        const h = holds.find((x) => String(x.stockCode).toUpperCase() === p.symbol);
+        const have = h ? Number(h.enableAmount || h.currentAmount || 0) : 0;
+        if (have <= 0) {
+          await col.updateOne({ _id: p._id }, { $set: { status: 'closed', closedAt: new Date(), reason: 'مش في المحفظة الحقيقية' } });
+          tg(`ℹ️ ${p.symbol} مش موجود في المحفظة الحقيقية ${C.fundAccount || ''} — اتشال من متابعة البوت من غير بيع`);
+          return;
+        }
+        if (have < p.qty) p.qty = have;
         const mkt = await sellNow(p.symbol, p.qty, px);
         const pnl = (px - p.entry) * p.qty, pct = ((px - p.entry) / p.entry) * 100;
         await col.updateOne({ _id: p._id }, { $set: { status: 'closed', exitPrice: px, closedAt: new Date(), pnl, pct, orderType: mkt ? 'market' : 'limit' } });
@@ -1203,9 +1205,7 @@ async function handle(sig, Signals) {
 
   const st = loadState();
   if (st.trades >= C.maxPerDay) { tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`); return skip(`⛔ حد الصفقات اليومي (${C.maxPerDay})`); }
-  // نفس السهم مسموح أكتر من مرة في اليوم — بس مش وهو لسه مفتوح (عشان ما نضاعفش)
-  const openSame = await mongoose.connection.collection('botpositions').findOne({ symbol: String(sig.symbol).toUpperCase(), status: { $in: ['open', 'closing', 'pending'] } });
-  if (openSame) return skip(`↷ تخطي ${tag}: فيه صفقة مفتوحة على نفس السهم`);
+  // نفس السهم مسموح أكتر من مرة — حتى لو فيه صفقة مفتوحة عليه
 
   try {
     const r = await placeBuy(sig);
@@ -1244,6 +1244,15 @@ async function handle(sig, Signals) {
   Settings = mongoose.connection.collection('botsettings');
   Logs = mongoose.connection.collection('botlogs');
   await Settings.updateOne({ key: 'sahm' }, { $setOnInsert: { key: 'sahm', ...DEFAULTS } }, { upsert: true });
+  // تنضيف: بيانات محفظة قديمة من محفظة غير الحقيقية (زي التجريبي) بتتمسح — عشان ما تتحسبش صفقات
+  try {
+    const st0 = await Settings.findOne({ key: 'sahm' });
+    const pf0 = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' });
+    const want0 = st0 && st0.fundAccount ? String(st0.fundAccount) : '';
+    const uns = {};
+    for (const mk of ['US', 'SA']) if (want0 && pf0 && pf0[mk] && (!pf0[mk].fund || String(pf0[mk].fund) !== want0)) uns[mk] = '';
+    if (Object.keys(uns).length) { await mongoose.connection.collection('sahmportfolio').updateOne({ key: 'sahm' }, { $unset: uns }); log('🧹 اتمسحت بيانات محفظة مش الحقيقية: ' + Object.keys(uns).join(', ')); }
+  } catch (_) {}
   await refreshSettings();
   console.log(`🚀 Sahm Bot | ${C.dry ? 'وضع التجربة' : 'تنفيذ حقيقي'} | ${C.amount}$ | سعر ${C.minPrice}-${C.maxPrice}`);
   // نبضة كل دقيقة: المنصة بتعرض "البوت متصل"
