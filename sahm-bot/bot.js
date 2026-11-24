@@ -565,6 +565,14 @@ async function realTicket() {
   await pushShot('المحفظة الحقيقية مش متاحة في التذكرة');
   throw new Error('ما قدرتش أثبّت المحفظة الحقيقية ' + (C.fundAccount || '') + ' في التذكرة — الأمر اتلغى (مفيش أي أمر اتبعت)');
 }
+// تحديث بيانات المحفظة (الرصيد/الأسهم/الأوامر) + تجهيز التذكرة تاني
+async function refreshPortfolio() {
+  if (working) return false;
+  await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
+  if (!working) await realTicket().catch(() => {});
+  return true;
+}
 let ticketAt = 0;
 let orderWatchUntil = 0, lastOrderReply = '';
 async function prepareTicket() {
@@ -1136,6 +1144,7 @@ async function checkCommands() {
       await page.goto(URL_PORTFOLIO, { waitUntil: 'domcontentloaded' }).catch(() => {});
       await setLogin(loggedIn ? 'success' : 'idle', 'اتسحب سجل الأوامر من سهم');
     }
+    else if (cmd.type === 'refreshpf') { await refreshPortfolio(); log('🔄 المحفظة اتحدثت من سهم'); }
     else if (cmd.type === 'shot') { await pushShot('طلب من المنصة'); await setLogin(loggedIn ? 'success' : 'idle', 'اتصوّرت صفحة سهم'); }
   } catch (e) {
     log('تسجيل الدخول: ' + e.message, 'error');
@@ -1349,7 +1358,8 @@ async function handle(sig, Signals) {
     try {
       await ensureBrowser();
       // لو التذكرة مفتوحة ما نعملش ريفرش (التحديث الدوري كل دقيقة كفاية كنشاط للجلسة)
-      if (!(await ticketPanel().catch(() => null))) { await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {}); }
+      // ريفرش كل دورة عشان الرصيد والأسهم يتحدثوا في المنصة، وبعده نرجّع التذكرة جاهزة للإشارة الجاية
+      await refreshPortfolio();
       const ok = await ensureLoggedIn();
       if (ok && !loggedIn) { sessionStart = Date.now(); tg('✅ رجع تسجيل الدخول في سهم'); }
       if (ok) await ensureUSMarket().catch(() => {});
@@ -1372,5 +1382,5 @@ async function handle(sig, Signals) {
       }
       loggedIn = ok || (loggedIn && !really);
     } catch (e) { log('keep-alive: ' + e.message, 'warn'); }
-  }, 4 * 60 * 1000);
+  }, 90 * 1000);
 })();
