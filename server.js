@@ -113,6 +113,9 @@ const BotSettingsSchema = new mongoose.Schema({
   fundAccount:{ type: String,  default: '' },       // رقم المحفظة في سهم (مثلاً 800906239) // market أمر سوق / limit محدد     // سعر المحدد فوق الإشارة %
   tpPct:      { type: Number,  default: 5 },
   slPct:      { type: Number,  default: 3 },
+  trailOn:    { type: Boolean, default: false },   // هدف متحرك (Trailing)
+  trailStart: { type: Number,  default: 5 },       // يبدأ لما الربح يوصل %
+  trailPct:   { type: Number,  default: 2 },       // يبيع لو السعر رجع % من أعلى سعر
   minPrice:   { type: Number,  default: 3 },
   maxPrice:   { type: Number,  default: 5 },
   maxPerDay:  { type: Number,  default: 5 },
@@ -1005,6 +1008,9 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
       fundAccount: typeof b.fundAccount === 'string' ? b.fundAccount.replace(/\D/g, '').slice(0, 15) : undefined,
       tpPct:     num(b.tpPct, 0.1, 100),
       slPct:     num(b.slPct, 0.1, 100),
+      trailOn:   bool(b.trailOn),
+      trailStart: num(b.trailStart, 0, 100),
+      trailPct:  num(b.trailPct, 0.1, 50),
       minPrice:  num(b.minPrice, 0, 100000),
       maxPrice:  num(b.maxPrice, 0, 100000),
       maxPerDay: num(b.maxPerDay, 0, 100),
