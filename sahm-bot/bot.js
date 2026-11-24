@@ -121,8 +121,11 @@ async function openBrowser() {
         const ex = (req.match(/exchangeType=(\w+)/) || [])[1] || lastExchange;
         const mk = ex ? (ex === 'S' ? 'SA' : 'US') : null;
         let data = null; try { data = JSON.parse(body).data; } catch (_) {}
-        if (mk && data) {
-          const set = { [`${mk}.${pm[1]}`]: data, [`${mk}.at`]: new Date(), [`${mk}.fund`]: (req.match(/fundAccount=(\d+)/) || [])[1] || lastFund };
+        const fundOf = (req.match(/fundAccount=(\d+)/) || query.match(/fundAccount=(\d+)/) || [])[1] || lastFund;
+        // بيانات محفظة تانية (زي التجريبي) ما نخلطهاش ببيانات المحفظة الحقيقية
+        const wrongFund = C.fundAccount && fundOf && String(fundOf) !== String(C.fundAccount);
+        if (mk && data && !wrongFund) {
+          const set = { [`${mk}.${pm[1]}`]: data, [`${mk}.at`]: new Date(), [`${mk}.fund`]: fundOf };
           // متوسط تكلفة كل سهم بنحفظه دايماً — عشان نحسب ربح/خسارة البيع بعد ما السهم يخرج من المحفظة
           for (const h of (data.holdsList || [])) if (h.stockCode && Number(h.costPrice) > 0) set[`${mk}.costs.${String(h.stockCode).replace(/\./g, '_')}`] = Number(h.costPrice);
           await mongoose.connection.collection('sahmportfolio').updateOne({ key: 'sahm' }, { $set: set }, { upsert: true });
@@ -401,7 +404,8 @@ async function sellNow(symbol, qty, price) {
 
 // أمر الشراء بيفضل "pending" لحد ما السهم يظهر فعلاً في محفظة سهم — ساعتها بس البوت يبدأ يراقب الهدف/الوقف
 async function holdsOf(mkt) {
-  const pf = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' }, { projection: { [`${mkt}.queryHoldsList`]: 1 } });
+  const pf = await mongoose.connection.collection('sahmportfolio').findOne({ key: 'sahm' }, { projection: { [`${mkt}.queryHoldsList`]: 1, [`${mkt}.fund`]: 1 } });
+  if (pf && pf[mkt] && C.fundAccount && pf[mkt].fund && String(pf[mkt].fund) !== String(C.fundAccount)) return null; // مش المحفظة الحقيقية
   const l = pf && pf[mkt] && pf[mkt].queryHoldsList && pf[mkt].queryHoldsList.holdsList;
   return Array.isArray(l) ? l : null;
 }
