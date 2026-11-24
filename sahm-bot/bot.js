@@ -495,6 +495,12 @@ async function selectSymbol(panel, symbol) {
     await alt.click().catch(() => {}); await alt.fill('').catch(() => {}); await alt.pressSequentially(symbol, { delay: 20 }).catch(() => {});
   }
   log(`🔎 كتبت ${symbol} في: ${focused || 'خانة البحث المنبثقة'}`);
+  // نتايج البحث في سهم متقسمة تبويبات حسب السوق (السعودي / الأمريكي) — لازم نختار تبويب السوق
+  await sleep(500);
+  // (من غير كلمة US/SA عشان ما نضغطش زرار تبديل السوق اللي فوق بالغلط)
+  const tabRe = C.market === 'SA' ? /^\s*(السعودي|الأسهم السعودية|السوق السعودي)\s*$/ : /^\s*(الأمريكي|الأسهم الأمريكية|السوق الأمريكي|أمريكي)\s*$/;
+  const tab = page.locator(':is(div,span,li,a,button):visible', { hasText: tabRe }).filter({ hasNotText: /\d/ }).last();
+  if (await tab.count()) { await tab.click().catch(() => {}); await sleep(600); }
   const sym = symbol.toUpperCase();
   const tryPick = () => page.evaluate((sym) => {
     // كل العناصر الظاهرة اللي نصها بيبدأ بالرمز بالظبط (أو الرمز لوحده) — من قايمة البحث المنبثقة
@@ -517,6 +523,15 @@ async function selectSymbol(panel, symbol) {
   await sleep(700);
   const txt = (await panel.innerText().catch(() => '')).toUpperCase();
   if (!txt.includes(sym)) {
+    // تشخيص: كل النصوص الظاهرة في النوافذ المنبثقة (نتايج البحث) + قيمة خانة البحث
+    const diag = await page.evaluate(() => {
+      const vis = (e) => e.offsetParent !== null || e.getClientRects().length;
+      const pops = [...document.querySelectorAll('.v-binder-follower-content,.n-popover,.n-modal,.n-drawer,[class*=search],[class*=popup],[class*=dropdown]')].filter(vis);
+      const t = pops.map((p) => (p.innerText || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' || ').slice(0, 500);
+      const vals = [...document.querySelectorAll('input')].filter(vis).map((i) => (i.placeholder || '?') + '=' + (i.value || '')).join(' ; ').slice(0, 300);
+      return `النوافذ: ${t || 'مفيش'} | الخانات: ${vals}`;
+    }).catch(() => '');
+    log('🔍 بحث ' + sym + ': ' + diag, 'warn');
     await pushShot('ما لقيتش ' + sym + ' في البحث');
     throw new Error(`السهم ${sym} ما اتختارش في التذكرة (نتايج البحث: ${res.texts.join(' ¦ ') || 'مفيش'})`);
   }
