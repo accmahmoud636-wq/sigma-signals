@@ -305,7 +305,7 @@ async function openTicketSearch() {
   const ph = /(رمز أو اسم الشركة|رمز|اسم الشركة|ابحث|بحث|Symbol|Search)/;
   const find = async () => { if (await ticketPanel()) return (await ticketPanel()).locator('input:visible').first(); for (const f of page.frames()) { const l = await phInput(f, ph); if (l) return l; } return null; };
   let el = await find(); if (el) return el;
-  const triggers = [page.locator('button.trade-button'), page.locator('[class*=trade-button],[class*=tradeButton],[class*=trade-btn]'), page.getByRole('button', { name: /تداول|Trade/ })];
+  const triggers = [page.getByRole('button', { name: /^(trade|تداول)$/i }), page.locator('button.trade-button'), page.locator('[class*=trade-button],[class*=tradeButton],[class*=trade-btn]'), page.getByRole('button', { name: /تداول|Trade/ })];
   for (const t of triggers) {
     const b = t.locator('visible=true').first();
     if (!(await b.count())) continue;
@@ -364,8 +364,8 @@ async function sellNow(symbol, qty, price) {
   await pickIn(panel, 1, mkt ? /السوق/ : /المحدد/);
   await selectSymbol(panel, symbol);
   await setSide(panel, 'بيع');
-  if (!mkt) await fieldByLabel(panel, 'السعر').fill(String(round(price * 0.99)));
-  await fieldByLabel(panel, 'الكمية').fill(String(qty));
+  if (!mkt) await (await priceField(panel)).fill(String(round(price * 0.99)));
+  await (await qtyField(panel)).fill(String(qty));
   const txt = await panel.innerText().catch(() => '');
   if (!/بيع/.test(txt)) throw new Error('التذكرة مش على بيع');
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
@@ -478,63 +478,38 @@ async function prepareTicket() {
   return panel;
 }
 
-// اختيار السهم في التذكرة: نكتب الرمز، ونختار النتيجة من قايمة البحث (بأكتر من طريقة)
+// اختيار السهم في التذكرة — متاخد من تسجيل حقيقي (codegen) لخطواتك في سهم:
+//   1) ضغطة على نص "رمز أو اسم الشركة" → بتفتح خانة البحث الحقيقية
+//   2) نكتب الرمز في الخانة (textbox) اللي اسمها "رمز أو اسم الشركة"
+//   3) النتيجة نصها = اسم الشركة + الرمز في الآخر (مثلاً "DataMeds AI, Inc.MEDS")
+const SEARCH_PH = /رمز أو اسم الشركة|Symbol or company name/;
 async function selectSymbol(panel, symbol) {
-  // خانة البحث في التذكرة ممكن تكون "زرار" بيفتح نافذة بحث فيها خانة تانية —
-  // فبنضغطها، ونكتب في الخانة اللي عليها التركيز (focus) فعلاً
-  const search = panel.locator('input:visible').first();
-  await search.click().catch(() => {});
-  await sleep(600);
-  const focused = await page.evaluate(() => { const a = document.activeElement; return a && a.tagName === 'INPUT' ? (a.placeholder || 'input') : ''; }).catch(() => '');
-  if (focused) {
-    await page.keyboard.press('Control+A').catch(() => {}); await page.keyboard.press('Backspace').catch(() => {});
-    await page.keyboard.type(symbol, { delay: 20 });
-  } else {
-    // دوّر على أي خانة بحث ظاهرة اتفتحت (نافذة البحث)
-    const alt = page.locator('input:visible').filter({ hasNot: page.locator('xpath=self::*[@type="number"]') }).last();
-    await alt.click().catch(() => {}); await alt.fill('').catch(() => {}); await alt.pressSequentially(symbol, { delay: 20 }).catch(() => {});
-  }
-  log(`🔎 كتبت ${symbol} في: ${focused || 'خانة البحث المنبثقة'}`);
-  // نتايج البحث في سهم متقسمة تبويبات حسب السوق (السعودي / الأمريكي) — لازم نختار تبويب السوق
-  await sleep(500);
-  // (من غير كلمة US/SA عشان ما نضغطش زرار تبديل السوق اللي فوق بالغلط)
-  const tabRe = C.market === 'SA' ? /^\s*(السعودي|الأسهم السعودية|السوق السعودي)\s*$/ : /^\s*(الأمريكي|الأسهم الأمريكية|السوق الأمريكي|أمريكي)\s*$/;
-  const tab = page.locator(':is(div,span,li,a,button):visible', { hasText: tabRe }).filter({ hasNotText: /\d/ }).last();
-  if (await tab.count()) { await tab.click().catch(() => {}); await sleep(600); }
   const sym = symbol.toUpperCase();
-  const tryPick = () => page.evaluate((sym) => {
-    // كل العناصر الظاهرة اللي نصها بيبدأ بالرمز بالظبط (أو الرمز لوحده) — من قايمة البحث المنبثقة
-    const vis = (e) => e.offsetParent !== null || e.getClientRects().length;
-    const re = new RegExp('^\\s*' + sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$|\\.|\\b)');
-    const all = [...document.querySelectorAll('body *')].filter((e) => vis(e) && e.children.length <= 3 && re.test((e.innerText || '').trim()));
-    // نفضّل اللي جوه نافذة منبثقة/قايمة بحث (مش جدول المحفظة)
-    const score = (e) => (e.closest('.v-binder-follower-content,.n-popover,.n-base-select-menu,[class*=search],[class*=dropdown],[class*=popup],[class*=result]') ? 0 : 1) + (e.closest('table') ? 2 : 0);
-    all.sort((a, b) => score(a) - score(b));
-    const hit = all[0];
-    if (hit) { (hit.closest('li,[role=option],.n-base-select-option,[class*=item]') || hit).click(); }
-    return { ok: !!hit, texts: all.slice(0, 6).map((e) => (e.innerText || '').trim().slice(0, 30)) };
-  }, sym).catch(() => ({ ok: false, texts: [] }));
-  let res = { ok: false, texts: [] };
-  for (let i = 0; i < 10 && !res.ok; i++) { await sleep(400); res = await tryPick(); }
-  if (!res.ok) {
-    // آخر محاولة: أول نتيجة بالكيبورد
-    await search.press('ArrowDown').catch(() => {}); await search.press('Enter').catch(() => {});
-  }
-  await sleep(700);
-  const txt = (await panel.innerText().catch(() => '')).toUpperCase();
-  if (!txt.includes(sym)) {
-    // تشخيص: كل النصوص الظاهرة في النوافذ المنبثقة (نتايج البحث) + قيمة خانة البحث
-    const diag = await page.evaluate(() => {
-      const vis = (e) => e.offsetParent !== null || e.getClientRects().length;
-      const pops = [...document.querySelectorAll('.v-binder-follower-content,.n-popover,.n-modal,.n-drawer,[class*=search],[class*=popup],[class*=dropdown]')].filter(vis);
-      const t = pops.map((p) => (p.innerText || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' || ').slice(0, 500);
-      const vals = [...document.querySelectorAll('input')].filter(vis).map((i) => (i.placeholder || '?') + '=' + (i.value || '')).join(' ; ').slice(0, 300);
-      return `النوافذ: ${t || 'مفيش'} | الخانات: ${vals}`;
-    }).catch(() => '');
-    log('🔍 بحث ' + sym + ': ' + diag, 'warn');
+  const esc = sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page.getByText(SEARCH_PH).locator('visible=true').first().click();
+  const box = page.getByRole('textbox', { name: SEARCH_PH }).locator('visible=true').first();
+  await box.waitFor({ state: 'visible', timeout: 5000 });
+  await box.fill(sym);
+  log(`🔎 كتبت ${sym} في خانة البحث`);
+  const result = page.getByText(new RegExp('\\S.*' + esc + '$')).locator('visible=true').first();
+  try {
+    await result.waitFor({ state: 'visible', timeout: 6000 });
+  } catch (_) {
+    const texts = await page.locator(':is(div,li,span):visible', { hasText: new RegExp(esc) }).allInnerTexts().catch(() => []);
     await pushShot('ما لقيتش ' + sym + ' في البحث');
-    throw new Error(`السهم ${sym} ما اتختارش في التذكرة (نتايج البحث: ${res.texts.join(' ¦ ') || 'مفيش'})`);
+    throw new Error(`السهم ${sym} ما ظهرش في نتايج البحث (${texts.map((t) => t.replace(/\s+/g, ' ').slice(0, 40)).slice(0, 5).join(' ¦ ') || 'مفيش'})`);
   }
+  await result.click();
+  await sleep(600);
+}
+// خانات الكمية والسعر بالاسم (زي التسجيل) — ولو ما لقاهاش بالعنوان اللي جنبها
+async function qtyField(panel) {
+  const a = page.getByRole('textbox', { name: /أدخل الكمية|Enter a quantity/ }).locator('visible=true').first();
+  return (await a.count()) ? a : fieldByLabel(panel, 'الكمية');
+}
+async function priceField(panel) {
+  const a = page.getByRole('textbox', { name: /أدخل السعر|Enter a price|Enter price/ }).locator('visible=true').first();
+  return (await a.count()) ? a : fieldByLabel(panel, 'السعر');
 }
 
 // ---------- تنفيذ أمر شراء ----------
@@ -569,10 +544,8 @@ async function placeBuy(sig) {
   let mkt = useMarketOrder();
   if (mkt && !(await pickIn(panel, 1, /السوق/))) { log('⚠️ نوع "السوق" مش متاح — هستخدم أمر محدد', 'warn'); mkt = false; }
   if (!mkt) await pickIn(panel, 1, /المحدد/);
-  const priceField = fieldByLabel(panel, 'السعر');
-  if (!mkt) await priceField.fill(String(limit));
-  else if (await priceField.isEditable().catch(() => false)) await priceField.fill(String(limit)).catch(() => {});
-  await fieldByLabel(panel, 'الكمية').fill(String(qty));
+  if (!mkt) await (await priceField(panel)).fill(String(limit));
+  await (await qtyField(panel)).fill(String(qty));
   log(`⚡ التذكرة اتملت في ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   const selCount = await panel.locator('.n-select:visible').count();
   // 6) الجلسة: نسجل الاختيارات المتاحة (لضبطها بعد أول تجربة)
@@ -637,9 +610,8 @@ async function sellOrder({ symbol, qty, price, confirm }) {
     if (await row.count()) await row.getByText('بيع', { exact: true }).first().click();
     else {
       // بديل: تذكرة التداول + البحث عن الرمز + بيع
-      const search = await openTicketSearch();
-      await search.click(); await search.pressSequentially(symbol, { delay: 30 }); await sleep(1500);
-      await page.locator(`xpath=//*[normalize-space(text())="${symbol}"][not(ancestor::tr)][not(ancestor::table)]`).locator('visible=true').first().click(); await sleep(1200);
+      await openTicketSearch();
+      await selectSymbol(null, symbol);
     }
     await sleep(1500);
     // 2) نوع الأمر: محدد
@@ -647,10 +619,10 @@ async function sellOrder({ symbol, qty, price, confirm }) {
     await pickIn(sp, 0, lastFund ? new RegExp(lastFund) : /الهامش|الرئيسية/).catch(() => {});
     await pickIn(sp, 1, /المحدد/).catch(() => {});
     await setSide(sp, 'بيع');
-    const priceIn = fieldByLabel(sp, 'السعر');
+    const priceIn = await priceField(sp);
     // 3) السعر والكمية
     await priceIn.fill(String(price));
-    await fieldByLabel(sp, 'الكمية').fill(String(qty));
+    await (await qtyField(sp)).fill(String(qty));
     await sleep(800);
     const ticket = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
     const sideOk = /بيع/.test(ticket);
