@@ -97,6 +97,12 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
 .an-f{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.an-f .pf-tab{padding:5px 12px}
 .an-f input[type=date]{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:8px;font-family:var(--mono)}
 </style>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+.ch-tabs{display:flex;gap:6px;flex-wrap:wrap}.ch-tab{padding:6px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;cursor:pointer;font-weight:700}
+.ch-tab.on{background:#f59e0b;color:#111;border-color:#f59e0b}.ch-info{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;margin:10px 0}
+.ch-info b{font-size:15px}#chBox{height:380px;width:100%}.ch-iv{padding:4px 9px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;cursor:pointer}.ch-iv.on{background:#334155;color:#fff}
+</style>
 </head>
 <body>
 <header>
@@ -109,6 +115,16 @@ pre{background:var(--bg3);border:1px solid var(--border);border-radius:9px;paddi
 </header>
 
 <div class="wrap">
+  <div class="card" style="margin-bottom:16px" id="chCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">📈 صفقاتي المفتوحة</h2>
+      <div style="display:flex;gap:4px"><button class="ch-iv on" data-iv="1m" onclick="chIv('1m')">1د</button><button class="ch-iv" data-iv="5m" onclick="chIv('5m')">5د</button><button class="ch-iv" data-iv="15m" onclick="chIv('15m')">15د</button></div>
+    </div>
+    <div class="ch-tabs" id="chTabs" style="margin-top:10px"></div>
+    <div class="ch-info" id="chInfo"></div>
+    <div id="chBox"></div>
+    <div id="chEmpty" style="color:#94a3b8;padding:20px;text-align:center">مفيش صفقات مفتوحة دلوقتي — أول ما البوت يشتري سهم هيظهر هنا بالشارت والدخول والهدف والوقف</div>
+  </div>
   <div class="card" style="margin-bottom:16px" id="pfCard">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <h2 style="margin:0">💼 محفظتي في سهم</h2>
@@ -628,6 +644,57 @@ async function loadWH(){ const r=await fetch('/api/bot/webhooklog',{headers:H});
 
 load(true); loadStats(); loadTrades(); loadLogs(); loadPF(); anRange('today'); loadWH();
 setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); loadAN(); loadWH(); }, 30000);
+
+// ===== 📈 شارت الصفقات المفتوحة =====
+let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[];
+function chInit(){
+  if(chart || !window.LightweightCharts) return;
+  const box=$('chBox');
+  chart=LightweightCharts.createChart(box,{height:380,layout:{background:{color:'#0b1220'},textColor:'#cbd5e1'},
+    grid:{vertLines:{color:'#1e293b'},horzLines:{color:'#1e293b'}},timeScale:{timeVisible:true,secondsVisible:false},
+    rightPriceScale:{borderColor:'#334155'},crosshair:{mode:0},
+    localization:{timeFormatter:t=>new Date(t*1000).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}});
+  cs=chart.addCandlestickSeries({upColor:'#22c55e',downColor:'#ef4444',borderVisible:false,wickUpColor:'#22c55e',wickDownColor:'#ef4444'});
+  vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'v',color:'#33415588'});
+  chart.priceScale('v').applyOptions({scaleMargins:{top:0.8,bottom:0}});
+  new ResizeObserver(()=>chart.applyOptions({width:box.clientWidth})).observe(box);
+}
+function chIv(iv){ chIvl=iv; document.querySelectorAll('.ch-iv').forEach(b=>b.classList.toggle('on',b.dataset.iv===iv)); loadChart(true); }
+function chPick(s){ chSym=s; renderChTabs(); loadChart(true); }
+function renderChTabs(){
+  $('chTabs').innerHTML=CHP.map(p=>`<button class="ch-tab ${p.symbol===chSym?'on':''}" onclick="chPick('${p.symbol}')">${p.symbol}${p.status==='closing'?' ⏳':''}</button>`).join('');
+}
+async function loadPositions(){
+  try{ const r=await fetch('/api/bot/positions',{headers:H}); if(!r.ok) return; CHP=await r.json(); }catch(_){ return; }
+  const has=CHP.length>0;
+  $('chEmpty').style.display=has?'none':'block'; $('chBox').style.display=has?'block':'none'; $('chInfo').style.display=has?'flex':'none';
+  if(!has){ chSym=null; $('chTabs').innerHTML=''; return; }
+  if(!CHP.find(p=>p.symbol===chSym)) chSym=CHP[0].symbol;
+  renderChTabs(); loadChart(false);
+}
+async function loadChart(fit){
+  if(!chSym) return; chInit(); if(!chart) return;
+  const p=CHP.find(x=>x.symbol===chSym); if(!p) return;
+  let d; try{ const r=await fetch(`/api/bot/candles?symbol=${chSym}&interval=${chIvl}`,{headers:H}); if(!r.ok) return; d=await r.json(); }catch(_){ return; }
+  const c=d.candles||[]; if(!c.length) return;
+  cs.setData(c.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));
+  vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
+  chLines.forEach(l=>cs.removePriceLine(l)); chLines=[];
+  const L=(price,color,title,style)=>price&&chLines.push(cs.createPriceLine({price:+price,color,lineWidth:2,lineStyle:style,axisLabelVisible:true,title}));
+  L(p.entry,'#3b82f6','دخول',0); L(p.tp,'#22c55e','🎯 هدف',2); L(p.sl,'#ef4444','🛑 وقف',2);
+  // علامة الدخول على الشمعة
+  const ot=Math.floor(new Date(p.openedAt).getTime()/1000);
+  const bar=[...c].reverse().find(x=>x.time<=ot);
+  if(bar) cs.setMarkers([{time:bar.time,position:'belowBar',color:'#3b82f6',shape:'arrowUp',text:'شراء '+p.qty}]); else cs.setMarkers([]);
+  if(fit) chart.timeScale().fitContent();
+  const last=c[c.length-1].close, pct=(last-p.entry)/p.entry*100, pnl=(last-p.entry)*p.qty;
+  const toTp=p.tp?((p.tp-last)/last*100):null;
+  $('chInfo').innerHTML=`<span>السهم <b>${p.symbol}</b></span><span>كمية <b>${p.qty}</b></span><span>دخول <b>$${(+p.entry).toFixed(4)}</b></span>
+    <span>الحالي <b>$${last.toFixed(4)}</b></span><span style="color:${pnl>=0?'#22c55e':'#ef4444'}">الربح <b>${pnl>=0?'+':''}${pnl.toFixed(2)}$ (${pct.toFixed(2)}%)</b></span>
+    <span style="color:#22c55e">🎯 $${p.tp} ${toTp!=null?`(باقي ${toTp.toFixed(2)}%)`:''}</span><span style="color:#ef4444">🛑 $${p.sl}</span>
+    <span style="color:#94a3b8">من ${new Date(p.openedAt).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}</span>`;
+}
+loadPositions(); setInterval(loadPositions, 10000);
 </script>
 </body>
 </html>
