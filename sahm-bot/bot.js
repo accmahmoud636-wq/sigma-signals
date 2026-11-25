@@ -92,7 +92,7 @@ async function openBrowser() {
   page.on('request', async (rq) => {
     try {
       const u = rq.url();
-      const watching = Date.now() < orderWatchUntil && rq.method() !== 'GET' && /sahmcapital\.com/.test(u) && !/query|heart|log|track|collect/i.test(u);
+      const watching = Date.now() < orderWatchUntil && rq.method() !== 'GET' && /sahmcapital\.com/.test(u) && !/query|heart|log|track|collect|coupon|available-list|sentry/i.test(u);
       if (watching) log('📤 طلب اتبعت لسهم بعد الإرسال: ' + u.replace(/^https?:\/\//, '').split('?')[0]);
       if (!watching && (rq.method() === 'GET' || !/sahmcapital\.com/.test(u) || !/trade\/order/i.test(u) || /query/i.test(u))) return;
       const h = rq.headers(); for (const k of Object.keys(h)) if (/cookie|authorization|token/i.test(k)) h[k] = '(موجود)';
@@ -104,7 +104,7 @@ async function openBrowser() {
   // نسجّل بيانات الحساب اللي سهم بتجيبها (المحفظة، الأسهم، الرصيد) — عشان نعرضها في المنصة
   page.on('response', async (r) => {
     try {
-      if (Date.now() < orderWatchUntil && r.request().method() !== 'GET' && /sahmcapital\.com/.test(r.url()) && !/query|heart|log|track|collect/i.test(r.url())) {
+      if (Date.now() < orderWatchUntil && r.request().method() !== 'GET' && /sahmcapital\.com/.test(r.url()) && !/query|heart|log|track|collect|coupon|available-list|sentry/i.test(r.url())) {
         const body = (await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
         log(`📥 رد سهم على الأمر (${r.status()}): ${body}`);
         lastOrderReply = body;
@@ -769,10 +769,33 @@ async function enterPinIfAsked() {
   const inputs = dlg.locator('input:not([type=hidden])');
   const n = await inputs.count();
   if (n >= 1) {
-    await inputs.first().evaluate((el) => el.focus()).catch(() => {});
-    await inputs.first().click({ force: true, timeout: 1500 }).catch(() => {});
-    await page.keyboard.type(String(C.tradePin), { delay: 80 });
-    log('PIN typed (' + n + ' inputs)');
+    const inp = inputs.first();
+    const gone = async () => !(await dlg.isVisible().catch(() => false));
+    // 1) focus the input itself (no click: a forced click can move focus away) and type
+    await inp.evaluate((el) => { el.focus(); if (el.select) el.select(); }).catch(() => {});
+    await page.keyboard.type(String(C.tradePin), { delay: 90 });
+    log('PIN typed (' + n + ' inputs) via focus');
+    await sleep(900);
+    // 2) set the value the way a framework (Vue/Naive) listens: native setter + input/change events
+    if (!(await gone())) {
+      await inp.evaluate((el, pin) => {
+        const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        set.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true }));
+        for (const ch of String(pin)) { set.call(el, el.value + ch); el.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' })); }
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, String(C.tradePin)).catch(() => {});
+      log('PIN set via input events');
+      await sleep(900);
+    }
+    // 3) click the visible dashes row and type
+    if (!(await gone())) {
+      const box = await dlg.boundingBox().catch(() => null);
+      if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.6);
+      await page.keyboard.type(String(C.tradePin), { delay: 90 });
+      log('PIN typed after clicking the dashes');
+    }
+    const info = await inp.evaluate((el) => ({ type: el.type, ml: el.maxLength, len: (el.value || '').length, ro: el.readOnly, op: getComputedStyle(el).opacity })).catch(() => null);
+    if (info) log('PIN input: type=' + info.type + ' maxlength=' + info.ml + ' valueLen=' + info.len + ' readonly=' + info.ro + ' opacity=' + info.op);
   } else {
     let done = false;
     for (const f of page.frames()) {
