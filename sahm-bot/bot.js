@@ -385,8 +385,7 @@ function livePrice(symbol) {
 async function sellNow(symbol, qty, price) {
   const t0 = Date.now();
   await closeDialogs();
-  const panel = await realTicket();
-  await selectSymbol(panel, symbol);
+  const panel = await freshTicketWithSymbol(symbol);
   await setSide(panel, 'بيع');
   await setTradingSession(panel);
   await (await priceField(panel)).fill(String(round(price * 0.99)));
@@ -707,8 +706,7 @@ async function placeBuy(sig) {
   // التذكرة جاهزة من قبل (المحفظة + محدد + شراء) → الرمز والسعر والكمية بس
   const t0 = Date.now();
   await closeDialogs();
-  const panel = await realTicket();
-  await selectSymbol(panel, symbol);
+  const panel = await freshTicketWithSymbol(symbol);
   await setSide(panel, 'شراء');
   const sess = await setTradingSession(panel);
   await (await priceField(panel)).fill(String(limit));
@@ -739,6 +737,25 @@ async function placeBuy(sig) {
 
 // تأكيد الأمر: بنستنى زرار التأكيد لحد 1.5 ث بس (لو مفيش تأكيد نكمل على طول)
 // رمز التداول: سهم بتطلبه بعد "إرسال الأمر" — البوت بيدخله من الإعدادات (عمره ما بيتكتب في السجل)
+// Open the ticket and select the symbol; if the search box is stuck (leftover dialog / closed ticket) reload the page once and retry
+async function freshTicketWithSymbol(symbol) {
+  try {
+    const p = await realTicket();
+    await selectSymbol(p, symbol);
+    return p;
+  } catch (e) {
+    log('Ticket stuck (' + String(e.message).split('\n')[0].slice(0, 120) + ') - reloading page and retrying', 'warn');
+    await closeDialogs().catch(() => {});
+    await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
+    await dismissPopups().catch(() => {});
+    await ensureUSMarket().catch(() => {});
+    const p = await realTicket();
+    await selectSymbol(p, symbol);
+    return p;
+  }
+}
+
 async function enterPinIfAsked() {
   // Sahm trading-password dialog: 6 dashes, no buttons, auto-submits after the 6th digit
   const PIN_RE = /كلمة مرور|كلمة المرور|رمز التداول|PIN|password/i;
