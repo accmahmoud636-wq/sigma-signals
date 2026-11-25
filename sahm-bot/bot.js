@@ -393,8 +393,18 @@ async function sellNow(symbol, qty, price) {
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
   await assertRealFund(panel);
   orderWatchUntil = Date.now() + 40000; lastOrderReply = '';
+  pinJustAccepted = false;
   await submitOrder(panel, 'بيع');
   await confirmOrder();
+  if (pinJustAccepted) {
+    // the password only unlocks trading - Sahm needs the order submitted again after unlocking
+    pinJustAccepted = false;
+    log('Trading unlocked - submitting the order again');
+    await sleep(600);
+    orderWatchUntil = Date.now() + 20000; lastOrderReply = '';
+    await submitOrder(panel, 'بيع');
+    await confirmOrder();
+  }
   if (!(await verifySent(symbol))) throw new Error('ضغطت إرسال البيع بس مفيش طلب وصل لسهم');
   log(`⚡ بيع محدد ${qty} ${symbol} @ ${round(price * 0.99)} — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد بيع ${qty} ${symbol}`).catch(() => {});
@@ -599,7 +609,7 @@ async function verifySent(symbol) {
   return false;
 }
 let ticketAt = 0;
-let orderWatchUntil = 0, lastOrderReply = '';
+let orderWatchUntil = 0, lastOrderReply = '', pinJustAccepted = false;
 async function prepareTicket() {
   let panel = await ticketPanel();
   if (!panel) { await openTicketSearch(); panel = await ticketPanel(); }
@@ -726,8 +736,18 @@ async function placeBuy(sig) {
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
   await assertRealFund(panel);
   orderWatchUntil = Date.now() + 40000; lastOrderReply = '';
+  pinJustAccepted = false;
   await submitOrder(panel, 'شراء');
   await confirmOrder();
+  if (pinJustAccepted) {
+    // the password only unlocks trading - Sahm needs the order submitted again after unlocking
+    pinJustAccepted = false;
+    log('Trading unlocked - submitting the order again');
+    await sleep(600);
+    orderWatchUntil = Date.now() + 20000; lastOrderReply = '';
+    await submitOrder(panel, 'شراء');
+    await confirmOrder();
+  }
   if (!(await verifySent(symbol))) log('No order request seen after submit - tracking as pending anyway (the fill check will confirm)', 'warn');
   setTimeout(() => closeDialogs(), 1500);
   log(`🎯 أمر محدد ${qty} ${symbol} @ ${limit} (${sess}) — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
@@ -829,6 +849,7 @@ async function enterPinIfAsked() {
   orderWatchUntil = Date.now() + 15000; // the real order request is sent after the password is accepted
   const still = await dlg.isVisible().catch(() => false);
   log(still ? 'PIN dialog still open after typing' : 'PIN accepted (dialog closed)', still ? 'warn' : 'info');
+  if (!still) pinJustAccepted = true;
   await pushShot('after PIN').catch(() => {});
   return true;
 }
