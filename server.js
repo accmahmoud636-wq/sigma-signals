@@ -1171,6 +1171,24 @@ app.get('/api/bot/positions', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Move a position's target / stop from the chart - the bot reads tp/sl every 2s, so the change is live immediately
+app.post('/api/bot/positions/:id/levels', auth, adminOnly, async (req, res) => {
+  try {
+    const tp = req.body && req.body.tp != null ? Number(req.body.tp) : null;
+    const sl = req.body && req.body.sl != null ? Number(req.body.sl) : null;
+    const set = {};
+    if (tp != null) { if (!(tp > 0)) return res.status(400).json({ error: 'tp' }); set.tp = tp; }
+    if (sl != null) { if (!(sl > 0)) return res.status(400).json({ error: 'sl' }); set.sl = sl; }
+    if (!Object.keys(set).length) return res.status(400).json({ error: 'nothing' });
+    set.levelsEditedAt = new Date();
+    const r = await mongoose.connection.collection('botpositions').findOneAndUpdate(
+      { _id: new mongoose.Types.ObjectId(req.params.id), status: { $in: ['open', 'pending'] } }, { $set: set }, { returnDocument: 'after' });
+    const doc = r && (r.value !== undefined ? r.value : r);
+    if (!doc) return res.status(404).json({ error: 'not open' });
+    res.json({ ok: true, tp: doc.tp, sl: doc.sl });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // شموع السهم (دقيقة، مع البري ماركت والافتر) — من Yahoo
 app.get('/api/bot/candles', auth, adminOnly, (req, res) => {
   const sym = String(req.query.symbol || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
