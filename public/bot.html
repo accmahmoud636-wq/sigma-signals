@@ -731,7 +731,7 @@ load(true); loadStats(); loadTrades(); loadLogs(); loadPF(); anRange('today'); l
 setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); loadAN(); loadWH(); }, 30000);
 
 // ===== 📈 شارت الصفقات المفتوحة =====
-let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[];
+let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[], lvl={tp:null,sl:null}, drag=null;
 function chInit(){
   if(chart || !window.LightweightCharts) return;
   const box=$('chBox');
@@ -758,7 +758,7 @@ async function loadPositions(){
   renderChTabs(); loadChart(false);
 }
 async function loadChart(fit){
-  if(!chSym) return; chInit(); if(!chart) return;
+  if(!chSym || drag) return; chInit(); if(!chart) return;
   const p=CHP.find(x=>x.symbol===chSym); if(!p) return;
   let d; try{ const r=await fetch(`/api/bot/candles?symbol=${chSym}&interval=${chIvl}`,{headers:H}); if(!r.ok) return; d=await r.json(); }catch(_){ return; }
   const c=d.candles||[]; if(!c.length) return;
@@ -766,7 +766,8 @@ async function loadChart(fit){
   vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
   chLines.forEach(l=>cs.removePriceLine(l)); chLines=[];
   const L=(price,color,title,style)=>price&&chLines.push(cs.createPriceLine({price:+price,color,lineWidth:2,lineStyle:style,axisLabelVisible:true,title}));
-  L(p.entry,'#3b82f6','دخول',0); if(!S.trailOn) L(p.tp,'#22c55e','🎯 هدف',2); L(p.sl,'#ef4444','🛑 وقف',2); if(S.trailOn&&p.entry) L(p.trailStop||(+p.entry*(1+(S.trailStart||0)/100)),'#f59e0b',p.trailStop?'📈 متحرك':'📈 يبدأ',1);
+  lvl={tp:null,sl:null,pos:p};
+  L(p.entry,'#3b82f6','دخول',0); if(!S.trailOn&&p.tp){ L(p.tp,'#22c55e','🎯 هدف ⇕',2); lvl.tp=chLines[chLines.length-1]; } if(p.sl){ L(p.sl,'#ef4444','🛑 وقف ⇕',2); lvl.sl=chLines[chLines.length-1]; } if(S.trailOn&&p.entry) L(p.trailStop||(+p.entry*(1+(S.trailStart||0)/100)),'#f59e0b',p.trailStop?'📈 متحرك':'📈 يبدأ',1);
   // علامة الدخول على الشمعة
   const ot=Math.floor(new Date(p.openedAt).getTime()/1000);
   const bar=[...c].reverse().find(x=>x.time<=ot);
@@ -792,6 +793,27 @@ function toggleTrail(el){ $('trailOn').checked=el.checked; trailUI(); post({trai
 
 async function pfRefresh(b){ b.disabled=true; b.textContent='⏳ بيحدّث...'; await fetch('/api/bot/refreshpf',{method:'POST',headers:H}).catch(()=>{}); toast('🔄 البوت بيحدّث المحفظة من سهم (حوالي 15 ثانية)');
   setTimeout(()=>{ loadPF(); }, 12000); setTimeout(()=>{ loadPF(); b.disabled=false; b.textContent='🔄 تحديث'; }, 22000); }
+
+// ===== drag the target / stop lines on the chart =====
+const fmtP=v=>v>=1?(+v).toFixed(2):(+v).toFixed(4);
+function lvlAt(y){ for(const k of ['tp','sl']){ const ln=lvl[k]; if(!ln) continue; const yy=cs.priceToCoordinate(ln.options().price); if(yy!=null&&Math.abs(yy-y)<=8) return k; } return null; }
+function chY(e){ const r=$('chBox').getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return t.clientY-r.top; }
+function dragStart(e){ if(!cs) return; const k=lvlAt(chY(e)); if(!k) return; drag=k; chart.applyOptions({handleScroll:false,handleScale:false}); e.preventDefault(); e.stopPropagation(); }
+function dragMove(e){ if(!cs) return; const y=chY(e);
+  if(!drag){ $('chBox').style.cursor=lvlAt(y)?'ns-resize':''; return; }
+  const p=cs.coordinateToPrice(y); if(p==null||p<=0) return;
+  lvl[drag].applyOptions({price:+fmtP(p), title:(drag==='tp'?'🎯 هدف ':'🛑 وقف ')+fmtP(p)}); e.preventDefault(); }
+async function dragEnd(){ if(!drag) return; const k=drag; drag=null; chart.applyOptions({handleScroll:true,handleScale:true});
+  const pos=lvl.pos; const price=+lvl[k].options().price; const last=(pos&&pos.lastPrice)||null;
+  const sellsNow = last && ((k==='tp'&&price<=last)||(k==='sl'&&price>=last));
+  if(sellsNow && !confirm('السعر الحالي '+last+' — الخط ده هيخلي البوت يبيع فوراً. متأكد؟')){ loadPositions(); return; }
+  try{ const r=await fetch('/api/bot/positions/'+pos._id+'/levels',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({[k]:price})});
+    if(!r.ok) throw new Error(r.status); toast((k==='tp'?'🎯 الهدف بقى $':'🛑 الوقف بقى $')+fmtP(price)+' — البوت بيستخدمه فوراً'); }
+  catch(e){ toast('❌ ما اتحفظش: '+e.message); }
+  loadPositions(); }
+(function(){ const b=$('chBox'); b.addEventListener('mousedown',dragStart,true); b.addEventListener('touchstart',dragStart,{capture:true,passive:false});
+  window.addEventListener('mousemove',dragMove,true); window.addEventListener('touchmove',dragMove,{capture:true,passive:false});
+  window.addEventListener('mouseup',dragEnd,true); window.addEventListener('touchend',dragEnd,true); })();
 </script>
 </body>
 </html>
