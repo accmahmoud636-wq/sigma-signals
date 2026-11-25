@@ -1398,6 +1398,18 @@ async function handle(sig, Signals) {
   await openBrowser();
   // أوامر المنصة (تسجيل الدخول/الرمز) — كل ثانيتين
   let cmdQueued = false;
+  // Fast lane: update / logout run within ~1s, without waiting behind queued page tasks
+  let fastCmdId = null;
+  setInterval(async () => {
+    try {
+      const s = await Settings.findOne({ key: 'sahm' }, { projection: { command: 1 } });
+      const cmd = s && s.command;
+      if (!cmd || cmd.id === lastCmd || cmd.id === fastCmdId) return;
+      if (cmd.at && Date.now() - new Date(cmd.at).getTime() > 2 * 60 * 1000) return;
+      if (cmd.type === 'update') { fastCmdId = lastCmd = cmd.id; await selfUpdate(); }
+      else if (cmd.type === 'logout') { fastCmdId = lastCmd = cmd.id; await logoutSahm(); }
+    } catch (e) { log('fast command: ' + e.message, 'warn'); }
+  }, 1000);
   setInterval(() => { if (cmdQueued) return; cmdQueued = true; enqueue(() => checkCommands().finally(() => { cmdQueued = false; }), 4 * 60 * 1000, 'أوامر المنصة').then(() => { cmdQueued = false; }); }, 2000);
 
   // ثواني بس: لو الجلسة المحفوظة اشتغلت، سهم بترد ببيانات الحساب على طول
