@@ -740,52 +740,53 @@ async function placeBuy(sig) {
 // تأكيد الأمر: بنستنى زرار التأكيد لحد 1.5 ث بس (لو مفيش تأكيد نكمل على طول)
 // رمز التداول: سهم بتطلبه بعد "إرسال الأمر" — البوت بيدخله من الإعدادات (عمره ما بيتكتب في السجل)
 async function enterPinIfAsked() {
-  // نافذة سهم: "أدخل كلمة مرور التداول يرجى الإدخال" — من غير زراير، بتتأكد لوحدها بعد كتابة الرمز
-  const PIN_RE = /كلمة مرور|كلمة المرور|كلمة السر|رمز التداول|رمز التحقق|PIN|password/i;
+  // Sahm trading-password dialog: 6 dashes, no buttons, auto-submits after the 6th digit
+  const PIN_RE = /كلمة مرور|كلمة المرور|رمز التداول|PIN|password/i;
+  const TICKET_RE = /أدخل الكمية|رمز أو اسم الشركة/;
   const dlg = page.locator('.n-modal:visible, .n-dialog:visible, [role=dialog]:visible, .n-drawer:visible, .n-popover:visible, .n-popconfirm:visible')
-    .filter({ hasText: PIN_RE }).filter({ hasNotText: /أدخل الكمية|رمز أو اسم الشركة/ }).last();
+    .filter({ hasText: PIN_RE }).filter({ hasNotText: TICKET_RE }).last();
   try { await dlg.waitFor({ state: 'visible', timeout: 2000 }); } catch (_) { return false; }
-  if (!C.tradePin) { await pushShot('سهم طالبة رمز التداول'); throw new Error('سهم طالبة كلمة مرور التداول — احفظها في الإعدادات ← 🔌 الاتصال بسهم ← رمز التداول'); }
+  if (!C.tradePin) { await pushShot('PIN needed'); throw new Error('Sahm asks for the trading password - save it in Settings > Sahm connection > trading PIN'); }
+  const NOT_CANCEL = /إلغاء|Cancel|Close/i;
+  const HAS_TEXT = /[A-Za-z؀-ۿ]/;
   const inputs = dlg.locator('input:not([type=hidden])');
   const n = await inputs.count();
-  if (n >= 4) {                                   // خانة لكل رقم
-    await inputs.first().click({ force: true }).catch(() => {});
-    await page.keyboard.type(String(C.tradePin), { delay: 60 });
-  } else if (n >= 1) {                            // خانة واحدة
-    await inputs.first().click({ force: true }).catch(() => {});
-    await inputs.first().fill(String(C.tradePin)).catch(async () => { await page.keyboard.type(String(C.tradePin), { delay: 60 }); });
+  if (n >= 1) {
+    await inputs.first().evaluate((el) => el.focus()).catch(() => {});
+    await inputs.first().click({ force: true, timeout: 1500 }).catch(() => {});
+    await page.keyboard.type(String(C.tradePin), { delay: 80 });
+    log('PIN typed (' + n + ' inputs)');
   } else {
-    // PIN input is usually inside an iframe (passport.sahmcapital.com)
     let done = false;
     for (const f of page.frames()) {
       if (f === page.mainFrame()) continue;
       const inDlg = await f.frameElement().then((fe) => fe.evaluate((el) => !!el.closest('.n-modal,.n-dialog,[role=dialog],.n-drawer,.n-popover,.n-popconfirm') && el.getClientRects().length > 0)).catch(() => false);
       if (!inDlg) continue;
-      const fin = f.locator('input:visible:not([type=hidden])');
+      const fin = f.locator('input:not([type=hidden])');
       const fn = await fin.count().catch(() => 0);
       log('PIN frame ' + f.url().split('?')[0] + ' inputs=' + fn);
       if (!fn) continue;
-      await fin.first().click({ force: true }).catch(() => {});
-      if (fn >= 4) await page.keyboard.type(String(C.tradePin), { delay: 60 });
-      else await fin.first().fill(String(C.tradePin)).catch(async () => { await page.keyboard.type(String(C.tradePin), { delay: 60 }); });
-      await sleep(300);
-      const fok = f.locator('button:visible').filter({ hasNotText: /\u0625\u0644\u063A\u0627\u0621|Cancel|Close/i }).last();
+      await fin.first().evaluate((el) => el.focus()).catch(() => {});
+      await fin.first().click({ force: true, timeout: 1500 }).catch(() => {});
+      await page.keyboard.type(String(C.tradePin), { delay: 80 });
+      const fok = f.locator('button:visible').filter({ hasText: HAS_TEXT }).filter({ hasNotText: NOT_CANCEL }).last();
       if (await fok.count().catch(() => 0)) await tryClick(fok);
       log('PIN typed inside frame (' + fn + ' inputs)');
       done = true; break;
     }
     if (!done) {
-      await dlg.click({ force: true }).catch(() => {});
-      await page.keyboard.type(String(C.tradePin), { delay: 60 });
-      log('PIN typed by keyboard (no visible input)');
+      const box = await dlg.boundingBox().catch(() => null);
+      if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.55);
+      await page.keyboard.type(String(C.tradePin), { delay: 80 });
+      log('PIN typed by keyboard (no input found)');
     }
   }
-  if (n) log('PIN typed (' + n + ' inputs)');
-  const ok = dlg.locator('button:visible').filter({ hasNotText: /\u0625\u0644\u063A\u0627\u0621|Cancel|Close/i }).last();
+  const ok = dlg.locator('button:visible').filter({ hasText: HAS_TEXT }).filter({ hasNotText: NOT_CANCEL }).last();
   if (await ok.count().catch(() => 0)) await tryClick(ok);
-  await sleep(600);
+  await sleep(1200);
+  const still = await dlg.isVisible().catch(() => false);
+  log(still ? 'PIN dialog still open after typing' : 'PIN accepted (dialog closed)', still ? 'warn' : 'info');
   await pushShot('after PIN').catch(() => {});
-  await sleep(900);
   return true;
 }
 
