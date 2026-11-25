@@ -588,7 +588,7 @@ async function submitOrder(panel, side) {
     return { list, picked: pick ? pick.innerText.replace(/\s+/g, ' ').trim() : null, disabled: pick ? pick.disabled : null };
   }, side).catch((e) => ({ err: e.message }));
   log(`🔘 زراير التذكرة: ${(info.list || []).map((b) => b.t + (b.dis ? '(معطّل)' : '')).filter(Boolean).join(' | ')} ← ضغطت: ${info.picked || 'ولا حاجة'}`);
-  if (!info.picked || info.disabled) { await pushShot('مش لاقي زرار الإرسال'); throw new Error('ما لقيتش زرار إرسال الأمر في التذكرة' + (info.disabled ? ' (معطّل)' : '')); }
+  if (!info.picked || info.disabled) { const SUBMIT_RE = /\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0623\u0645\u0631|Place Order|Submit/; const el = panel.getByText(SUBMIT_RE).locator('visible=true').last(); if (await el.count().catch(() => 0)) { await el.click({ timeout: 3000 }); log('Submit clicked (text element)'); return; } await pushShot('no submit button'); throw new Error('Submit button not found in the ticket'); }
 }
 // بعد الإرسال: لو سهم ما استلمتش أي طلب خلال 4 ثواني نقول بوضوح
 async function verifySent(symbol) {
