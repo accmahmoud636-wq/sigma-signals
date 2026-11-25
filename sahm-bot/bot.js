@@ -740,17 +740,29 @@ async function placeBuy(sig) {
 // تأكيد الأمر: بنستنى زرار التأكيد لحد 1.5 ث بس (لو مفيش تأكيد نكمل على طول)
 // رمز التداول: سهم بتطلبه بعد "إرسال الأمر" — البوت بيدخله من الإعدادات (عمره ما بيتكتب في السجل)
 async function enterPinIfAsked() {
-  const dlg = page.locator('.n-modal:visible, .n-dialog:visible, [role=dialog]:visible, .n-drawer:visible')
-    .filter({ hasText: /رمز|PIN|كلمة المرور|كلمة السر|التحقق/i }).filter({ hasNotText: /أدخل الكمية|رمز أو اسم الشركة/ }).last();
-  try { await dlg.waitFor({ state: 'visible', timeout: 1500 }); } catch (_) { return false; }
-  const inputs = dlg.locator('input:visible');
+  // نافذة سهم: "أدخل كلمة مرور التداول يرجى الإدخال" — من غير زراير، بتتأكد لوحدها بعد كتابة الرمز
+  const PIN_RE = /كلمة مرور|كلمة المرور|كلمة السر|رمز التداول|رمز التحقق|PIN|password/i;
+  const dlg = page.locator('.n-modal:visible, .n-dialog:visible, [role=dialog]:visible, .n-drawer:visible, .n-popover:visible, .n-popconfirm:visible')
+    .filter({ hasText: PIN_RE }).filter({ hasNotText: /أدخل الكمية|رمز أو اسم الشركة/ }).last();
+  try { await dlg.waitFor({ state: 'visible', timeout: 2000 }); } catch (_) { return false; }
+  if (!C.tradePin) { await pushShot('سهم طالبة رمز التداول'); throw new Error('سهم طالبة كلمة مرور التداول — احفظها في الإعدادات ← 🔌 الاتصال بسهم ← رمز التداول'); }
+  const inputs = dlg.locator('input:not([type=hidden])');
   const n = await inputs.count();
-  if (!n) return false;
-  if (!C.tradePin) { await pushShot('سهم طالبة رمز التداول'); throw new Error('سهم طالبة رمز التداول — احفظه في الإعدادات ← 🔌 الاتصال بسهم ← رمز التداول'); }
-  if (n >= 4) { await inputs.first().click().catch(() => {}); await page.keyboard.type(String(C.tradePin), { delay: 50 }); }
-  else { await inputs.first().fill(String(C.tradePin)); }
-  await sleep(350);
-  log('🔐 دخلت رمز التداول');
+  if (n >= 4) {                                   // خانة لكل رقم
+    await inputs.first().click({ force: true }).catch(() => {});
+    await page.keyboard.type(String(C.tradePin), { delay: 60 });
+  } else if (n >= 1) {                            // خانة واحدة
+    await inputs.first().click({ force: true }).catch(() => {});
+    await inputs.first().fill(String(C.tradePin)).catch(async () => { await page.keyboard.type(String(C.tradePin), { delay: 60 }); });
+  } else {                                        // خانات مرسومة من غير input ظاهر — نكتب بالكيبورد
+    await dlg.click({ force: true }).catch(() => {});
+    await page.keyboard.type(String(C.tradePin), { delay: 60 });
+  }
+  log(`🔐 دخلت كلمة مرور التداول (${n} خانة)`);
+  // لو فيه زرار تأكيد جوه النافذة نضغطه، ولو مفيش بتتأكد لوحدها
+  const ok = dlg.getByRole('button', { name: /تأكيد|موافق|إرسال|دخول|متابعة|Confirm|OK/ }).first();
+  if (await ok.count().catch(() => 0)) await tryClick(ok);
+  await sleep(900);
   return true;
 }
 
