@@ -402,7 +402,7 @@ async function sellNow(symbol, qty, price) {
     log('Trading unlocked - submitting the order again');
     await sleep(600);
     orderWatchUntil = Date.now() + 20000; lastOrderReply = '';
-    await submitOrder(panel, 'بيع');
+    await submitOrder((await ticketPanel()) || panel, 'بيع');
     await confirmOrder();
   }
   if (!(await verifySent(symbol))) throw new Error('ضغطت إرسال البيع بس مفيش طلب وصل لسهم');
@@ -521,7 +521,8 @@ async function monitorPositions() {
 async function ticketPanel() {
   // التذكرة = أصغر div فيه "إرسال الأمر" + خانات إدخال + اختيار المحفظة
   // لازم الخانات نفسها تكون ظاهرة (سهم فيها نسخة مخفية من التذكرة)
-  const p = page.locator('div:visible', { has: page.getByText('إرسال الأمر').locator('visible=true') }).filter({ has: page.locator('input:visible') }).filter({ has: page.locator('.n-select:visible') }).last();
+  const SUBMIT_LABEL = /^\s*\u0625\u0631\u0633\u0627\u0644( \u0627\u0644\u0623\u0645\u0631)?\s*$/; // locked: "send order", unlocked: "send"
+  const p = page.locator('div:visible', { has: page.getByText(SUBMIT_LABEL).locator('visible=true') }).filter({ has: page.locator('input:visible') }).filter({ has: page.locator('.n-select:visible') }).last();
   return (await p.count()) ? p : null;
 }
 async function setSide(panel, side) {
@@ -592,13 +593,14 @@ async function submitOrder(panel, side) {
     const sideRe = side === 'بيع' ? /بيع|Sell/i : /شراء|Buy/i;
     // الأولوية: زرار فيه "إرسال الأمر" ← زرار رئيسي (primary) فيه شراء/بيع أو تأكيد ← آخر زرار رئيسي
     let pick = btns.find((b) => /إرسال الأمر|Place Order|Submit/i.test(b.innerText));
+    if (!pick) pick = btns.find((b) => /^\s*\u0625\u0631\u0633\u0627\u0644\s*$/.test(b.innerText));
     if (!pick) pick = btns.filter((b) => /primary|success|error|warning/.test(b.className) && (sideRe.test(b.innerText) || /تأكيد|إرسال|Confirm/i.test(b.innerText))).pop();
     if (!pick) pick = btns.filter((b) => /primary|success|error/.test(b.className)).pop();
     if (pick && !pick.disabled) pick.click();
     return { list, picked: pick ? pick.innerText.replace(/\s+/g, ' ').trim() : null, disabled: pick ? pick.disabled : null };
   }, side).catch((e) => ({ err: e.message }));
   log(`🔘 زراير التذكرة: ${(info.list || []).map((b) => b.t + (b.dis ? '(معطّل)' : '')).filter(Boolean).join(' | ')} ← ضغطت: ${info.picked || 'ولا حاجة'}`);
-  if (!info.picked || info.disabled) { const SUBMIT_RE = /\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0623\u0645\u0631|Place Order|Submit/; const el = panel.getByText(SUBMIT_RE).locator('visible=true').last(); if (await el.count().catch(() => 0)) { await el.click({ timeout: 3000 }); log('Submit clicked (text element)'); return; } await pushShot('no submit button'); throw new Error('Submit button not found in the ticket'); }
+  if (!info.picked || info.disabled) { const SUBMIT_RE = /\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0623\u0645\u0631|Place Order|Submit/; const el = panel.getByText(SUBMIT_RE).locator('visible=true').last(); if (await el.count().catch(() => 0)) { await el.click({ timeout: 3000 }); log('Submit clicked (text element)'); return; } const pb = page.locator('button:visible').filter({ hasText: /^\s*\u0625\u0631\u0633\u0627\u0644\s*$/ }).last(); if (await pb.count().catch(() => 0)) { await pb.click({ timeout: 3000 }); log('Submit clicked (page button)'); return; } await pushShot('no submit button'); throw new Error('Submit button not found in the ticket'); }
 }
 // بعد الإرسال: لو سهم ما استلمتش أي طلب خلال 4 ثواني نقول بوضوح
 async function verifySent(symbol) {
@@ -745,7 +747,7 @@ async function placeBuy(sig) {
     log('Trading unlocked - submitting the order again');
     await sleep(600);
     orderWatchUntil = Date.now() + 20000; lastOrderReply = '';
-    await submitOrder(panel, 'شراء');
+    await submitOrder((await ticketPanel()) || panel, 'شراء');
     await confirmOrder();
   }
   if (!(await verifySent(symbol))) log('No order request seen after submit - tracking as pending anyway (the fill check will confirm)', 'warn');
