@@ -392,7 +392,7 @@ async function sellNow(symbol, qty, price) {
   await (await qtyField(panel)).fill(String(qty));
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — البيع اتلغى');
   await assertRealFund(panel);
-  orderWatchUntil = Date.now() + 8000; lastOrderReply = '';
+  orderWatchUntil = Date.now() + 40000; lastOrderReply = '';
   await submitOrder(panel, 'بيع');
   await confirmOrder();
   if (!(await verifySent(symbol))) throw new Error('ضغطت إرسال البيع بس مفيش طلب وصل لسهم');
@@ -593,7 +593,7 @@ async function submitOrder(panel, side) {
 // بعد الإرسال: لو سهم ما استلمتش أي طلب خلال 4 ثواني نقول بوضوح
 async function verifySent(symbol) {
   const t0 = Date.now();
-  while (Date.now() - t0 < 4000) { if (lastOrderReply) return true; await sleep(250); }
+  while (Date.now() - t0 < 8000) { if (lastOrderReply) return true; await sleep(250); }
   log(`⚠️ ${symbol}: مفيش أي طلب وصل لسهم بعد الضغط على الإرسال — الأمر ما اتبعتش`, 'warn');
   await pushShot('الأمر ما اتبعتش ' + symbol);
   return false;
@@ -725,10 +725,10 @@ async function placeBuy(sig) {
   // إرسال + تأكيد
   if (await isDemo()) throw new Error('الصفحة على التداول التجريبي — الأمر اتلغى');
   await assertRealFund(panel);
-  orderWatchUntil = Date.now() + 8000; lastOrderReply = '';
+  orderWatchUntil = Date.now() + 40000; lastOrderReply = '';
   await submitOrder(panel, 'شراء');
   await confirmOrder();
-  if (!(await verifySent(symbol))) throw new Error('ضغطت إرسال بس مفيش طلب وصل لسهم — الأمر ما اتبعتش (صورة الصفحة في 📸)');
+  if (!(await verifySent(symbol))) log('No order request seen after submit - tracking as pending anyway (the fill check will confirm)', 'warn');
   setTimeout(() => closeDialogs(), 1500);
   log(`🎯 أمر محدد ${qty} ${symbol} @ ${limit} (${sess}) — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد إرسال شراء ${qty} ${symbol}`).catch(() => {});
@@ -794,7 +794,7 @@ async function enterPinIfAsked() {
       await page.keyboard.type(String(C.tradePin), { delay: 90 });
       log('PIN typed after clicking the dashes');
     }
-    const info = await inp.evaluate((el) => ({ type: el.type, ml: el.maxLength, len: (el.value || '').length, ro: el.readOnly, op: getComputedStyle(el).opacity })).catch(() => null);
+    const info = (await gone()) ? null : await inp.evaluate((el) => ({ type: el.type, ml: el.maxLength, len: (el.value || '').length, ro: el.readOnly, op: getComputedStyle(el).opacity }), null, { timeout: 800 }).catch(() => null);
     if (info) log('PIN input: type=' + info.type + ' maxlength=' + info.ml + ' valueLen=' + info.len + ' readonly=' + info.ro + ' opacity=' + info.op);
   } else {
     let done = false;
@@ -821,9 +821,12 @@ async function enterPinIfAsked() {
       log('PIN typed by keyboard (no input found)');
     }
   }
-  const ok = dlg.locator('button:visible').filter({ hasText: HAS_TEXT }).filter({ hasNotText: NOT_CANCEL }).last();
-  if (await ok.count().catch(() => 0)) await tryClick(ok);
-  await sleep(1200);
+  if (await dlg.isVisible().catch(() => false)) {
+    const ok = dlg.locator('button:visible').filter({ hasText: HAS_TEXT }).filter({ hasNotText: NOT_CANCEL }).last();
+    if (await ok.count().catch(() => 0)) await tryClick(ok);
+    await sleep(800);
+  }
+  orderWatchUntil = Date.now() + 15000; // the real order request is sent after the password is accepted
   const still = await dlg.isVisible().catch(() => false);
   log(still ? 'PIN dialog still open after typing' : 'PIN accepted (dialog closed)', still ? 'warn' : 'info');
   await pushShot('after PIN').catch(() => {});
