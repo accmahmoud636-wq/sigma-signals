@@ -286,6 +286,10 @@ label.l{font-size:11px;margin-bottom:4px}
       <h3 class="h3">الأوامر</h3>
       <div class="tw" style="max-height:420px;overflow-y:auto"><table class="pf-tbl"><thead><tr><th>التاريخ</th><th>الرمز</th><th>العملية</th><th>الكمية</th><th>المنفذ</th><th>متوسط التنفيذ</th><th>التكلفة</th><th>العمولة</th><th>الربح/الخسارة</th><th>الحالة</th></tr></thead><tbody id="anOrd"></tbody></table></div>
     </div>
+    <div class="card">
+      <div class="row-h"><h2>🧠 أداء كل مؤشر</h2><span class="hint">صفقات البوت المقفولة في نفس الفترة</span></div>
+      <div class="tw"><table class="pf-tbl"><thead><tr><th>المؤشر</th><th>صفقات</th><th>ربح / خسارة</th><th>نسبة النجاح</th><th>متوسط الصفقة</th><th>صافي الربح</th><th>أحسن</th><th>أسوأ</th></tr></thead><tbody id="stTbl"></tbody></table></div>
+    </div>
   </section>
 
   <!-- ===== ⚙️ الإعدادات ===== -->
@@ -339,6 +343,7 @@ label.l{font-size:11px;margin-bottom:4px}
           <div><label class="l">أعلى سعر للسهم $</label><input class="inp" id="maxPrice" type="number" step="0.5" min="0"></div>
         </div>
         <div class="field"><label class="l">أقصى صفقات في اليوم</label><input class="inp" id="maxPerDay" type="number" min="0"></div>
+        <div class="toggle-row" style="margin-bottom:8px"><span>📰 فلتر الأخبار (طرح أسهم / تخفيف / تقسيم عكسي)</span><label class="toggle"><input type="checkbox" id="newsFilter"><span class="slider"></span></label></div>
         <details style="margin-bottom:10px"><summary class="hint" style="cursor:pointer">متقدم</summary>
           <div class="field" style="margin-top:8px"><label class="l">نص جلسة التداول في سهم (فاضي = تلقائي)</label><input class="inp" id="session" type="text" style="font-family:var(--ar)"></div>
         </details>
@@ -443,6 +448,7 @@ function fillForm(){
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>$(k).value = S[k] ?? '');
   $('session').value = S.session || '';
   $('autoBracket').checked = S.autoBracket !== false;
+  $('newsFilter').checked = S.newsFilter !== false;
   $('trailOn').checked = !!S.trailOn; $('trailTop').checked = !!S.trailOn; $('trailStart').value = S.trailStart ?? 5; $('trailPct').value = S.trailPct ?? 2; trailUI();
   $('live').checked = !S.dryRun;
   $('tgChatId').value = S.tgChatId || '';
@@ -499,7 +505,7 @@ function setMarket(){
 function save(){
   const live = $('live').checked;
   if (live && S.dryRun && !confirm('هتشغّل التنفيذ الحقيقي بفلوس فعلية على سهم. متأكد؟')) return;
-  const b = { broker:$('broker').value, market:$('market').value, orderType:$('orderType').value, fundAccount:$('fundAccount').value.trim(), sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value, trailOn:$('trailOn').checked, trailStart:Number($('trailStart').value), trailPct:Number($('trailPct').value) };
+  const b = { broker:$('broker').value, market:$('market').value, orderType:$('orderType').value, fundAccount:$('fundAccount').value.trim(), sizeMode:$('sizeMode').value, dryRun:!live, autoBracket:$('autoBracket').checked, session:$('session').value, trailOn:$('trailOn').checked, trailStart:Number($('trailStart').value), trailPct:Number($('trailPct').value), newsFilter:$('newsFilter').checked };
   ['amount','sizePct','tpPct','slPct','dailyProfitTarget','dailyLossLimit','minPrice','maxPrice','maxPerDay','offsetPct'].forEach(k=>b[k]=Number($(k).value));
   if (b.minPrice > b.maxPrice) return toast('⚠️ أقل سعر أكبر من أعلى سعر');
   post(b);
@@ -710,6 +716,7 @@ function anRange(r,btn){
   loadAN();
 }
 async function loadAN(){
+  loadStrat().catch(()=>{});
   const qs=new URLSearchParams({market:PFM, from:$('anFrom').value||'', to:$('anTo').value||''});
   const r=await fetch('/api/bot/orders?'+qs,{headers:H}); if(!r.ok) return; const j=await r.json(); const S2=j.summary, cur=PFM==='US'?'$':'ر.س';
   $('anInfo').textContent = `${PFM==='US'?'🇺🇸 الأمريكي':'🇸🇦 السعودي'} — ${S2.orders} أمر (${S2.executed} منفذ)` + (S2.unknownCost?` — ${S2.unknownCost} بيع تكلفته مش معروفة (مش داخل في الربح)`:'');
@@ -721,6 +728,11 @@ async function loadAN(){
     + (S2.best?box('أفضل صفقة: '+S2.best.symbol,S2.best.pl,true):'') + (S2.worst?box('أسوأ صفقة: '+S2.worst.symbol,S2.worst.pl,true):'');
   $('anSym').innerHTML = j.bySymbol.length ? j.bySymbol.map(b=>`<tr><td><b>${b.symbol}</b></td><td>${b.buys}</td><td>${b.sells}</td><td>${fm(b.boughtValue)}</td><td>${fm(b.soldValue)}</td><td>${fm(b.fees)}</td><td class="${cls(b.pl)}">${fm(b.pl)}</td></tr>`).join('') : '<tr><td colspan="7" class="hint" style="text-align:center">مفيش صفقات في الفترة دي</td></tr>';
   $('anOrd').innerHTML = j.orders.length ? j.orders.map(o=>`<tr><td>${o.time?new Date(o.time).toLocaleString('ar-EG',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td><td><b>${o.symbol}</b></td><td>${o.side==='BUY'?'<span class="up">شراء</span>':o.side==='SELL'?'<span class="dn">بيع</span>':o.side}</td><td>${fm(o.qty,0)}</td><td>${fm(o.filled,0)}</td><td>${o.avg?fm(o.avg,4):'—'}</td><td>${o.cost?fm(o.cost,4):'—'}</td><td>${fm(o.fee)}</td><td>${typeof o.pl==='number'?`<span class="${cls(o.pl)}">${fm(o.pl)} (${fm(o.plPct)}%)</span>`:'—'}</td><td>${o.statusDesc||'—'}</td></tr>`).join('') : '<tr><td colspan="10" class="hint" style="text-align:center">مفيش أوامر في الفترة دي</td></tr>';
+}
+async function loadStrat(){
+  const qs=new URLSearchParams({from:$('anFrom').value||'', to:$('anTo').value||''});
+  const r=await fetch('/api/bot/strategies?'+qs,{headers:H}); if(!r.ok) return; const l=await r.json();
+  $('stTbl').innerHTML = l.length ? l.map(s=>`<tr><td><b>${String(s.strategy).replace(/</g,'&lt;')}</b></td><td>${s.trades}</td><td><span class="up">${s.wins}</span> / <span class="dn">${s.losses}</span></td><td>${fm(s.winRate,0)}%</td><td class="${cls(s.avgPct)}">${fm(s.avgPct)}%</td><td class="${cls(s.pnl)}">${fm(s.pnl)}$</td><td>${s.best?s.best.symbol+' '+fm(s.best.pct)+'%':'—'}</td><td>${s.worst?s.worst.symbol+' '+fm(s.worst.pct)+'%':'—'}</td></tr>`).join('') : '<tr><td colspan="8" class="hint" style="text-align:center">لسه مفيش صفقات مقفولة للبوت في الفترة دي</td></tr>';
 }
 async function anHistory(){ await fetch('/api/bot/history',{method:'POST',headers:H}); toast('⬇️ البوت بيفتح سجل الأوامر في سهم...'); setTimeout(loadAN,25000); }
 
@@ -778,7 +790,8 @@ async function loadChart(fit){
   $('chInfo').innerHTML=`<span>السهم <b>${p.symbol}</b></span><span>كمية <b>${p.qty}</b></span><span>دخول <b>$${(+p.entry).toFixed(4)}</b></span>
     <span>الحالي <b>$${last.toFixed(4)}</b></span><span style="color:${pnl>=0?'#22c55e':'#ef4444'}">الربح <b>${pnl>=0?'+':''}${pnl.toFixed(2)}$ (${pct.toFixed(2)}%)</b></span>
     <span style="color:#22c55e">🎯 $${p.tp} ${toTp!=null?`(باقي ${toTp.toFixed(2)}%)`:''}</span><span style="color:#ef4444">🛑 $${p.sl}</span>
-    <span style="color:#94a3b8">من ${new Date(p.openedAt).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}</span>`;
+    <span style="color:#94a3b8">من ${new Date(p.openedAt).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}</span>
+    <span style="display:flex;gap:6px;margin-inline-start:auto"><button class="pf-tab" onclick="posAct('${p._id}','be')">🛡️ الوقف على الدخول</button><button class="pf-tab" onclick="posAct('${p._id}','half')">✂️ بيع النص</button><button class="pf-tab" style="color:var(--red);border-color:rgba(255,77,77,.5)" onclick="posAct('${p._id}','sell')">🔴 بيع الآن</button></span>`;
 }
 loadPositions(); setInterval(loadPositions, 10000);
 
@@ -793,6 +806,16 @@ function toggleTrail(el){ $('trailOn').checked=el.checked; trailUI(); post({trai
 
 async function pfRefresh(b){ b.disabled=true; b.textContent='⏳ بيحدّث...'; await fetch('/api/bot/refreshpf',{method:'POST',headers:H}).catch(()=>{}); toast('🔄 البوت بيحدّث المحفظة من سهم (حوالي 15 ثانية)');
   setTimeout(()=>{ loadPF(); }, 12000); setTimeout(()=>{ loadPF(); b.disabled=false; b.textContent='🔄 تحديث'; }, 22000); }
+
+// ===== manual actions on an open position =====
+async function posAct(id,type){
+  const p=CHP.find(x=>x._id===id); const name=p?p.symbol:'';
+  const q={sell:'🔴 بيع كل '+name+' دلوقتي؟',half:'✂️ بيع نص '+name+' دلوقتي؟',be:'🛡️ نقل وقف '+name+' لسعر الدخول؟'}[type];
+  if(!confirm(q)) return;
+  try{ const r=await fetch('/api/bot/positions/'+id+'/action',{method:'POST',headers:H,body:JSON.stringify({type})}); const j=await r.json(); toast(j.msg||(j.ok?'✅':'❌')); }
+  catch(e){ toast('❌ '+e.message); }
+  loadPositions();
+}
 
 // ===== drag the target / stop lines on the chart =====
 const fmtP=v=>v>=1?(+v).toFixed(2):(+v).toFixed(4);
