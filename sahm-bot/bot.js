@@ -13,7 +13,7 @@ const mongoose = require('mongoose');
 const { chromium } = require('playwright');
 
 // الإعدادات بتتقرا من منصة MILLIONAIRE (صفحة 🤖 بوت سهم) قبل كل إشارة
-const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3, tradePin: '', trailOn: false, trailStart: 5, trailPct: 2,
+const DEFAULTS = { paused: false, dryRun: true, amount: 100, offsetPct: 0.5, tpPct: 5, slPct: 3, tradePin: '', trailOn: false, trailStart: 5, trailPct: 2, newsFilter: true,
                    minPrice: 3, maxPrice: 5, maxPerDay: 5, session: '', broker: 'sahm',
                    sizeMode: 'fixed', sizePct: 10, market: 'US', orderType: 'market', fundAccount: '', dailyProfitTarget: 0, dailyLossLimit: 0, autoBracket: true };
 let C = { ...DEFAULTS };
@@ -51,6 +51,16 @@ function tg(text, level) {
   const p = `/bot${token}/sendMessage?chat_id=${chat}&parse_mode=HTML&text=${encodeURIComponent(text)}`;
   https.get({ hostname: 'api.telegram.org', path: p }).on('error', () => {});
 }
+// Telegram message with inline buttons: rows = [[{text, data}], ...] (presses are handled by the platform webhook)
+function tgButtons(text, rows) {
+  log(text);
+  const token = C.tgToken || process.env.TG_TOKEN, chat = C.tgChatId || process.env.TG_CHAT_ID;
+  if (!token || !chat) return;
+  const kb = JSON.stringify({ inline_keyboard: rows.map((r) => r.map((x) => ({ text: x.text, callback_data: x.data }))) });
+  const p = `/bot${token}/sendMessage?chat_id=${chat}&parse_mode=HTML&text=${encodeURIComponent(text)}&reply_markup=${encodeURIComponent(kb)}`;
+  https.get({ hostname: 'api.telegram.org', path: p }).on('error', () => {});
+}
+const posButtons = (id) => [[{ text: '🔴 بيع الآن', data: `pos:${id}:sell` }, { text: '✂️ بيع النص', data: `pos:${id}:half` }], [{ text: '🛡️ الوقف على الدخول', data: `pos:${id}:be` }]];
 
 // ---------- حالة اليوم (عدد الصفقات والأسهم) ----------
 const STATE_FILE = path.join(__dirname, 'state.json');
@@ -364,6 +374,26 @@ const useMarketOrder = () => false;
 
 // ---------- الخروج التلقائي: بيع سوق فوراً عند الهدف الأول أو الوقف ----------
 // السعر اللحظي من Yahoo (كل ثانيتين) — مع ما قبل/بعد الافتتاح
+// News filter: skip a signal when the stock has dilution / distress news in the last 36h (Yahoo news search)
+const BAD_NEWS = /offering|priced|registered direct|private placement|at-the-market|ATM program|shelf registration|warrants?\b|reverse (stock )?split|dilut|delist|bankrupt|chapter 11|going concern|nasdaq (notice|deficiency)/i;
+function badNews(symbol) {
+  return new Promise((resolve) => {
+    const req = https.get({ hostname: 'query1.finance.yahoo.com', path: `/v1/finance/search?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=10`,
+      headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 }, (r) => {
+      let d = ''; r.on('data', (c) => (d += c)); r.on('end', () => {
+        try {
+          const since = Date.now() / 1000 - 36 * 3600;
+          const hit = (JSON.parse(d).news || []).find((n) => (n.providerPublishTime || 0) >= since && BAD_NEWS.test(n.title || '')
+            && (!n.relatedTickers || n.relatedTickers.map((t) => String(t).toUpperCase()).includes(symbol)));
+          resolve(hit ? hit.title : null);
+        } catch (_) { resolve(null); }
+      });
+    });
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve(null));
+  });
+}
+
 function livePrice(symbol) {
   return new Promise((resolve) => {
     const req = https.get({ hostname: 'query1.finance.yahoo.com', path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d&includePrePost=true`,
@@ -432,7 +462,7 @@ async function checkPending(col) {
       // الهدف والوقف من سعر التنفيذ الحقيقي
       const tp = round(entry * (1 + (C.tpPct || 5) / 100)), sl = round(entry * (1 - (C.slPct || 3) / 100));
       await col.updateOne({ _id: p._id }, { $set: { status: 'open', qty: Math.min(have, p.qty) || have, entry, tp, sl, filledAt: new Date() } });
-      tg(`✅ <b>اتنفذ فعلاً: ${p.symbol}</b> — ${have} سهم @ ${entry}\n🎯 ${tp} (+${C.tpPct || 5}%) | 🛑 ${sl} (-${C.slPct || 3}%)`);
+      tgButtons(`✅ <b>اتنفذ فعلاً: ${p.symbol}</b> — ${have} سهم @ ${entry}\n🎯 ${tp} (+${C.tpPct || 5}%) | 🛑 ${sl} (-${C.slPct || 3}%)`, posButtons(p._id));
     } else if (p.status === 'pending' && age > 3) {
       await col.updateOne({ _id: p._id }, { $set: { status: 'unfilled' } });
       tg(`⚠️ أمر شراء ${p.symbol} @ ${p.orderPrice || p.entry} <b>ما اتنفذش خلال 3 دقايق</b>\nافتح سهم ← الأوامر: لو لسه معلّق الغيه (أو سيبه والبوت هيتابعه لو اتنفذ)`, 'warn');
@@ -468,6 +498,9 @@ async function monitorPositions() {
       if (!monitorWarned) { monitorWarned = true; log('⚠️ مصدر السعر اللحظي مش راد — بستخدم سعر محفظة سهم (أبطأ)', 'warn'); }
     }
     let reason = null;
+    // manual action from the platform or Telegram buttons
+    if (p.action === 'sell') reason = '🔴 بيع يدوي من المنصة';
+    else if (p.action === 'half') reason = '✂️ بيع النص من المنصة';
     // أعلى سعر وصله السهم من وقت الدخول (للهدف المتحرك)
     const peak = Math.max(Number(p.peak) || 0, px || 0, Number(p.entry) || 0);
     if (px != null && peak > (Number(p.peak) || 0)) await col.updateOne({ _id: p._id }, { $set: { peak } });
@@ -484,8 +517,10 @@ async function monitorPositions() {
     // البيع على الهدف أو الوقف بس — تنبيه "الهدف الأول" بتاع المؤشر مش بيبيع (عشان نوصل لـ 5%)
     if (px != null) await col.updateOne({ _id: p._id }, { $set: { lastPrice: px, lastAt: new Date() } });
     if (!reason) return;
+    if (px == null) px = Number(p.lastPrice) || Number(p.entry);
+    const half = p.action === 'half';
     closingNow.add(String(p._id));
-    await col.updateOne({ _id: p._id }, { $set: { status: 'closing', reason, triggerPrice: px } });
+    await col.updateOne({ _id: p._id }, { $set: { status: 'closing', reason, triggerPrice: px }, $unset: { action: '' } });
     working = true;
     tradeChain = tradeChain.then(async () => {
       working = true;
@@ -506,8 +541,16 @@ async function monitorPositions() {
           return;
         }
         if (have < p.qty) p.qty = have;
+        if (half && p.qty >= 2) {
+          const sq = Math.floor(p.qty / 2), rest = p.qty - sq;
+          await sellNow(p.symbol, sq, px);
+          const hp = (px - p.entry) * sq;
+          await col.updateOne({ _id: p._id }, { $set: { status: 'open', qty: rest, halfSold: sq, halfPnl: hp, tries: 0 } });
+          tgButtons(`✂️ <b>اتباع نص ${p.symbol}</b> — ${sq} سهم @ ~${px} (${hp >= 0 ? '+' : ''}${hp.toFixed(2)}$)\nفاضل ${rest} سهم والبوت لسه متابعهم`, posButtons(p._id));
+          return;
+        }
         const mkt = await sellNow(p.symbol, p.qty, px);
-        const pnl = (px - p.entry) * p.qty, pct = ((px - p.entry) / p.entry) * 100;
+        const pnl = (px - p.entry) * p.qty + (Number(p.halfPnl) || 0), pct = ((px - p.entry) / p.entry) * 100;
         await col.updateOne({ _id: p._id }, { $set: { status: 'closed', exitPrice: px, closedAt: new Date(), pnl, pct, orderType: mkt ? 'market' : 'limit' } });
         tg(`${reason === '🛑 الوقف' ? '🛑' : reason.startsWith('📈') ? '📈' : '🎯'} <b>اتباع ${p.symbol}</b> — ${reason}\nكمية ${p.qty} | دخول ${p.entry} → خروج ~${px}\n${pnl >= 0 ? '🟢' : '🔴'} ${pnl.toFixed(2)}$ (${pct.toFixed(2)}%) تقريبي قبل العمولة`);
       } catch (e) {
@@ -617,6 +660,36 @@ async function verifySent(symbol) {
   await pushShot('الأمر ما اتبعتش ' + symbol);
   return false;
 }
+// Unlock Sahm's trading lock once per session so orders don't stop for the password
+let unlockTriedAt = 0;
+async function unlockTrading() {
+  if (working || !loggedIn || !C.tradePin || usSession() === 'closed') return;
+  if (Date.now() - unlockTriedAt < 4 * 60 * 1000) return;
+  const panel = await ticketPanel().catch(() => null);
+  if (!panel) return;
+  const LOCKED = /^\s*\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0623\u0645\u0631\s*$/; // submit label while locked
+  if (!(await panel.getByText(LOCKED).locator('visible=true').count().catch(() => 0))) return; // already unlocked
+  unlockTriedAt = Date.now();
+  const lock = panel.locator('[class*=lock]:visible, svg[class*=lock]:visible, [aria-label*=lock i]:visible').first();
+  let target = (await lock.count().catch(() => 0)) ? lock : null;
+  if (!target) {
+    // the lock icon sits next to the ticket title: pick the small icon closest to the top of the ticket
+    const h = await panel.evaluateHandle((root) => {
+      const vis = (e) => e.getClientRects().length;
+      const r0 = root.getBoundingClientRect();
+      return [...root.querySelectorAll('svg, i, span[class*=icon]')].filter(vis)
+        .map((e) => ({ e, r: e.getBoundingClientRect() })).filter((x) => x.r.top - r0.top < 60 && x.r.width < 40)
+        .sort((a, b2) => a.r.left - b2.r.left).map((x) => x.e.closest('button,span,div') || x.e)[1] || null;
+    }).catch(() => null);
+    target = h && h.asElement ? h.asElement() : null;
+  }
+  if (!target) { log('Trading lock icon not found - the password will be entered with the first order'); return; }
+  await target.click({ timeout: 2000 }).catch(() => {});
+  const ok = await enterPinIfAsked().catch((e) => { log('unlock: ' + e.message, 'warn'); return false; });
+  pinJustAccepted = false;
+  log(ok ? '🔓 Trading unlocked for this session' : 'Unlock: no password dialog appeared');
+}
+setInterval(() => { unlockTrading().catch(() => {}); }, 60 * 1000);
 let ticketAt = 0;
 let orderWatchUntil = 0, lastOrderReply = '', pinJustAccepted = false;
 async function prepareTicket() {
@@ -1367,6 +1440,10 @@ async function handle(sig, Signals) {
   if (C.dailyLossLimit > 0 && pnl <= -C.dailyLossLimit) return tg(`⛔ حد الخسارة اليومي (${pnl.toFixed(2)}$) — تخطي ${tag}`, 'warn');
 
   const st = loadState();
+  if (C.newsFilter !== false) {
+    const bad = await badNews(String(sig.symbol).toUpperCase());
+    if (bad) { tg(`📰 تخطي ${tag}: خبر سيئ النهارده — ${bad.slice(0, 120)}`); return skip(`📰 تخطي ${tag}: خبر طرح/تخفيف — ${bad.slice(0, 120)}`); }
+  }
   if (st.trades >= C.maxPerDay) { tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`); return skip(`⛔ حد الصفقات اليومي (${C.maxPerDay})`); }
   // نفس السهم مسموح أكتر من مرة — حتى لو فيه صفقة مفتوحة عليه
 
