@@ -114,6 +114,7 @@ const BotSettingsSchema = new mongoose.Schema({
   tpPct:      { type: Number,  default: 5 },
   slPct:      { type: Number,  default: 3 },
   trailOn:    { type: Boolean, default: false },   // هدف متحرك (Trailing)
+  newsFilter: { type: Boolean, default: true },    // skip signals with dilution/distress news
   trailStart: { type: Number,  default: 5 },       // يبدأ لما الربح يوصل %
   trailPct:   { type: Number,  default: 2 },       // يبيع لو السعر رجع % من أعلى سعر
   minPrice:   { type: Number,  default: 3 },
@@ -1011,6 +1012,7 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
       tpPct:     num(b.tpPct, 0.1, 100),
       slPct:     num(b.slPct, 0.1, 100),
       trailOn:   bool(b.trailOn),
+      newsFilter: bool(b.newsFilter),
       trailStart: num(b.trailStart, 0, 100),
       trailPct:  num(b.trailPct, 0.1, 50),
       minPrice:  num(b.minPrice, 0, 100000),
@@ -1027,6 +1029,7 @@ app.post('/api/bot/settings', auth, adminOnly, async (req, res) => {
     Object.keys(upd).forEach(k => upd[k] === undefined && delete upd[k]);
     const s = await BotSettings.findOneAndUpdate({ key: 'sahm' }, { $set: upd }, { upsert: true, new: true });
     setTelegramFromSettings(s);
+    if (upd.tgToken) ensureTgWebhook().catch(() => {});
     if ('paused' in upd || 'dryRun' in upd) {
       const m = `🤖 بوت سهم: ${s.paused ? '⏸ متوقف' : '▶️ شغال'} | ${s.dryRun ? '🧪 تجربة' : '💵 تنفيذ حقيقي'}`;
       sendTelegram(m).catch(() => {});
@@ -1169,6 +1172,88 @@ app.get('/api/bot/positions', auth, adminOnly, async (req, res) => {
       .find({ status: { $in: ['open', 'closing'] } }).sort({ openedAt: -1 }).limit(20).toArray();
     res.json(open);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Manual position actions (platform buttons and Telegram buttons): sell now / sell half / stop to breakeven
+async function positionAction(id, type) {
+  const col = mongoose.connection.collection('botpositions');
+  const p = await col.findOne({ _id: new mongoose.Types.ObjectId(id) });
+  if (!p || !['open', 'pending'].includes(p.status)) return { ok: false, msg: 'الصفقة مش مفتوحة' };
+  if (type === 'be') {
+    await col.updateOne({ _id: p._id }, { $set: { sl: p.entry, levelsEditedAt: new Date() } });
+    return { ok: true, msg: `🛡️ ${p.symbol}: الوقف بقى على الدخول ${p.entry}` };
+  }
+  if (type === 'sell' || type === 'half') {
+    if (p.status !== 'open') return { ok: false, msg: 'الصفقة لسه مستنية التنفيذ' };
+    await col.updateOne({ _id: p._id }, { $set: { action: type, actionAt: new Date() } });
+    return { ok: true, msg: type === 'sell' ? `🔴 ${p.symbol}: البوت بيبيع الكل دلوقتي` : `✂️ ${p.symbol}: البوت بيبيع النص دلوقتي` };
+  }
+  return { ok: false, msg: 'أمر غير معروف' };
+}
+app.post('/api/bot/positions/:id/action', auth, adminOnly, async (req, res) => {
+  try { res.json(await positionAction(req.params.id, String((req.body || {}).type || ''))); }
+  catch (e) { res.status(500).json({ ok: false, msg: e.message }); }
+});
+
+// Telegram buttons: webhook receives button presses from the configured chat only
+const TG_BASE = process.env.RENDER_EXTERNAL_URL || 'https://sigma-signals-by-mahmoud-ahmed.onrender.com';
+const tgSecret = () => crypto.createHash('sha256').update(String(TG.token || '')).digest('hex').slice(0, 32);
+function tgApi(method, params) {
+  return new Promise((resolve) => {
+    if (!TG.token) return resolve(null);
+    const body = JSON.stringify(params);
+    const rq = https.request({ hostname: 'api.telegram.org', path: `/bot${TG.token}/${method}`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (r) => {
+      let d = ''; r.on('data', (c) => (d += c)); r.on('end', () => { try { resolve(JSON.parse(d)); } catch (_) { resolve(null); } });
+    });
+    rq.on('error', () => resolve(null)); rq.end(body);
+  });
+}
+async function ensureTgWebhook() {
+  if (!TG.token) return;
+  const r = await tgApi('setWebhook', { url: `${TG_BASE}/tg/hook/${tgSecret()}`, allowed_updates: ['callback_query'] });
+  console.log('Telegram webhook:', r && r.ok ? 'ok' : JSON.stringify(r));
+}
+app.post('/tg/hook/:secret', async (req, res) => {
+  res.sendStatus(200);
+  try {
+    if (!TG.token || req.params.secret !== tgSecret()) return;
+    const cq = req.body && req.body.callback_query;
+    if (!cq) return;
+    const chatId = String((cq.message && cq.message.chat && cq.message.chat.id) || '');
+    if (!TG.chat || chatId !== String(TG.chat)) { tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: 'غير مسموح' }); return; }
+    const m = /^pos:([0-9a-f]{24}):(sell|half|be)$/.exec(String(cq.data || ''));
+    if (!m) return;
+    const r = await positionAction(m[1], m[2]);
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: r.msg.slice(0, 190), show_alert: !r.ok });
+    if (r.ok) sendTelegram(r.msg);
+  } catch (e) { console.log('tg hook:', e.message); }
+});
+setTimeout(async () => {
+  try { const s = await BotSettings.findOne({ key: 'sahm' }).lean(); setTelegramFromSettings(s); await ensureTgWebhook(); } catch (_) {}
+}, 8000);
+
+// Performance per strategy/indicator (closed bot positions joined with their signals)
+app.get('/api/bot/strategies', auth, adminOnly, async (req, res) => {
+  try {
+    const q = { status: 'closed', exitPrice: { $ne: null } };
+    if (req.query.from || req.query.to) { q.closedAt = {}; if (req.query.from) q.closedAt.$gte = new Date(req.query.from); if (req.query.to) q.closedAt.$lte = new Date(req.query.to + 'T23:59:59'); }
+    const pos = await mongoose.connection.collection('botpositions').find(q).toArray();
+    const ids = pos.map((p) => p.signalId).filter(Boolean);
+    const sigs = await Signal.find({ _id: { $in: ids } }).select('strategy').lean();
+    const strat = {}; sigs.forEach((x) => { strat[String(x._id)] = x.strategy || '—'; });
+    const by = {};
+    pos.forEach((p) => {
+      const k = strat[String(p.signalId)] || '—';
+      const o = by[k] || (by[k] = { strategy: k, trades: 0, wins: 0, losses: 0, pnl: 0, pctSum: 0, best: null, worst: null });
+      const pnl = Number(p.pnl) || 0, pct = Number(p.pct) || 0;
+      o.trades++; o.pnl += pnl; o.pctSum += pct; if (pnl > 0) o.wins++; else if (pnl < 0) o.losses++;
+      if (!o.best || pct > o.best.pct) o.best = { symbol: p.symbol, pct };
+      if (!o.worst || pct < o.worst.pct) o.worst = { symbol: p.symbol, pct };
+    });
+    const list = Object.values(by).map((o) => ({ ...o, winRate: o.trades ? (o.wins / o.trades) * 100 : 0, avgPct: o.trades ? o.pctSum / o.trades : 0 })).sort((a, b) => b.pnl - a.pnl);
+    res.json(list);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Move a position's target / stop from the chart - the bot reads tp/sl every 2s, so the change is live immediately
