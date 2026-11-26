@@ -442,6 +442,7 @@ async function checkPending(col) {
   }
 }
 
+let monitorPausedLogged = false;
 const closingNow = new Set();
 let monitorWarned = false;
 async function monitorPositions() {
@@ -449,6 +450,12 @@ async function monitorPositions() {
   await checkPending(col).catch((e) => log('checkPending: ' + e.message, 'warn'));
   const open = await col.find({ status: 'open' }).toArray();
   if (!open.length) return;
+  // No exits while the US market is closed (Riyadh ~04:00-12:00): quotes are stale/overnight and Sahm can't execute
+  if ((C.market || 'US') === 'US' && usSession() === 'closed') {
+    if (!monitorPausedLogged) { monitorPausedLogged = true; log('US market closed - target/stop monitoring paused until pre-market'); }
+    return;
+  }
+  monitorPausedLogged = false;
   const Signals = mongoose.connection.collection('signals');
   await Promise.all(open.map(async (p) => {
     if (closingNow.has(String(p._id))) return;
