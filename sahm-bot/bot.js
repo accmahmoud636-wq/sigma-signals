@@ -450,25 +450,60 @@ async function holdsOf(mkt) {
   return Array.isArray(l) ? l : null;
 }
 async function checkPending(col) {
-  const pend = await col.find({ status: { $in: ['pending', 'unfilled', 'rejected'] } }).toArray();
+  const pend = await col.find({ status: { $in: ['pending', 'unfilled', 'rejected'] } }).sort({ openedAt: -1 }).toArray();
+  // الكمية اللي في المحفظة بتتوزع على الأوامر — نفس السهم ممكن يكون ليه كذا أمر قديم ما اتنفذش،
+  // فمش كل أمر معلّق على نفس الرمز يتحسب "اتنفذ" لمجرد إن السهم ظهر في المحفظة
+  const freeBy = {};
+  const free = async (mkt, sym, holds) => {
+    const k = mkt + ':' + sym;
+    if (freeBy[k] == null) {
+      const h = holds.find((x) => String(x.stockCode).toUpperCase() === sym);
+      const have = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
+      const open = await col.find({ symbol: sym, market: mkt, status: { $in: ['open', 'closing'] } }).toArray();
+      freeBy[k] = have - open.reduce((a, o) => a + (Number(o.qty) || 0), 0);
+    }
+    return k;
+  };
   for (const p of pend) {
     const holds = await holdsOf(p.market);
     if (!holds) continue;
     const h = holds.find((x) => String(x.stockCode).toUpperCase() === p.symbol);
-    const have = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
+    const k = await free(p.market, p.symbol, holds);
+    const avail = freeBy[k];
     const age = (Date.now() - new Date(p.openedAt)) / 60000;
-    if (have > 0) {
+    if (h && avail > 0) {
+      const q = Math.min(avail, Number(p.qty) || avail);
+      freeBy[k] -= q;
       const entry = Number(h.costPrice) || p.entry;
       // الهدف والوقف من سعر التنفيذ الحقيقي
       const tp = round(entry * (1 + (C.tpPct || 5) / 100)), sl = round(entry * (1 - (C.slPct || 3) / 100));
-      await col.updateOne({ _id: p._id }, { $set: { status: 'open', qty: Math.min(have, p.qty) || have, entry, tp, sl, filledAt: new Date() } });
-      tgButtons(`✅ <b>اتنفذ فعلاً: ${p.symbol}</b> — ${have} سهم @ ${entry}\n🎯 ${tp} (+${C.tpPct || 5}%) | 🛑 ${sl} (-${C.slPct || 3}%)`, posButtons(p._id));
+      await col.updateOne({ _id: p._id }, { $set: { status: 'open', qty: q, entry, tp, sl, filledAt: new Date() } });
+      tgButtons(`✅ <b>اتنفذ فعلاً: ${p.symbol}</b> — ${q} سهم @ ${entry}\n🎯 ${tp} (+${C.tpPct || 5}%) | 🛑 ${sl} (-${C.slPct || 3}%)`, posButtons(p._id));
     } else if (p.status === 'pending' && age > 3) {
       await col.updateOne({ _id: p._id }, { $set: { status: 'unfilled' } });
       tg(`⚠️ أمر شراء ${p.symbol} @ ${p.orderPrice || p.entry} <b>ما اتنفذش خلال 3 دقايق</b>\nافتح سهم ← الأوامر: لو لسه معلّق الغيه (أو سيبه والبوت هيتابعه لو اتنفذ)`, 'warn');
     } else if ((p.status === 'unfilled' || p.status === 'rejected') && age > 360) {
       await col.updateOne({ _id: p._id }, { $set: { status: 'expired' } });
     }
+  }
+  // تنضيف: لو فيه صفقات مفتوحة على نفس السهم كميتها أكتر من اللي في المحفظة (اتحسبت أكتر من مرة)
+  // نشيل الزيادة من المتابعة من غير بيع — عشان البوت ما يبيعش نفس الأسهم مرتين
+  const open = await col.find({ status: 'open' }).sort({ openedAt: 1 }).toArray();
+  const seen = {};
+  for (const o of open) {
+    const holds = await holdsOf(o.market);
+    if (!holds) continue;
+    const k = o.market + ':' + o.symbol;
+    if (seen[k] == null) {
+      const h = holds.find((x) => String(x.stockCode).toUpperCase() === o.symbol);
+      seen[k] = h ? Number(h.currentAmount || h.enableAmount || 0) : 0;
+      if (seen[k] <= 0) seen[k] = -1;
+    }
+    if (seen[k] === -1) continue; // السهم مش في المحفظة خالص — ده شغل البيع (بيقفلها لوحده)، مش تكرار
+    if (seen[k] >= (Number(o.qty) || 0)) { seen[k] -= Number(o.qty) || 0; continue; }
+    if (seen[k] > 0) { await col.updateOne({ _id: o._id }, { $set: { qty: seen[k] } }); seen[k] = 0; continue; }
+    await col.updateOne({ _id: o._id }, { $set: { status: 'closed', closedAt: new Date(), reason: 'مكررة — نفس الأسهم متابعة في صفقة تانية' } });
+    tg(`🧹 ${o.symbol}: شلت صفقة مكررة من المتابعة (من غير بيع) — الأسهم اللي في المحفظة متابعة في صفقة واحدة بس`);
   }
 }
 
@@ -534,7 +569,7 @@ async function monitorPositions() {
           return;
         }
         const h = holds.find((x) => String(x.stockCode).toUpperCase() === p.symbol);
-        const have = h ? Number(h.enableAmount || h.currentAmount || 0) : 0;
+        const have = h ? Number(h.enableAmount != null ? h.enableAmount : (h.currentAmount || 0)) : 0;
         if (have <= 0) {
           await col.updateOne({ _id: p._id }, { $set: { status: 'closed', closedAt: new Date(), reason: 'مش في المحفظة الحقيقية' } });
           tg(`ℹ️ ${p.symbol} مش موجود في المحفظة الحقيقية ${C.fundAccount || ''} — اتشال من متابعة البوت من غير بيع`);
