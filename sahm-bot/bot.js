@@ -479,9 +479,10 @@ async function checkPending(col) {
       const tp = round(entry * (1 + (C.tpPct || 5) / 100)), sl = round(entry * (1 - (C.slPct || 3) / 100));
       await col.updateOne({ _id: p._id }, { $set: { status: 'open', qty: q, entry, tp, sl, filledAt: new Date() } });
       tgButtons(`✅ <b>اتنفذ فعلاً: ${p.symbol}</b> — ${q} سهم @ ${entry}\n🎯 ${tp} (+${C.tpPct || 5}%) | 🛑 ${sl} (-${C.slPct || 3}%)`, posButtons(p._id));
-    } else if (p.status === 'pending' && age > 3) {
+    } else if (p.status === 'pending' && age > 15) {
+      // مش تحذير: أمر الليمت لسه قاعد في سهم مستني السعر — البوت متابعه لحد 6 ساعات
       await col.updateOne({ _id: p._id }, { $set: { status: 'unfilled' } });
-      tg(`⚠️ أمر شراء ${p.symbol} @ ${p.orderPrice || p.entry} <b>ما اتنفذش خلال 3 دقايق</b>\nافتح سهم ← الأوامر: لو لسه معلّق الغيه (أو سيبه والبوت هيتابعه لو اتنفذ)`, 'warn');
+      tg(`⏳ أمر شراء ${p.symbol} @ ${p.orderPrice || p.entry} <b>لسه مستني التنفيذ</b> (عدّى 15 دقيقة)\nالأمر قاعد في سهم والبوت متابعه لحد 6 ساعات — لو السعر وصل واتنفذ هيبعتلك ✅ ويبدأ يراقب الهدف والوقف.\nلو مش عاوزه تاني: الغيه من سهم ← الأوامر`);
     } else if ((p.status === 'unfilled' || p.status === 'rejected') && age > 360) {
       await col.updateOne({ _id: p._id }, { $set: { status: 'expired' } });
     }
