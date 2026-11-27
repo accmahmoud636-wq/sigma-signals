@@ -553,8 +553,8 @@ async function loadStats(){
   const p=$('s-pnl'); p.textContent = money(s.pnlToday); p.style.color = s.pnlToday>0?'var(--green)':s.pnlToday<0?'var(--red)':'';
 }
 
-const LBL = {'sent':'<span style="color:var(--blue)">📨 اتبعت</span>','dry-run':'<span style="color:var(--yellow)">🧪 تجربة</span>','error':'<span style="color:var(--red)">❌ فشل</span>','skipped':'<span style="color:var(--muted2)">↷ تخطي</span>'};
-const PST = {pending:'<span style="color:var(--yellow)">⏳ مستني التنفيذ</span>',unfilled:'<span style="color:var(--red)">⚠️ ما اتنفذش</span>',expired:'<span style="color:var(--muted2)">⌛ انتهى</span>',open:'<span style="color:var(--blue)">🔵 مفتوحة</span>',closing:'<span style="color:var(--yellow)">⏳ بيتباع</span>',closed:'<span style="color:var(--green)">✅ مقفولة</span>',error:'<span style="color:var(--red)">❌ فشل البيع</span>'};
+const LBL = {'rejected':'<span style="color:var(--red)">⛔ سهم رفضت</span>','sent':'<span style="color:var(--blue)">📨 اتبعت</span>','dry-run':'<span style="color:var(--yellow)">🧪 تجربة</span>','error':'<span style="color:var(--red)">❌ فشل</span>','skipped':'<span style="color:var(--muted2)">↷ تخطي</span>'};
+const PST = {pending:'<span style="color:var(--yellow)">⏳ مستني التنفيذ</span>',unfilled:'<span style="color:var(--red)">⚠️ ما اتنفذش</span>',expired:'<span style="color:var(--muted2)">⌛ انتهى</span>',open:'<span style="color:var(--blue)">🔵 مفتوحة</span>',closing:'<span style="color:var(--yellow)">⏳ بيتباع</span>',closed:'<span style="color:var(--green)">✅ مقفولة</span>',error:'<span style="color:var(--red)">❌ فشل البيع</span>',rejected:'<span style="color:var(--red)">⛔ سهم رفضت</span>'};
 const tm = d => d ? new Date(d).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : '';
 function pnlOf(s){ const p=s.position; if(!p) return null; if(p.pnl!=null) return p.pnl; if(p.status==='open'&&p.lastPrice&&p.entry) return (p.lastPrice-p.entry)*p.qty; return null; }
 function stOf(s){ const t=s.tradeResult||{}, p=s.position; if(t.status==='sent'&&p) return p.status==='closed'&&p.exitPrice==null ? '<span style="color:var(--muted2)">ℹ️ مش في المحفظة</span>' : (PST[p.status]||p.status); return LBL[t.status]||t.status||'—'; }
@@ -571,7 +571,22 @@ function renderTrades(){
     <td class="m">${buy}</td><td class="m">${sell}</td>
     <td class="m">${(p&&p.tp)||t.tp||'—'} / ${(p&&p.sl)||t.sl||'—'}</td>
     <td class="m" style="color:${pn>0?'var(--green)':pn<0?'var(--red)':''}">${pn==null?'—':money(pn)+pct}</td>
-    <td style="font-size:11px;color:var(--muted2)">${String(note).slice(0,70)}</td></tr>`}).join('');
+    <td style="font-size:11px;color:var(--muted2)">${String(note).slice(0,70)}${canRetry(s)?`<br><button class="pf-tab" style="margin-top:4px;color:var(--gold);border-color:var(--gold)" onclick="retryBuy('${s._id}')">🔁 إعادة الطلب</button>`:''}</td></tr>`}).join('');
+}
+// الطلبات اللي ما اتنفذتش / اترفضت / اتخطت عشان الرصيد → زرار إعادة الطلب
+function canRetry(s){ const t=s.tradeResult||{}, p=s.position;
+  if(p && ['unfilled','expired','rejected'].includes(p.status)) return true;
+  if(!p && ['error','rejected'].includes(t.status)) return true;
+  if(t.status==='skipped' && /رصيد/.test(t.error||t.reason||'')) return true;
+  return false; }
+async function retryBuy(id){
+  const s=TR.find(x=>x._id===id); if(!s) return;
+  const t=s.tradeResult||{}, def=s.price||t.limit||'';
+  const v=prompt(`🔁 إعادة طلب شراء ${s.symbol}\nالسعر اللي هيتبعت للبوت (أمر محدد):\n(لو الأمر القديم لسه معلّق في سهم، الغيه الأول عشان ما يتنفذوش الاتنين)`, def);
+  if(v===null) return; const price=Number(v); if(!(price>0)) return toast('⚠️ سعر غير صحيح');
+  if(!S.dryRun && !confirm(`البوت على التنفيذ الحقيقي — هيشتري ${s.symbol} بأمر محدد عند ${price}. متأكد؟`)) return;
+  const r=await fetch('/api/admin/signals',{method:'POST',headers:H,body:JSON.stringify({symbol:s.symbol,action:'BUY',price,strategy:(s.strategy||'Manual')+' 🔁'})});
+  toast(r.ok?'🔁 الطلب اتبعت للبوت تاني — تابع السجل':'❌ فشل الإرسال'); setTimeout(loadTrades,3000);
 }
 function filt(el){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); el.classList.add('on'); F=el.dataset.f; renderTrades(); }
 async function loadTrades(){ const r=await fetch('/api/bot/trades',{headers:H}); if(!r.ok) return; TR=await r.json(); renderTrades(); }
