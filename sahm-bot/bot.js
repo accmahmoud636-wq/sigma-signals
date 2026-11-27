@@ -450,7 +450,7 @@ async function holdsOf(mkt) {
   return Array.isArray(l) ? l : null;
 }
 async function checkPending(col) {
-  const pend = await col.find({ status: { $in: ['pending', 'unfilled'] } }).toArray();
+  const pend = await col.find({ status: { $in: ['pending', 'unfilled', 'rejected'] } }).toArray();
   for (const p of pend) {
     const holds = await holdsOf(p.market);
     if (!holds) continue;
@@ -466,7 +466,7 @@ async function checkPending(col) {
     } else if (p.status === 'pending' && age > 3) {
       await col.updateOne({ _id: p._id }, { $set: { status: 'unfilled' } });
       tg(`⚠️ أمر شراء ${p.symbol} @ ${p.orderPrice || p.entry} <b>ما اتنفذش خلال 3 دقايق</b>\nافتح سهم ← الأوامر: لو لسه معلّق الغيه (أو سيبه والبوت هيتابعه لو اتنفذ)`, 'warn');
-    } else if (p.status === 'unfilled' && age > 360) {
+    } else if ((p.status === 'unfilled' || p.status === 'rejected') && age > 360) {
       await col.updateOne({ _id: p._id }, { $set: { status: 'expired' } });
     }
   }
@@ -770,17 +770,47 @@ async function priceField(panel) {
   return (await a.count()) ? a : fieldByLabel(panel, 'السعر');
 }
 
-// ---------- تنفيذ أمر شراء ----------
-async function placeBuy(sig) {
-  const symbol = sig.symbol.toUpperCase();
+// ---------- حجم الأمر (سعر الليمت + المبلغ + الكمية) ----------
+function sizeOrder(sig, quiet) {
   const limit = round(sig.price * (1 + C.offsetPct / 100));
   let amount = C.amount;
   if (C.sizeMode === 'percent') {
     const net = C.account && C.account.currency === 'USD' ? C.account.netAssets : null;
     if (net) amount = net * C.sizePct / 100;
-    else log(`نسبة من المحفظة: قيمة الحساب بالدولار مش معروفة — استخدام المبلغ الثابت ${C.amount}$`, 'warn');
+    else if (!quiet) log(`نسبة من المحفظة: قيمة الحساب بالدولار مش معروفة — استخدام المبلغ الثابت ${C.amount}$`, 'warn');
   }
   const qty = Math.floor(amount / (C.orderType === 'limit' ? limit : sig.price * 1.01));
+  return { limit, amount, qty };
+}
+
+// فحص الرصيد قبل الشراء — من آخر قراءة للقوة الشرائية (بتتحدث كل دقيقة، من غير ما نكلم سهم)
+// بيرجّع رسالة لو الرصيد واضح إنه مش كفاية، و null لو كفاية أو لو الرصيد مش معروف (ساعتها الأمر بيتبعت عادي)
+function fundsProblem(sig) {
+  const a = C.account;
+  if (!a || a.currency !== 'USD' || a.buyingPower == null || !isFinite(a.buyingPower)) return null;
+  if (!a.at || Date.now() - new Date(a.at).getTime() > 10 * 60 * 1000) return null; // قراءة قديمة — ما نوقفش عليها
+  const { limit, qty } = sizeOrder(sig, true);
+  const cost = Math.max(qty, 1) * limit;
+  if (cost <= a.buyingPower) return null;
+  return `الصفقة محتاجة ~${cost.toFixed(2)}$ والقوة الشرائية ${Number(a.buyingPower).toFixed(2)}$`;
+}
+
+// رد سهم على الأمر: هل فيه رفض؟ (رصيد غير كافي / مرفوض ...) — بيرجّع نص السبب أو null
+function orderRejection(reply) {
+  if (!reply) return null;
+  try {
+    const j = JSON.parse(reply);
+    const m = j && (j.msg || j.message || j.errorMsg || j.error_msg || j.errMsg || '');
+    if (j && (j.success === false || j.ok === false || /^(error|fail|failed|rejected)$/i.test(String(j.status || '')))) return String(m || 'سهم رفضت الأمر').slice(0, 160);
+  } catch (_) { /* مش JSON كامل — نكمّل بالكلمات */ }
+  const hit = reply.match(/(غير كاف\S*|القوة الشرائية\S*|رصيد\S*|مرفوض\S*|رفض\S*|insufficient[^"]{0,60}|buying power[^"]{0,60}|not enough[^"]{0,60}|rejected[^"]{0,60})/i);
+  return hit ? hit[0].slice(0, 160) : null;
+}
+
+// ---------- تنفيذ أمر شراء ----------
+async function placeBuy(sig) {
+  const symbol = sig.symbol.toUpperCase();
+  const { limit, amount, qty } = sizeOrder(sig);
   // الهدف والوقف من المنصة بس (شريط الهدف/الوقف) — محسوبين من سعر الدخول (سعر الأمر)، ومتجاهلين أرقام المؤشر
   const tp = round(limit * (1 + (C.tpPct || 5) / 100));
   const sl = round(limit * (1 - (C.slPct || 3) / 100));
@@ -831,7 +861,13 @@ async function placeBuy(sig) {
     await confirmOrder();
   }
   if (!(await verifySent(symbol))) log('No order request seen after submit - tracking as pending anyway (the fill check will confirm)', 'warn');
+  const rejected = orderRejection(lastOrderReply);
   setTimeout(() => closeDialogs(), 1500);
+  if (rejected) {
+    log(`⛔ سهم ردّت برفض على أمر ${symbol}: ${rejected}`, 'warn');
+    pushShot(`رفض شراء ${qty} ${symbol}: ${rejected.slice(0, 60)}`).catch(() => {});
+    return { status: 'rejected', reason: rejected, ...info };
+  }
   log(`🎯 أمر محدد ${qty} ${symbol} @ ${limit} (${sess}) — اتبعت بعد ${((Date.now() - t0) / 1000).toFixed(1)} ث`);
   pushShot(`بعد إرسال شراء ${qty} ${symbol}`).catch(() => {});
   return { status: 'sent', ...info };
@@ -1447,13 +1483,19 @@ async function handle(sig, Signals) {
   if (st.trades >= C.maxPerDay) { tg(`⛔ حد الصفقات اليومي (${C.maxPerDay}) — تخطي ${tag}`); return skip(`⛔ حد الصفقات اليومي (${C.maxPerDay})`); }
   // نفس السهم مسموح أكتر من مرة — حتى لو فيه صفقة مفتوحة عليه
 
+  // 💰 فحص الرصيد (من الذاكرة — مش بيأخر التنفيذ)
+  const noFunds = fundsProblem(sig);
+  if (noFunds) { tg(`💰 <b>رصيد غير كافي — تخطي ${tag}</b>\n${noFunds}`, 'warn'); return skip(`💰 رصيد غير كافي — تخطي ${tag}: ${noFunds}`, 'warn'); }
+
   try {
     const r = await placeBuy(sig);
     if (r.status === 'sent') { st.trades++; st.symbols.push(sig.symbol); saveState(st); }
-    if (r.status === 'sent') await mongoose.connection.collection('botpositions').insertOne({
+    // حتى لو سهم ردّت برفض بنسجّل المركز "rejected" — لو اتضح إنه اتنفذ، فحص التنفيذ هيفتحه ويراقبه عادي
+    if (r.status === 'sent' || r.status === 'rejected') await mongoose.connection.collection('botpositions').insertOne({
       symbol: r.symbol, qty: r.qty, entry: r.limit, tp: r.tp, sl: r.sl, signalId: sig._id,
-      market: C.market === 'SA' ? 'SA' : 'US', status: 'pending', openedAt: new Date(), orderPrice: r.limit });
+      market: C.market === 'SA' ? 'SA' : 'US', status: r.status === 'sent' ? 'pending' : 'rejected', openedAt: new Date(), orderPrice: r.limit });
     await Signals.updateOne({ _id: sig._id }, { $set: { tradeResult: { broker: 'sahm', ...r, at: new Date() } } });
+    if (r.status === 'rejected') return tg(`⛔ <b>سهم رفضت أمر الشراء: ${r.symbol}</b>\n${r.reason}\nكمية ${r.qty} | محدد $${r.limit}`, 'warn');
     tg(
       (r.status === 'sent' ? '📨 <b>أمر شراء اتبعت لسهم</b> (مستني التنفيذ)' : '🧪 <b>تجربة (من غير إرسال)</b>') +
       `\n${r.symbol} | كمية ${r.qty} | ${r.mkt ? 'أمر سوق' : 'محدد $' + r.limit}\n🎯 $${r.tp} | 🛑 $${r.sl}` +
