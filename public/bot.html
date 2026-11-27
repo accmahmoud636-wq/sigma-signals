@@ -159,6 +159,13 @@ label.l{font-size:11px;margin-bottom:4px}
 .ov-box{position:absolute;border:1px dashed;box-sizing:border-box}
 .ov-lbl{position:absolute;font:12px var(--mono);padding:4px 8px;border-radius:6px;color:#000;white-space:nowrap;direction:ltr;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5)}
 .ov-zone{position:absolute;box-sizing:border-box}
+#chGrid{display:none;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:8px;margin-top:6px}
+#chCard.full #chGrid{grid-template-columns:repeat(2,1fr)}
+.gc{border:1px solid var(--border2);border-radius:8px;background:#0b1220;overflow:hidden}
+.gc-h{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)}
+.gc-h b{font-family:var(--mono);color:var(--gold)}
+.gc-b{height:300px;position:relative}
+#chCard.full .gc-b{height:calc(50vh - 90px)}
 #chCard.full{position:fixed;inset:0;z-index:9999;margin:0;border-radius:0;overflow:auto}
 .ch-iv{padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);cursor:pointer;font-size:11px}
 .ch-iv.on{color:var(--gold);border-color:var(--gold)}
@@ -230,6 +237,7 @@ label.l{font-size:11px;margin-bottom:4px}
           <span id="chUpd" style="font-size:11px;color:var(--muted2);font-family:var(--mono)"></span>
         </div>
         <div id="chBox"><div class="ch-legend" id="chLegend"></div><div id="chOv"></div></div>
+        <div id="chGrid"></div>
         <div id="chEmpty" class="empty">مفيش صفقات مفتوحة — أول ما البوت يشتري سهم هيظهر هنا بالشارت والدخول والهدف والوقف</div>
       </div>
       <div class="card">
@@ -788,7 +796,7 @@ setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); 
 let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[], lvl={tp:null,sl:null}, drag=null;
 // إعدادات الشارت (بتتحفظ في المتصفح)
 let CHO={hollow:true,zones:true,vwap:true,ema9:false,ema20:false}; try{ Object.assign(CHO, JSON.parse(localStorage.getItem('ch_opts')||'{}')); }catch(_){}
-let chSeen={}, chMode=null, meas=null, chBars=[], userLines=[], vwapS=null, ema9S=null, ema20S=null;
+let chAll=false, GR={}, chSeen={}, chMode=null, meas=null, chBars=[], userLines=[], vwapS=null, ema9S=null, ema20S=null;
 const UP='#22c55e', DN='#ef4444';
 function candleStyle(){ return CHO.hollow
   ? {upColor:'rgba(0,0,0,0)',downColor:DN,borderVisible:true,borderUpColor:UP,borderDownColor:DN,wickUpColor:UP,wickDownColor:DN}
@@ -812,18 +820,23 @@ function chInit(){
   new ResizeObserver(()=>{ chart.applyOptions({width:box.clientWidth,height:box.clientHeight}); chOverlay(); }).observe(box);
   chSyncBtns();
 }
-function chIv(iv){ chIvl=iv; document.querySelectorAll('.ch-iv').forEach(b=>b.classList.toggle('on',b.dataset.iv===iv)); loadChart(true); }
-function chPick(s){ chSym=s; meas=null; renderChTabs(); loadChart(true); }
+function chIv(iv){ chIvl=iv; document.querySelectorAll('.ch-iv').forEach(b=>b.classList.toggle('on',b.dataset.iv===iv)); if(chAll){ Object.values(GR).forEach(g=>{g.seen=null;g.fit=true;}); gridRender(); } else loadChart(true); }
+function chPick(s){ chAll=false; chSym=s; meas=null; chMode_view(); renderChTabs(); loadChart(true); }
+function chPickAll(){ chAll=true; chMode_view(); renderChTabs(); gridRender(); }
+function chMode_view(){ const has=CHP.length>0;
+  $('chBox').style.display=has&&!chAll?'block':'none'; $('chInfo').style.display=has&&!chAll?'flex':'none';
+  $('chTools').style.display=has&&!chAll?'flex':'none'; $('chGrid').style.display=has&&chAll?'grid':'none'; }
 function renderChTabs(){
-  $('chTabs').innerHTML=CHP.map(p=>`<button class="ch-tab ${p.symbol===chSym?'on':''}" onclick="chPick('${p.symbol}')">${p.symbol}${p.status==='closing'?' ⏳':''}</button>`).join('');
+  $('chTabs').innerHTML=(CHP.length>1?`<button class="ch-tab ${chAll?'on':''}" onclick="chPickAll()">🔲 الكل (${CHP.length})</button>`:'')+CHP.map(p=>`<button class="ch-tab ${!chAll&&p.symbol===chSym?'on':''}" onclick="chPick('${p.symbol}')">${p.symbol}${p.status==='closing'?' ⏳':''}</button>`).join('')+(chAll?`<button class="ch-tab" onclick="chFull()" title="ملء الشاشة">⛶</button>`:'');
 }
 async function loadPositions(){
   try{ const r=await fetch('/api/bot/positions',{headers:H}); if(!r.ok) return; CHP=await r.json(); }catch(_){ return; }
   const has=CHP.length>0;
   $('chEmpty').style.display=has?'none':'block'; $('chBox').style.display=has?'block':'none'; $('chInfo').style.display=has?'flex':'none'; $('chTools').style.display=has?'flex':'none';
-  if(!has){ chSym=null; $('chTabs').innerHTML=''; return; }
+  if(!has){ chSym=null; chAll=false; $('chTabs').innerHTML=''; chMode_view(); gridClear(); return; }
   if(!CHP.find(p=>p.symbol===chSym)) chSym=CHP[0].symbol;
-  renderChTabs(); loadChart(false);
+  if(chAll&&CHP.length<2) chAll=false;
+  chMode_view(); renderChTabs(); if(chAll) gridRender(); else loadChart(false);
 }
 async function loadChart(fit){
   if(!chSym || drag) return; chInit(); if(!chart) return;
@@ -860,7 +873,7 @@ loadPositions(); setInterval(loadPositions, 10000);
 // الشموع بتتحدث كل 3 ثواني طول ما صفحة الصفقات مفتوحة وقدامك
 let chBusy=false;
 async function chTick(){ if(chBusy||document.hidden||!chSym) return; const pane=$('p-trade'); if(pane&&!pane.classList.contains('on')) return;
-  chBusy=true; try{ await loadChart(false); } finally{ chBusy=false; } }
+  chBusy=true; try{ if(chAll) await gridRender(); else await loadChart(false); } finally{ chBusy=false; } }
 setInterval(chTick, 3000);
 async function chRefresh(){ const b=$('tb-refresh'); b.disabled=true; b.textContent='⏳';
   try{ await loadPositions(); await loadChart(false); } finally{ b.disabled=false; b.textContent='🔄 تحديث'; } }
@@ -973,6 +986,50 @@ function chOverlay(){
     }
   }
   ov.innerHTML=h;
+}
+
+// ===== 🔲 عرض الكل: كل الصفقات المفتوحة جنب بعض =====
+function gridClear(){ Object.values(GR).forEach(g=>{ try{ g.chart.remove(); }catch(_){} }); GR={}; $('chGrid').innerHTML=''; }
+function gridCell(p){
+  const sym=p.symbol; if(GR[sym]) return GR[sym];
+  const box=document.createElement('div'); box.className='gc'; box.id='gc-'+sym;
+  box.innerHTML=`<div class="gc-h" onclick="chPick('${sym}')" title="افتح الشارت لوحده"><b>${sym}</b><span id="gci-${sym}"></span></div><div class="gc-b"></div>`;
+  $('chGrid').appendChild(box);
+  const body=box.querySelector('.gc-b');
+  const chart=LightweightCharts.createChart(body,{height:body.clientHeight||300,width:body.clientWidth,layout:{background:{color:'#0b1220'},textColor:'#cbd5e1'},
+    grid:{vertLines:{color:'#1e293b'},horzLines:{color:'#1e293b'}},timeScale:{timeVisible:true,secondsVisible:false},rightPriceScale:{borderColor:'#334155'},crosshair:{mode:0},
+    localization:{timeFormatter:t=>new Date(t*1000).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}});
+  const cs2=chart.addCandlestickSeries(candleStyle());
+  const vs2=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'v',color:'#33415588'});
+  chart.priceScale('v').applyOptions({scaleMargins:{top:0.8,bottom:0}});
+  const vw2=chart.addLineSeries({color:'#f59e0b',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  new ResizeObserver(()=>chart.applyOptions({width:body.clientWidth,height:body.clientHeight})).observe(body);
+  GR[sym]={chart,cs:cs2,vs:vs2,vw:vw2,lines:[],seen:null,fit:true};
+  return GR[sym];
+}
+async function gridRender(){
+  if(!window.LightweightCharts) return;
+  const syms=CHP.map(p=>p.symbol);
+  Object.keys(GR).forEach(k=>{ if(!syms.includes(k)){ try{ GR[k].chart.remove(); }catch(_){} const el=$('gc-'+k); if(el) el.remove(); delete GR[k]; } });
+  await Promise.all(CHP.map(async p=>{
+    const g=gridCell(p); g.cs.applyOptions(candleStyle());
+    let d; try{ const r=await fetch(`/api/bot/candles?symbol=${p.symbol}&interval=${chIvl}`,{headers:H}); if(!r.ok) return; d=await r.json(); }catch(_){ return; }
+    const c=d.candles||[]; if(!c.length) return;
+    const lt=c[c.length-1].time, prev=g.seen;
+    if(prev && (lt<prev.t || (lt===prev.t && c.length<prev.n*0.9) || (lt>prev.t && lt-prev.t<6*3600 && c.length<prev.n*0.8))) return;
+    g.seen={t:lt,n:c.length};
+    g.cs.setData(c.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));
+    g.vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
+    if(CHO.vwap){ const vw=[]; let day=null,pv=0,vv=0; for(const x of c){ const dd=new Date(x.time*1000).toLocaleDateString('en-US',{timeZone:'America/New_York'}); if(dd!==day){day=dd;pv=0;vv=0;} pv+=(x.high+x.low+x.close)/3*(x.volume||0); vv+=(x.volume||0); if(vv>0) vw.push({time:x.time,value:pv/vv}); } g.vw.setData(vw); } else g.vw.setData([]);
+    g.lines.forEach(l=>g.cs.removePriceLine(l)); g.lines=[];
+    const L=(price,color,title,style)=>price&&g.lines.push(g.cs.createPriceLine({price:+price,color,lineWidth:2,lineStyle:style,axisLabelVisible:true,title}));
+    L(p.entry,'#3b82f6','دخول',0); if(p.tp) L(p.tp,'#22c55e','🎯',2); if(p.sl) L(p.sl,'#ef4444','🛑',2);
+    const ot=Math.floor(new Date(p.openedAt).getTime()/1000); const bar=[...c].reverse().find(x=>x.time<=ot);
+    g.cs.setMarkers(bar?[{time:bar.time,position:'belowBar',color:'#3b82f6',shape:'arrowUp',text:'شراء '+p.qty}]:[]);
+    if(g.fit){ g.chart.timeScale().fitContent(); g.fit=false; }
+    const last=c[c.length-1].close, pct=(last-p.entry)/p.entry*100, pnl=(last-p.entry)*p.qty;
+    const el=$('gci-'+p.symbol); if(el) el.innerHTML=`<span dir="ltr" style="color:${pnl>=0?'#22c55e':'#ef4444'};font-family:var(--mono)">$${last.toFixed(4)} · ${pnl>=0?'+':''}${pnl.toFixed(2)}$ (${pct.toFixed(2)}%)</span>`;
+  }));
 }
 
 // ===== drag the target / stop lines on the chart =====
