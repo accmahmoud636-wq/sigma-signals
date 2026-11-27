@@ -770,7 +770,7 @@ setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); 
 let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[], lvl={tp:null,sl:null}, drag=null;
 // إعدادات الشارت (بتتحفظ في المتصفح)
 let CHO={hollow:true,zones:true,vwap:true,ema9:false,ema20:false}; try{ Object.assign(CHO, JSON.parse(localStorage.getItem('ch_opts')||'{}')); }catch(_){}
-let chMode=null, meas=null, chBars=[], userLines=[], vwapS=null, ema9S=null, ema20S=null;
+let chSeen={}, chMode=null, meas=null, chBars=[], userLines=[], vwapS=null, ema9S=null, ema20S=null;
 const UP='#22c55e', DN='#ef4444';
 function candleStyle(){ return CHO.hollow
   ? {upColor:'rgba(0,0,0,0)',downColor:DN,borderVisible:true,borderUpColor:UP,borderDownColor:DN,wickUpColor:UP,wickDownColor:DN}
@@ -812,6 +812,10 @@ async function loadChart(fit){
   const p=CHP.find(x=>x.symbol===chSym); if(!p) return;
   let d; try{ const r=await fetch(`/api/bot/candles?symbol=${chSym}&interval=${chIvl}`,{headers:H}); if(!r.ok) return; d=await r.json(); }catch(_){ return; }
   const c=d.candles||[]; if(!c.length) return;
+  // ياهو ساعات بيرجّع نسخة قديمة/ناقصة من البيانات (من سيرفر تاني عنده كاش) — نتجاهلها عشان الشارت ما يتنططش
+  const ck=chSym+'|'+chIvl, lt=c[c.length-1].time, prev=chSeen[ck];
+  if(prev && (lt<prev.t || (lt===prev.t && c.length<prev.n*0.9) || (lt>prev.t && lt-prev.t<6*3600 && c.length<prev.n*0.8))) return;
+  chSeen[ck]={t:lt,n:c.length};
   cs.setData(c.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));
   vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
   chBars=c; chIndicators(c); chUserLines();
