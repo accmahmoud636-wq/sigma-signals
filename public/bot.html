@@ -225,6 +225,9 @@ label.l{font-size:11px;margin-bottom:4px}
           <button class="ch-tool" id="tb-hollow" onclick="chToggle('hollow')" title="شموع مفرغة / مملوءة">🕯 مفرغة</button>
           <button class="ch-tool" onclick="chart&&chart.timeScale().fitContent()" title="رجّع الشارت للعرض الكامل">⤢ ملائمة</button>
           <button class="ch-tool" id="tb-full" onclick="chFull()" title="ملء الشاشة">⛶ كبير</button>
+          <span class="ch-sep"></span>
+          <button class="ch-tool" id="tb-refresh" onclick="chRefresh()" title="تحديث الشموع دلوقتي">🔄 تحديث</button>
+          <span id="chUpd" style="font-size:11px;color:var(--muted2);font-family:var(--mono)"></span>
         </div>
         <div id="chBox"><div class="ch-legend" id="chLegend"></div><div id="chOv"></div></div>
         <div id="chEmpty" class="empty">مفيش صفقات مفتوحة — أول ما البوت يشتري سهم هيظهر هنا بالشارت والدخول والهدف والوقف</div>
@@ -816,6 +819,7 @@ async function loadChart(fit){
   const ck=chSym+'|'+chIvl, lt=c[c.length-1].time, prev=chSeen[ck];
   if(prev && (lt<prev.t || (lt===prev.t && c.length<prev.n*0.9) || (lt>prev.t && lt-prev.t<6*3600 && c.length<prev.n*0.8))) return;
   chSeen[ck]={t:lt,n:c.length};
+  const u=$('chUpd'); if(u) u.textContent='⏱ '+new Date().toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Riyadh'});
   cs.setData(c.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));
   vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
   chBars=c; chIndicators(c); chUserLines();
@@ -838,6 +842,13 @@ async function loadChart(fit){
     <span style="display:flex;gap:6px;margin-inline-start:auto"><button class="pf-tab" onclick="posAct('${p._id}','be')">🛡️ الوقف على الدخول</button><button class="pf-tab" onclick="posAct('${p._id}','half')">✂️ بيع النص</button><button class="pf-tab" style="color:var(--red);border-color:rgba(255,77,77,.5)" onclick="posAct('${p._id}','sell')">🔴 بيع الآن</button></span>`;
 }
 loadPositions(); setInterval(loadPositions, 10000);
+// الشموع بتتحدث كل 3 ثواني طول ما صفحة الصفقات مفتوحة وقدامك
+let chBusy=false;
+async function chTick(){ if(chBusy||document.hidden||!chSym) return; const pane=$('p-trade'); if(pane&&!pane.classList.contains('on')) return;
+  chBusy=true; try{ await loadChart(false); } finally{ chBusy=false; } }
+setInterval(chTick, 3000);
+async function chRefresh(){ const b=$('tb-refresh'); b.disabled=true; b.textContent='⏳';
+  try{ await loadPositions(); await loadChart(false); } finally{ b.disabled=false; b.textContent='🔄 تحديث'; } }
 
 function mtab(p){ document.querySelectorAll('.mt').forEach(b=>b.classList.toggle('on',b.dataset.p===p)); document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id==='p-'+p)); try{localStorage.setItem('bot_tab',p);}catch(_){} if(p==='trade'&&chart) chart.applyOptions({width:$('chBox').clientWidth}); }
 try{ const t=localStorage.getItem('bot_tab'); if(t&&document.getElementById('p-'+t)) mtab(t); }catch(_){}
