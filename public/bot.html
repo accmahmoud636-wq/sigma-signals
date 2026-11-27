@@ -149,7 +149,17 @@ label.l{font-size:11px;margin-bottom:4px}
 .ch-tab{padding:4px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;font-weight:700;font-family:var(--mono);font-size:12px}
 .ch-tab.on{background:var(--gold);color:#000;border-color:var(--gold)}
 .ch-info{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin:8px 0}.ch-info b{font-family:var(--mono)}
-#chBox{height:340px;width:100%;display:none}
+#chBox{height:420px;width:100%;display:none;position:relative}
+.ch-tools{display:none;gap:4px;flex-wrap:wrap;align-items:center;margin:6px 0;padding:5px;border:1px solid var(--border);border-radius:8px;background:var(--bg3)}
+.ch-tool{padding:4px 9px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;font-size:12px;font-family:var(--ar)}
+.ch-tool.on{background:var(--gold);color:#000;border-color:var(--gold)}
+.ch-sep{width:1px;height:20px;background:var(--border2);margin:0 3px}
+.ch-legend{position:absolute;top:6px;left:8px;z-index:5;font:11px var(--mono);color:#cbd5e1;pointer-events:none;background:rgba(11,18,32,.7);padding:3px 7px;border-radius:6px;direction:ltr}
+#chOv{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.ov-box{position:absolute;border:1px dashed;box-sizing:border-box}
+.ov-lbl{position:absolute;font:12px var(--mono);padding:4px 8px;border-radius:6px;color:#000;white-space:nowrap;direction:ltr;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.ov-zone{position:absolute;box-sizing:border-box}
+#chCard.full{position:fixed;inset:0;z-index:9999;margin:0;border-radius:0;overflow:auto}
 .ch-iv{padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);cursor:pointer;font-size:11px}
 .ch-iv.on{color:var(--gold);border-color:var(--gold)}
 </style>
@@ -202,7 +212,21 @@ label.l{font-size:11px;margin-bottom:4px}
         </div>
         <div class="ch-tabs" id="chTabs"></div>
         <div class="ch-info" id="chInfo"></div>
-        <div id="chBox"></div>
+        <div class="ch-tools" id="chTools">
+          <button class="ch-tool" id="tb-measure" onclick="chTool('measure')" title="دوس على نقطتين في الشارت">📏 قياس</button>
+          <button class="ch-tool" id="tb-hline" onclick="chTool('hline')" title="دوس على السعر اللي عاوز عليه خط">➖ خط أفقي</button>
+          <button class="ch-tool" onclick="chClearDraw()" title="مسح القياس والخطوط اللي رسمتها">🗑 مسح</button>
+          <span class="ch-sep"></span>
+          <button class="ch-tool" id="tb-zones" onclick="chToggle('zones')" title="منطقة الربح (أخضر) والخسارة (أحمر) للصفقة">💰 ربح/خسارة</button>
+          <button class="ch-tool" id="tb-vwap" onclick="chToggle('vwap')">VWAP</button>
+          <button class="ch-tool" id="tb-ema9" onclick="chToggle('ema9')">EMA 9</button>
+          <button class="ch-tool" id="tb-ema20" onclick="chToggle('ema20')">EMA 20</button>
+          <span class="ch-sep"></span>
+          <button class="ch-tool" id="tb-hollow" onclick="chToggle('hollow')" title="شموع مفرغة / مملوءة">🕯 مفرغة</button>
+          <button class="ch-tool" onclick="chart&&chart.timeScale().fitContent()" title="رجّع الشارت للعرض الكامل">⤢ ملائمة</button>
+          <button class="ch-tool" id="tb-full" onclick="chFull()" title="ملء الشاشة">⛶ كبير</button>
+        </div>
+        <div id="chBox"><div class="ch-legend" id="chLegend"></div><div id="chOv"></div></div>
         <div id="chEmpty" class="empty">مفيش صفقات مفتوحة — أول ما البوت يشتري سهم هيظهر هنا بالشارت والدخول والهدف والوقف</div>
       </div>
       <div class="card">
@@ -744,27 +768,41 @@ setInterval(()=>{ load(false); loadStats(); loadTrades(); loadLogs(); loadPF(); 
 
 // ===== 📈 شارت الصفقات المفتوحة =====
 let CHP=[], chSym=null, chIvl='1m', chart=null, cs=null, vs=null, chLines=[], lvl={tp:null,sl:null}, drag=null;
+// إعدادات الشارت (بتتحفظ في المتصفح)
+let CHO={hollow:true,zones:true,vwap:true,ema9:false,ema20:false}; try{ Object.assign(CHO, JSON.parse(localStorage.getItem('ch_opts')||'{}')); }catch(_){}
+let chMode=null, meas=null, chBars=[], userLines=[], vwapS=null, ema9S=null, ema20S=null;
+const UP='#22c55e', DN='#ef4444';
+function candleStyle(){ return CHO.hollow
+  ? {upColor:'rgba(0,0,0,0)',downColor:DN,borderVisible:true,borderUpColor:UP,borderDownColor:DN,wickUpColor:UP,wickDownColor:DN}
+  : {upColor:UP,downColor:DN,borderVisible:false,wickUpColor:UP,wickDownColor:DN}; }
 function chInit(){
   if(chart || !window.LightweightCharts) return;
   const box=$('chBox');
-  chart=LightweightCharts.createChart(box,{height:340,layout:{background:{color:'#0b1220'},textColor:'#cbd5e1'},
+  chart=LightweightCharts.createChart(box,{height:box.clientHeight||420,layout:{background:{color:'#0b1220'},textColor:'#cbd5e1'},
     grid:{vertLines:{color:'#1e293b'},horzLines:{color:'#1e293b'}},timeScale:{timeVisible:true,secondsVisible:false},
     rightPriceScale:{borderColor:'#334155'},crosshair:{mode:0},
     localization:{timeFormatter:t=>new Date(t*1000).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'})}});
-  cs=chart.addCandlestickSeries({upColor:'#22c55e',downColor:'#ef4444',borderVisible:false,wickUpColor:'#22c55e',wickDownColor:'#ef4444'});
+  cs=chart.addCandlestickSeries(candleStyle());
+  vwapS=chart.addLineSeries({color:'#f59e0b',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,title:'VWAP'});
+  ema9S=chart.addLineSeries({color:'#22d3ee',lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,title:'EMA9'});
+  ema20S=chart.addLineSeries({color:'#a78bfa',lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,title:'EMA20'});
+  chart.subscribeClick(chClick);
+  chart.subscribeCrosshairMove(chMove);
+  chart.timeScale().subscribeVisibleLogicalRangeChange(()=>chOverlay());
   vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'v',color:'#33415588'});
   chart.priceScale('v').applyOptions({scaleMargins:{top:0.8,bottom:0}});
-  new ResizeObserver(()=>chart.applyOptions({width:box.clientWidth})).observe(box);
+  new ResizeObserver(()=>{ chart.applyOptions({width:box.clientWidth,height:box.clientHeight}); chOverlay(); }).observe(box);
+  chSyncBtns();
 }
 function chIv(iv){ chIvl=iv; document.querySelectorAll('.ch-iv').forEach(b=>b.classList.toggle('on',b.dataset.iv===iv)); loadChart(true); }
-function chPick(s){ chSym=s; renderChTabs(); loadChart(true); }
+function chPick(s){ chSym=s; meas=null; renderChTabs(); loadChart(true); }
 function renderChTabs(){
   $('chTabs').innerHTML=CHP.map(p=>`<button class="ch-tab ${p.symbol===chSym?'on':''}" onclick="chPick('${p.symbol}')">${p.symbol}${p.status==='closing'?' ⏳':''}</button>`).join('');
 }
 async function loadPositions(){
   try{ const r=await fetch('/api/bot/positions',{headers:H}); if(!r.ok) return; CHP=await r.json(); }catch(_){ return; }
   const has=CHP.length>0;
-  $('chEmpty').style.display=has?'none':'block'; $('chBox').style.display=has?'block':'none'; $('chInfo').style.display=has?'flex':'none';
+  $('chEmpty').style.display=has?'none':'block'; $('chBox').style.display=has?'block':'none'; $('chInfo').style.display=has?'flex':'none'; $('chTools').style.display=has?'flex':'none';
   if(!has){ chSym=null; $('chTabs').innerHTML=''; return; }
   if(!CHP.find(p=>p.symbol===chSym)) chSym=CHP[0].symbol;
   renderChTabs(); loadChart(false);
@@ -776,6 +814,7 @@ async function loadChart(fit){
   const c=d.candles||[]; if(!c.length) return;
   cs.setData(c.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));
   vs.setData(c.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'#22c55e55':'#ef444455'})));
+  chBars=c; chIndicators(c); chUserLines();
   chLines.forEach(l=>cs.removePriceLine(l)); chLines=[];
   const L=(price,color,title,style)=>price&&chLines.push(cs.createPriceLine({price:+price,color,lineWidth:2,lineStyle:style,axisLabelVisible:true,title}));
   lvl={tp:null,sl:null,pos:p};
@@ -785,6 +824,7 @@ async function loadChart(fit){
   const bar=[...c].reverse().find(x=>x.time<=ot);
   if(bar) cs.setMarkers([{time:bar.time,position:'belowBar',color:'#3b82f6',shape:'arrowUp',text:'شراء '+p.qty}]); else cs.setMarkers([]);
   if(fit) chart.timeScale().fitContent();
+  chLegend(null); chOverlay();
   const last=c[c.length-1].close, pct=(last-p.entry)/p.entry*100, pnl=(last-p.entry)*p.qty;
   const toTp=p.tp?((p.tp-last)/last*100):null;
   $('chInfo').innerHTML=`<span>السهم <b>${p.symbol}</b></span><span>كمية <b>${p.qty}</b></span><span>دخول <b>$${(+p.entry).toFixed(4)}</b></span>
@@ -815,6 +855,94 @@ async function posAct(id,type){
   try{ const r=await fetch('/api/bot/positions/'+id+'/action',{method:'POST',headers:H,body:JSON.stringify({type})}); const j=await r.json(); toast(j.msg||(j.ok?'✅':'❌')); }
   catch(e){ toast('❌ '+e.message); }
   loadPositions();
+}
+
+// ===== 🛠 أدوات الشارت =====
+function chSave(){ try{ localStorage.setItem('ch_opts',JSON.stringify(CHO)); }catch(_){} }
+function chSyncBtns(){
+  ['zones','vwap','ema9','ema20','hollow'].forEach(k=>{ const b=$('tb-'+k); if(b) b.classList.toggle('on',!!CHO[k]); });
+  ['measure','hline'].forEach(k=>{ const b=$('tb-'+k); if(b) b.classList.toggle('on',chMode===k); });
+  const hb=$('tb-hollow'); if(hb) hb.textContent=CHO.hollow?'🕯 مفرغة':'🕯 مملوءة';
+}
+function chToggle(k){ CHO[k]=!CHO[k]; chSave(); chSyncBtns();
+  if(k==='hollow'&&cs) cs.applyOptions(candleStyle());
+  if(['vwap','ema9','ema20'].includes(k)) chIndicators(chBars);
+  chOverlay(); }
+function chTool(m){ chMode = chMode===m ? null : m; if(m==='measure'&&chMode) meas=null; chSyncBtns(); $('chBox').style.cursor=chMode?'crosshair':''; chOverlay(); }
+function chFull(){ const c=$('chCard'); c.classList.toggle('full'); $('chBox').style.height=c.classList.contains('full')?'calc(100vh - 170px)':'420px';
+  $('tb-full').classList.toggle('on',c.classList.contains('full')); }
+// المؤشرات: VWAP (بيبدأ من جديد كل يوم) + EMA
+function chIndicators(c){
+  if(!vwapS) return;
+  const vw=[]; let day=null, pv=0, vv=0;
+  for(const x of c){ const d=new Date(x.time*1000).toLocaleDateString('en-US',{timeZone:'America/New_York'});
+    if(d!==day){ day=d; pv=0; vv=0; } const tp=(x.high+x.low+x.close)/3; pv+=tp*(x.volume||0); vv+=(x.volume||0);
+    if(vv>0) vw.push({time:x.time,value:pv/vv}); }
+  const ema=(n)=>{ const k=2/(n+1); let e=null; return c.map(x=>{ e=e==null?x.close:x.close*k+e*(1-k); return {time:x.time,value:e}; }); };
+  vwapS.setData(CHO.vwap?vw:[]); ema9S.setData(CHO.ema9?ema(9):[]); ema20S.setData(CHO.ema20?ema(20):[]);
+}
+// أسطورة OHLC فوق الشارت
+const chFp=v=>v==null?'-':(v>=1?(+v).toFixed(2):(+v).toFixed(4));
+function chLegend(bar){
+  const b=bar||chBars[chBars.length-1]; if(!b){ $('chLegend').textContent=''; return; }
+  const ch=(b.close-b.open)/b.open*100, col=b.close>=b.open?UP:DN;
+  const v=b.volume>=1e6?(b.volume/1e6).toFixed(2)+'M':b.volume>=1e3?(b.volume/1e3).toFixed(1)+'K':b.volume;
+  $('chLegend').innerHTML=`<b>${chSym||''}</b> O <span style="color:${col}">${chFp(b.open)}</span> H <span style="color:${col}">${chFp(b.high)}</span> L <span style="color:${col}">${chFp(b.low)}</span> C <span style="color:${col}">${chFp(b.close)}</span> <span style="color:${col}">${ch>=0?'+':''}${ch.toFixed(2)}%</span> Vol ${v}`;
+}
+function chMove(p){
+  if(p&&p.time){ const b=chBars.find(x=>x.time===p.time); if(b) chLegend(b); } else chLegend(null);
+  if(chMode==='measure'&&meas&&!meas.done&&p&&p.point){ const pr=cs.coordinateToPrice(p.point.y); if(pr!=null){ meas.b={l:p.logical,p:pr}; chOverlay(); } }
+}
+function chClick(p){
+  if(!p||!p.point||drag) return; const pr=cs.coordinateToPrice(p.point.y); if(pr==null) return;
+  if(chMode==='measure'){
+    if(!meas||meas.done) meas={a:{l:p.logical,p:pr},b:{l:p.logical,p:pr},done:false};
+    else { meas.b={l:p.logical,p:pr}; meas.done=true; }
+    chOverlay();
+  } else if(chMode==='hline'){
+    const k='ch_hl_'+chSym; let a=[]; try{ a=JSON.parse(localStorage.getItem(k)||'[]'); }catch(_){}
+    a.push(+chFp(pr)); try{ localStorage.setItem(k,JSON.stringify(a)); }catch(_){}
+    chUserLines(); chTool('hline');
+  }
+}
+function chUserLines(){
+  if(!cs) return; userLines.forEach(l=>cs.removePriceLine(l)); userLines=[];
+  let a=[]; try{ a=JSON.parse(localStorage.getItem('ch_hl_'+chSym)||'[]'); }catch(_){}
+  a.forEach(v=>userLines.push(cs.createPriceLine({price:v,color:'#94a3b8',lineWidth:1,lineStyle:1,axisLabelVisible:true,title:''})));
+}
+function chClearDraw(){ meas=null; try{ localStorage.removeItem('ch_hl_'+chSym); }catch(_){} chUserLines(); chOverlay(); }
+// الرسم فوق الشارت: القياس + منطقة الربح/الخسارة
+function chOverlay(){
+  const ov=$('chOv'); if(!ov||!chart||!cs) return; let h='';
+  const ts=chart.timeScale(), W=$('chBox').clientWidth-60;
+  // 💰 منطقة الربح/الخسارة للصفقة المفتوحة
+  const pos=CHP.find(x=>x.symbol===chSym);
+  if(CHO.zones&&pos&&pos.entry){
+    const ot=Math.floor(new Date(pos.openedAt).getTime()/1000);
+    const bar=[...chBars].reverse().find(x=>x.time<=ot)||chBars[0];
+    let x0=bar?ts.timeToCoordinate(bar.time):0; if(x0==null||x0<0) x0=0;
+    const yE=cs.priceToCoordinate(+pos.entry), yT=pos.tp?cs.priceToCoordinate(+pos.tp):null, yS=pos.sl?cs.priceToCoordinate(+pos.sl):null;
+    const w=Math.max(W-x0,0);
+    if(yE!=null&&yT!=null) h+=`<div class="ov-zone" style="left:${x0}px;width:${w}px;top:${Math.min(yE,yT)}px;height:${Math.abs(yE-yT)}px;background:rgba(34,197,94,.13);border-top:1px solid rgba(34,197,94,.5)"></div>`;
+    if(yE!=null&&yS!=null) h+=`<div class="ov-zone" style="left:${x0}px;width:${w}px;top:${Math.min(yE,yS)}px;height:${Math.abs(yE-yS)}px;background:rgba(239,68,68,.13);border-bottom:1px solid rgba(239,68,68,.5)"></div>`;
+    if(pos.tp&&pos.sl&&yE!=null){ const rr=(pos.tp-pos.entry)/(pos.entry-pos.sl);
+      const win=(pos.tp-pos.entry)*pos.qty, loss=(pos.entry-pos.sl)*pos.qty;
+      h+=`<div class="ov-lbl" style="left:${x0+6}px;top:${(yT!=null?yT:yE)+4}px;background:#22c55e">+${((pos.tp-pos.entry)/pos.entry*100).toFixed(1)}% = +$${win.toFixed(2)}</div>`;
+      h+=`<div class="ov-lbl" style="left:${x0+6}px;top:${(yS!=null?yS:yE)-26}px;background:#ef4444;color:#fff">-${((pos.entry-pos.sl)/pos.entry*100).toFixed(1)}% = -$${loss.toFixed(2)} | R:R ${isFinite(rr)?rr.toFixed(2):'-'}</div>`; }
+  }
+  // 📏 القياس
+  if(meas&&meas.a&&meas.b&&meas.a.l!=null&&meas.b.l!=null){
+    const xa=ts.logicalToCoordinate(meas.a.l), xb=ts.logicalToCoordinate(meas.b.l), ya=cs.priceToCoordinate(meas.a.p), yb=cs.priceToCoordinate(meas.b.p);
+    if(xa!=null&&xb!=null&&ya!=null&&yb!=null){
+      const up=meas.b.p>=meas.a.p, col=up?'34,197,94':'239,68,68';
+      const pct=(meas.b.p-meas.a.p)/meas.a.p*100, diff=meas.b.p-meas.a.p, bars=Math.round(meas.b.l-meas.a.l);
+      const mins=bars*({'1m':1,'5m':5,'15m':15}[chIvl]||1);
+      const q=pos?pos.qty:0;
+      h+=`<div class="ov-box" style="left:${Math.min(xa,xb)}px;top:${Math.min(ya,yb)}px;width:${Math.max(Math.abs(xb-xa),1)}px;height:${Math.max(Math.abs(yb-ya),1)}px;background:rgba(${col},.18);border-color:rgb(${col})"></div>`;
+      h+=`<div class="ov-lbl" style="left:${Math.min(xa,xb)}px;top:${up?Math.min(ya,yb)-(q?70:50):Math.max(ya,yb)+4}px;background:rgb(${col});${up?'':'color:#fff'}"><div>${pct>=0?'+':''}${pct.toFixed(2)}% (${diff>=0?'+':''}${chFp(diff)}$)</div><div style="unicode-bidi:plaintext;direction:rtl">${Math.abs(bars)} شمعة — ${Math.abs(mins)>=60?(Math.abs(mins)/60).toFixed(1)+' ساعة':Math.abs(mins)+' دقيقة'}</div>${q?`<div style="unicode-bidi:plaintext;direction:rtl">ربح ${q} سهم: <bdi dir="ltr">${diff>=0?'+':'-'}$${Math.abs(diff*q).toFixed(2)}</bdi></div>`:''}</div>`;
+    }
+  }
+  ov.innerHTML=h;
 }
 
 // ===== drag the target / stop lines on the chart =====
